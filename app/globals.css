@@ -280,10 +280,10 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .verrou:focus-visible { outline: 2px solid rgba(236, 211, 147, 0.7); outline-offset: 4px; border-radius: 8px; }
 
 .laiton { position: absolute; width: 54px; height: 54px; z-index: 4; filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.65)); pointer-events: none; }
-.laiton.hg { top: -4px; left: -4px; }
-.laiton.hd { top: -4px; right: -4px; transform: scaleX(-1); }
-.laiton.bg { bottom: -4px; left: -4px; transform: scaleY(-1); }
-.laiton.bd { bottom: -4px; right: -4px; transform: scale(-1, -1); }
+.laiton.hg { top: 0; left: 0; }
+.laiton.hd { top: 0; right: 0; transform: scaleX(-1); }
+.laiton.bg { bottom: 0; left: 0; transform: scaleY(-1); }
+.laiton.bd { bottom: 0; right: 0; transform: scale(-1, -1); }
 
 /* Edges of the paper block (sides and bottom), one piece so the corners meet. */
 .bloc-papier {
