@@ -149,7 +149,7 @@ export default function Sceau() {
           <div className="tome-pages" aria-hidden />
           <div className="tome-garde" aria-hidden>
             <Fleuron />
-            <p>Bienvenue parmi nous, ami.</p>
+            <p>Jobal kha'jay, trevan.</p>
           </div>
           <div className="tome-battant">
           <div className="tome-doublure" aria-hidden />
