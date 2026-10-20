@@ -91,6 +91,11 @@ export function Verrou({ onRefermer }: { onRefermer: () => void }) {
           <path d="M45 51.5H53" stroke="#e8e1d4" strokeOpacity=".45" strokeWidth="1.2" strokeLinecap="round" />
           <path d="M3 78.5H58" stroke="#000" strokeOpacity=".75" strokeWidth="1.6" strokeLinecap="round" />
         </g>
+        {/* Engraved word under the bolt: dark cut, light lower lip */}
+        <g className="verrou-grave" fontFamily="var(--f-capitales)" fontSize="11" letterSpacing=".5" textAnchor="middle">
+          <text x="42" y="100.4" fill="#000" fillOpacity=".8">Refermer</text>
+          <text x="42" y="101.2" fill="#cfc6b6" fillOpacity=".78">Refermer</text>
+        </g>
       </svg>
     </button>
   )
