@@ -1,4 +1,6 @@
+import { useId } from 'react'
 import type { Artisan } from '@/lib/types'
+import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
 import { ARTISANS, ICONES_ARTISANS } from '@/lib/recherche'
 
 /** A game-icons.net glyph (512×512, filled with currentColor). */
@@ -16,34 +18,39 @@ export function GlypheArtisan({ artisan, icones }: { artisan: Artisan; icones: R
   )
 }
 
-/** Masser (red, large) and Secunda (pale, small): the wandering moons of the caravan. */
-export function Lunes({ taille = 48, className }: { taille?: number; className?: string }) {
+/** The caravan's emblem, gilded: gold leaf gradient, a dark tooled outline and a soft relief. */
+export function Embleme({ taille = 48, className }: { taille?: number; className?: string }) {
+  const id = useId().replace(/:/g, '')
+  const [, , l, h] = EMBLEME_VIEWBOX.split(' ').map(Number)
   return (
-    <svg className={className} width={taille} height={taille} viewBox="0 0 64 64" aria-hidden>
+    <svg className={`embleme ${className ?? ''}`} width={(taille * l) / h} height={taille} viewBox={EMBLEME_VIEWBOX} aria-hidden>
       <defs>
-        <mask id="croissant-masser">
-          <rect width="64" height="64" fill="#fff" />
-          <circle cx="34" cy="28" r="17" fill="#000" />
-        </mask>
-        <mask id="croissant-secunda">
-          <rect width="64" height="64" fill="#fff" />
-          <circle cx="50" cy="14" r="6.5" fill="#000" />
-        </mask>
-        <radialGradient id="lueur" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#f3d27a" stopOpacity=".45" />
-          <stop offset="100%" stopColor="#f3d27a" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="masser" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#e0694a" />
-          <stop offset="100%" stopColor="#8e2416" />
+        <linearGradient id={`${id}-or`} x1="0" y1="0" x2="0.35" y2="1">
+          <stop offset="0%" stopColor="#fff2c4" />
+          <stop offset="22%" stopColor="#e9c470" />
+          <stop offset="48%" stopColor="#b8862f" />
+          <stop offset="62%" stopColor="#f2d58c" />
+          <stop offset="80%" stopColor="#9c6f24" />
+          <stop offset="100%" stopColor="#dcb565" />
         </linearGradient>
+        <filter id={`${id}-relief`} x="-5%" y="-5%" width="110%" height="110%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="flou" />
+          <feSpecularLighting in="flou" surfaceScale="6" specularConstant="0.9" specularExponent="24" lightingColor="#fff6d8" result="reflet">
+            <feDistantLight azimuth="235" elevation="48" />
+          </feSpecularLighting>
+          <feComposite in="reflet" in2="SourceAlpha" operator="in" result="refletForme" />
+          <feComposite in="SourceGraphic" in2="refletForme" operator="arithmetic" k2="1" k3="0.6" />
+        </filter>
       </defs>
-      <circle cx="30" cy="34" r="30" fill="url(#lueur)" />
-      <circle cx="26" cy="34" r="20" fill="url(#masser)" mask="url(#croissant-masser)" />
-      <circle cx="46" cy="17" r="8" fill="#ece0c4" mask="url(#croissant-secunda)" />
-      <circle cx="15" cy="10" r="1.2" fill="#f3d27a" />
-      <circle cx="56" cy="44" r="1" fill="#f3d27a" />
-      <circle cx="40" cy="56" r=".9" fill="#f3d27a" />
+      <path
+        d={EMBLEME_TRACE}
+        fill={`url(#${id}-or)`}
+        fillRule="evenodd"
+        stroke="#4a3010"
+        strokeOpacity="0.55"
+        strokeWidth="4"
+        filter={`url(#${id}-relief)`}
+      />
     </svg>
   )
 }

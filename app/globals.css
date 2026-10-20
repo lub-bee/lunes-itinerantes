@@ -116,7 +116,10 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 }
 
 .blason { display: flex; align-items: center; gap: 12px; }
-.blason svg { filter: drop-shadow(0 0 10px rgba(240, 120, 70, 0.35)); }
+.blason .embleme { flex: none; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 10px rgba(232, 180, 90, 0.3)); }
+/* In the page header the emblem lies on its side (rotated a quarter turn clockwise). */
+.embleme-entete { transform: rotate(90deg); margin: 0 10px 0 6px; }
+.frontispice-embleme path { stroke-opacity: 0.85; }
 .blason h1 {
   margin: 0;
   font-family: var(--f-gothique);
@@ -626,14 +629,14 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 
 /* ─── Frontispiece ─── */
 
-.frontispice { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 100%; padding: 10px 6px; }
-.frontispice-lunes { filter: drop-shadow(0 2px 2px rgba(60, 30, 10, 0.35)); animation: flotte 7s ease-in-out infinite alternate; }
+.frontispice { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; flex: 1 0 auto; padding: 0 6px; }
+.frontispice-embleme { flex: none; height: clamp(64px, 11vh, 120px); width: auto; filter: drop-shadow(0 1px 0 rgba(60, 30, 10, 0.55)) drop-shadow(0 2px 3px rgba(60, 30, 10, 0.4)); animation: flotte 7s ease-in-out infinite alternate; }
 @keyframes flotte { to { transform: translateY(-5px) rotate(-3deg); } }
-.frontispice-sur { margin-top: 14px; font-family: var(--f-capitales); letter-spacing: 0.24em; font-size: 15px; color: var(--encre-pale); }
-.frontispice-titre { margin: 6px 0 0; font-family: var(--f-gothique); font-weight: 400; font-size: clamp(42px, 4.6vw, 64px); line-height: 1.05; color: var(--encre-rouge); text-shadow: 0 1px 0 rgba(255, 250, 230, 0.5); }
-.citation { font-style: italic; font-size: 19px; color: var(--encre); }
-.frontispice-texte { max-width: 420px; text-align: justify; hyphens: auto; font-size: 16px; line-height: 1.55; color: var(--encre-douce); }
-.consigne { margin-top: 18px; font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.1em; color: var(--encre-pale); }
+.frontispice-sur { margin-top: 8px; font-family: var(--f-capitales); letter-spacing: 0.24em; font-size: 15px; color: var(--encre-pale); }
+.frontispice-titre { margin: 6px 0 0; font-family: var(--f-gothique); font-weight: 400; font-size: clamp(32px, min(4.4vw, 6vh), 62px); line-height: 1.05; color: var(--encre-rouge); text-shadow: 0 1px 0 rgba(255, 250, 230, 0.5); }
+.citation { margin: 8px 0; font-style: italic; font-size: 19px; color: var(--encre); }
+.frontispice-texte { margin: 4px 0; max-width: 420px; text-align: justify; hyphens: auto; font-size: 16px; line-height: 1.55; color: var(--encre-douce); }
+.consigne { margin-top: 6px; font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.1em; color: var(--encre-pale); }
 .colophon { margin: 4px 0 0; font-style: italic; font-size: 12px; color: var(--encre-pale); opacity: 0.8; }
 .frontispice.compact { min-height: auto; padding-bottom: 12px; }
 
@@ -785,7 +788,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .recherche-globale { grid-column: 1 / -1; grid-row: 2; }
   .blason h1 { font-size: 23px; }
   .blason p { font-size: 11px; }
-  .blason svg { width: 38px; height: 38px; }
+  .blason .embleme { height: 40px; width: auto; }
   .refermer span { display: none; }
   .refermer { padding: 8px; }
 
@@ -951,7 +954,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   box-shadow: 1px 1px 0 rgba(255, 215, 170, 0.12), inset 1px 1px 0 rgba(255, 215, 170, 0.1);
 }
 .tome-cadre::before { content: ''; position: absolute; inset: 7px; border: 1px solid rgba(214, 174, 90, 0.55); pointer-events: none; }
-.tome-cadre svg:first-child { filter: drop-shadow(0 0 12px rgba(240, 120, 70, 0.35)) drop-shadow(0 2px 1px rgba(0, 0, 0, 0.6)); }
+.tome-embleme { filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 12px rgba(232, 170, 80, 0.25)); }
 .tome-titre {
   margin: 14px 0 0;
   font-family: var(--f-gothique);
@@ -1041,7 +1044,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .cle-fourreau { margin-top: 22px; padding: 10px 0; }
   .fermoir { right: -22px; top: calc(50% - 32px); width: 44px; height: 71px; }
   .tome-cadre { inset: 20px 18px 20px 36px; }
-  .tome-cadre svg:first-child { width: 64px; height: 64px; }
+  .tome-embleme { height: 104px; width: auto; }
   .tome-couverture .laiton { width: 36px; height: 36px; }
   .cle-tige { font-size: 14px; padding: 0 6px; }
 }

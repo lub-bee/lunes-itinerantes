@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import type { Livre, Page, PageChapitre } from '@/lib/types'
 import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
-import { Fleuron, GlypheArtisan, Icone, Lunes, Plume } from './Ornements'
+import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 
 export type Ctx = {
   livre: Livre
@@ -139,7 +139,7 @@ function EnTete({
 function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
   return (
     <div className={`frontispice ${compact ? 'compact' : ''}`}>
-      <Lunes taille={compact ? 72 : 120} className="frontispice-lunes" />
+      <Embleme taille={160} className="frontispice-embleme" />
       <div className="frontispice-sur">Grimoire de la</div>
       <h2 className="frontispice-titre">Caravane des Lunes Itinérantes</h2>
       <Fleuron />

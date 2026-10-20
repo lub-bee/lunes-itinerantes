@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { Article, Livre, Page, PartieId } from '@/lib/types'
 import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
-import { CoinLaiton, Icone, Lunes, Plume } from './Ornements'
+import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
@@ -392,7 +392,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
     <div className={`scene ${tourne?.manuel ? 'en-tourne' : ''}`}>
       <header className="entete">
         <div className="blason">
-          <Lunes taille={50} />
+          <Embleme taille={64} className="embleme-entete" />
           <div>
             <h1>Caravane des Lunes Itinérantes</h1>
             <p>Grimoire des marchands</p>

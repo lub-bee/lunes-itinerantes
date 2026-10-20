@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { CoinLaiton, Fleuron, Lunes } from './Ornements'
+import { CoinLaiton, Embleme, Fleuron } from './Ornements'
 
 type Etat = 'repos' | 'essai' | 'refus' | 'ouvert'
 
@@ -155,7 +155,7 @@ export default function Sceau() {
             <CoinLaiton className="hd" />
             <CoinLaiton className="bd" />
             <div className="tome-cadre">
-              <Lunes taille={88} />
+              <Embleme taille={150} className="tome-embleme" />
               <h1 className="tome-titre">Lunes Itinérantes</h1>
               <Fleuron className="tome-fleuron" />
             </div>
