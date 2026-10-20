@@ -19,4 +19,4 @@ Si Khajiit enfreint, détourne, trompe ou abuse, Khajiit le fait **sans la cape 
 
 *Il reste de l'espace sur cette page.*
 
-> Les lunes voient tout, mais la caravane sait détourner le regard.
+> Les lunes voient tout, la caravane choisit ce qu'elle regarde.
