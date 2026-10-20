@@ -52,6 +52,11 @@ credited on the title page), through `@iconify-json/game-icons`. A chapter or me
 with an `icone` field holding the game-icons name (e.g. `beer-stein`, `crossed-swords`): browse the
 site, take the last part of the icon's URL. Only the icons in use are sent to the browser.
 
+### Table texture
+
+`public/textures/table.jpg` is Poly Haven's [wood_table](https://polyhaven.com/a/wood_table) (CC0), 2K,
+recompressed. Swap the file to change the table; its tint is set in `app/globals.css` (`body`).
+
 ### Memo pages ("pense-bêtes") — `content/pense-betes/*.md`
 
 Drop a Markdown file to add a page. Files are ordered by name (prefix with `03-`, `04-`…).

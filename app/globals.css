@@ -21,7 +21,6 @@
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .33 0 0 0 0 .22 0 0 0 0 .1 0 0 0 .24 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
   --taches: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.006' numOctaves='5' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55 0 0 0 0 .36 0 0 0 0 .14 0 0 0 1.25 -.52'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
   --cuir-relief: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.42' numOctaves='4' seed='4' stitchTiles='stitch'/%3E%3CfeDiffuseLighting lighting-color='%23fff' surfaceScale='2.4' diffuseConstant='1.05'%3E%3CfeDistantLight azimuth='225' elevation='48'/%3E%3C/feDiffuseLighting%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
-  --bois: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0035 .11' numOctaves='4' seed='21' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .26 0 0 0 0 .15 0 0 0 0 .07 0 0 0 1.6 -.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -38,11 +37,12 @@ html, body { margin: 0; min-height: 100%; }
 
 body {
   background-color: var(--table);
+  /* Tavern table: CC0 photo texture (Poly Haven "wood_table"), dimmed to candlelight. */
   background-image:
-    radial-gradient(ellipse 75% 60% at 50% 42%, rgba(255, 168, 70, 0.17), transparent 72%),
-    var(--bois),
-    linear-gradient(180deg, #2a1a0e, #140c06);
-  background-size: auto, 900px 900px, auto;
+    radial-gradient(ellipse 75% 60% at 50% 42%, rgba(255, 160, 60, 0.20), transparent 72%),
+    linear-gradient(180deg, rgba(18, 9, 3, 0.42), rgba(10, 5, 2, 0.6)),
+    url('/textures/table.jpg');
+  background-size: auto, auto, 1024px 1024px;
   color: var(--parchemin);
   font-family: var(--f-texte);
   overflow-x: hidden;
@@ -598,25 +598,29 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .legende-sceaux { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 14px; color: var(--encre-douce); }
 .legende-sceaux span { display: inline-flex; align-items: center; gap: 5px; }
 
-/* Engraved medallion closing the left page. */
-.vignette { margin-top: auto; display: flex; justify-content: center; padding-top: 12px; }
+/* Engraved medallion beside the page title. */
+.titre-ligne { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 8px; }
+.titre-ligne .titre-page { margin: 0; }
 .medaillon {
-  --t: clamp(96px, 17vh, 150px);
+  --t: clamp(54px, 7vh, 72px);
+  flex: none;
   width: var(--t);
   height: var(--t);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: rgba(52, 30, 12, 0.85);
+  color: rgba(52, 30, 12, 0.88);
   background:
     radial-gradient(circle, rgba(255, 248, 228, 0.5) 30%, transparent 70%),
-    repeating-linear-gradient(45deg, rgba(90, 60, 30, 0.07) 0 1px, transparent 1px 5px);
+    repeating-linear-gradient(45deg, rgba(90, 60, 30, 0.08) 0 1px, transparent 1px 4px);
   border: 1.5px solid rgba(120, 60, 30, 0.5);
-  box-shadow: 0 0 0 5px rgba(239, 222, 182, 0.6), 0 0 0 6.5px rgba(120, 60, 30, 0.3), inset 0 0 18px rgba(120, 75, 25, 0.25);
+  box-shadow: 0 0 0 3px rgba(239, 222, 182, 0.6), 0 0 0 4.5px rgba(120, 60, 30, 0.3), inset 0 0 12px rgba(120, 75, 25, 0.25);
 }
 .medaillon .icone { width: 64%; height: 64%; filter: drop-shadow(0 1px 0 rgba(255, 248, 228, 0.6)); }
 
-.en-tete.compact .titre-page { font-size: 40px; margin-top: 4px; }
+.en-tete.compact .titre-page { font-size: 40px; margin-top: 0; }
+.en-tete.compact .medaillon { --t: 46px; }
+.en-tete.compact .titre-ligne { gap: 10px; margin-top: 4px; }
 .en-tete.compact .fleuron { margin: 6px auto; }
 .en-tete.compact .intro { font-size: 16px; }
 

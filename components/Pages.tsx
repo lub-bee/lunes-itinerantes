@@ -57,18 +57,6 @@ function Folio({ n }: { n: number }) {
 
 const teinte = (ctx: Ctx, page: Page) => ({ '--teinte': ctx.livre.parties.find((p) => p.id === page.partie)?.couleur } as CSSProperties)
 
-/** Engraved illustration closing the left page. */
-function Vignette({ page, ctx }: { page: Page; ctx: Ctx }) {
-  if (page.type === 'sommaire') return null
-  return (
-    <div className="vignette" aria-hidden>
-      <div className="medaillon">
-        <Icone corps={ctx.livre.icones[page.icone]} />
-      </div>
-    </div>
-  )
-}
-
 /* ───────────────────────────── Left pages ───────────────────────────── */
 
 export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ctx; compact?: boolean }) {
@@ -80,14 +68,19 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return <TeteChapitre page={page} ctx={ctx} compact={compact} />
       case 'note':
         return (
-          <EnTete surtitre="Pense-bête" titre={page.titre} compact={compact}>
+          <EnTete surtitre="Pense-bête" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
             {page.resume && <p className="intro lettrine">{page.resume}</p>}
             {page.auteur && <p className="signature">Consigné par {page.auteur}</p>}
           </EnTete>
         )
       case 'avenir':
         return (
-          <EnTete surtitre={ctx.livre.parties.find((p) => p.id === page.partie)?.titre ?? ''} titre={page.titre} compact={compact}>
+          <EnTete
+            surtitre={ctx.livre.parties.find((p) => p.id === page.partie)?.titre ?? ''}
+            titre={page.titre}
+            icone={ctx.livre.icones[page.icone]}
+            compact={compact}
+          >
             <p className="intro lettrine">{page.intro}</p>
           </EnTete>
         )
@@ -97,17 +90,37 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   return (
     <div className="contenu gauche-contenu" style={teinte(ctx, page)}>
       {corps}
-      <Vignette page={page} ctx={ctx} />
       <Folio n={ctx.index * 2 + 1} />
     </div>
   )
 }
 
-function EnTete({ surtitre, titre, sousTitre, compact, children }: { surtitre: string; titre: string; sousTitre?: string; compact?: boolean; children?: ReactNode }) {
+function EnTete({
+  surtitre,
+  titre,
+  sousTitre,
+  icone,
+  compact,
+  children,
+}: {
+  surtitre: string
+  titre: string
+  sousTitre?: string
+  icone?: string
+  compact?: boolean
+  children?: ReactNode
+}) {
   return (
     <header className={`en-tete ${compact ? 'compact' : ''}`}>
       <div className="surtitre">{surtitre}</div>
-      <h2 className="titre-page">{titre}</h2>
+      <div className="titre-ligne">
+        {icone && (
+          <span className="medaillon" aria-hidden>
+            <Icone corps={icone} />
+          </span>
+        )}
+        <h2 className="titre-page">{titre}</h2>
+      </div>
       {sousTitre && <div className="sous-titre">{sousTitre}</div>}
       <Fleuron />
       {children}
@@ -139,7 +152,7 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
   const surtitre = `Livre des Marchandises · Chapitre ${romain(ctx.livre.pages.filter((p) => p.type === 'chapitre').indexOf(page) + 1).toUpperCase()}`
   const prixConnus = page.articles.flatMap((a) => [a.min, a.max]).filter((v): v is number => v !== null)
   return (
-    <EnTete surtitre={surtitre} titre={page.titre} sousTitre={page.titreEn} compact={compact}>
+    <EnTete surtitre={surtitre} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
       <label className="recherche-locale">
         <Plume className="plume" />
