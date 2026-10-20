@@ -853,9 +853,16 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 
 .seuil {
   --tome-l: clamp(260px, 30vw, 360px);
-  --cle-l: 380px;
-  --ecart: 60px;
-  --course: calc(var(--ecart) + 66px);
+  --cle-l: 340px;
+  --ecart: 44px;
+  --plaque: calc(var(--cle-l) * 84 / 340);
+  --marge-serrure: 22px;
+  /* Height of the keyhole on the cover (lower third, clear of the title); the key lines up with it. */
+  --y-trou: calc(var(--tome-l) * 1.42 * 0.77);
+  /* Distance from the book's right edge to the keyhole, where the key's sheath clips it. */
+  --trou: calc(var(--marge-serrure) + var(--plaque) / 2);
+  /* The key travels to the keyhole and sinks its bit (and a little shaft) into it. */
+  --course: calc(var(--ecart) + var(--cle-l) * 64 / 380);
   position: relative;
   z-index: 1;
   min-height: 100vh;
@@ -867,7 +874,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   gap: 22px;
   padding: 24px 16px;
 }
-.table-tome { display: flex; align-items: center; animation: ouverture 1100ms cubic-bezier(.2, .7, .2, 1) both; }
+.table-tome { display: flex; align-items: flex-start; animation: ouverture 1100ms cubic-bezier(.2, .7, .2, 1) both; }
 
 .tome { position: relative; width: var(--tome-l); height: calc(var(--tome-l) * 1.42); perspective: 2200px; }
 
@@ -948,7 +955,8 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 9%;
   text-align: center;
   border: 1.5px solid rgba(0, 0, 0, 0.42);
   box-shadow: 1px 1px 0 rgba(255, 215, 170, 0.12), inset 1px 1px 0 rgba(255, 215, 170, 0.1);
@@ -969,23 +977,12 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 }
 .tome-fleuron { width: 72%; color: #d6ae5a; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7)); }
 
-/* Clasp: a leather strap wrapping the fore-edge, held by a brass lock plate. */
-.fermoir { position: absolute; z-index: 3; right: -30px; top: calc(50% - 43px); width: 60px; height: 97px; transform-origin: 20% 50%; }
-.fermoir-sangle {
-  position: absolute;
-  top: 30%;
-  height: 40%;
-  left: -26px;
-  right: -12px;
-  border-radius: 3px 10px 10px 3px;
-  background: linear-gradient(180deg, rgba(255, 220, 180, 0.12), rgba(0, 0, 0, 0.35)), url('/textures/cuir.jpg') center / 300px, #4a1d0e;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 3px 6px rgba(0, 0, 0, 0.55);
-}
-.fermoir-sangle::after { content: ''; position: absolute; inset: 4px 6px; border: 1px dashed rgba(230, 200, 150, 0.35); border-radius: 2px 8px 8px 2px; }
+/* Iron lock plate on the cover, scaled with the key so the keyhole fits it. */
+.fermoir { position: absolute; z-index: 3; right: var(--marge-serrure); top: calc(var(--y-trou) - var(--plaque) * 58 / 84); width: var(--plaque); height: calc(var(--plaque) * 140 / 84); }
 .serrure { position: relative; display: block; width: 100%; height: 100%; filter: drop-shadow(2px 3px 3px rgba(0, 0, 0, 0.65)); }
 
 /* The key. Its sheath clips it at the keyhole, so it seems to enter the lock. */
-.cle-fourreau { position: relative; z-index: 4; overflow: hidden; padding: 12px 0 12px var(--ecart); perspective: 900px; }
+.cle-fourreau { position: relative; z-index: 4; overflow: hidden; margin-top: calc(var(--y-trou) - 12px - var(--cle-l) * 60 / 380); margin-left: calc(-1 * var(--trou)); padding: 12px 0 12px calc(var(--trou) + var(--ecart)); perspective: 900px; }
 .cle {
   position: relative;
   width: var(--cle-l);
@@ -1022,8 +1019,8 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 
 .etat-essai .cle, .etat-refus .cle, .etat-ouvert .cle { transform: translateX(calc(-1 * var(--course))); }
 .etat-refus .cle { animation: cle-hesite 520ms ease-in-out; }
-.etat-ouvert .cle { animation: cle-tourne 420ms 80ms cubic-bezier(.5, 0, .3, 1) forwards, cle-efface 400ms 900ms ease forwards; }
-.etat-ouvert .fermoir { animation: fermoir-saute 560ms 480ms cubic-bezier(.3, 1.3, .5, 1) forwards; }
+.etat-ouvert .cle { animation: cle-tourne 420ms 80ms cubic-bezier(.5, 0, .3, 1) forwards, cle-efface 300ms 560ms ease forwards; }
+.etat-ouvert .fermoir { animation: fermoir-declic 240ms 480ms ease; }
 .etat-ouvert .tome-battant { animation: couverture-ouvre 1150ms 820ms cubic-bezier(.55, 0, .25, 1) forwards; }
 /* The gilded title and emblem are composited apart (filters) and ignore backface-visibility in some
    browsers: hide the front face outright once the cover passes upright (~51% of its swing). */
@@ -1037,18 +1034,18 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 }
 @keyframes cle-tourne { to { transform: translateX(calc(-1 * var(--course))) rotateX(-84deg); } }
 @keyframes cle-efface { to { opacity: 0; } }
-@keyframes fermoir-saute { to { transform: translateX(38px) rotate(18deg); opacity: 0; } }
+@keyframes fermoir-declic { 40% { transform: translateY(2px) rotate(-2deg); } }
 @keyframes couverture-ouvre { to { transform: rotateY(-128deg); } }
 
 .tome-message { min-height: 1.6em; margin: 0; font-style: italic; font-size: 18px; color: var(--or-pale); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); text-align: center; }
 
 @media (max-width: 760px) {
-  .seuil { --tome-l: min(270px, 68vw); --cle-l: min(300px, 86vw); --ecart: 0px; --course: 0px; }
-  .table-tome { flex-direction: column; }
-  .cle-fourreau { margin-top: 22px; padding: 10px 0; }
-  .fermoir { right: -22px; top: calc(50% - 32px); width: 44px; height: 71px; }
+  .seuil { --tome-l: min(270px, 68vw); --cle-l: min(260px, 76vw); --ecart: 0px; --course: 0px; --marge-serrure: 14px; }
+  .table-tome { flex-direction: column; align-items: center; }
+  .cle-fourreau { margin: 22px 0 0; padding: 10px 0; }
   .tome-cadre { inset: 20px 18px 20px 36px; }
-  .tome-embleme { height: 104px; width: auto; }
+  .tome-embleme { height: 78px; width: auto; }
+  .tome-cadre { padding-top: 5%; }
   .tome-couverture .laiton { width: 36px; height: 36px; }
   .cle-tige { font-size: 14px; padding: 0 6px; }
 }
