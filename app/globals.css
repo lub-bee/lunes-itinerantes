@@ -1025,6 +1025,10 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .etat-ouvert .cle { animation: cle-tourne 420ms 80ms cubic-bezier(.5, 0, .3, 1) forwards, cle-efface 400ms 900ms ease forwards; }
 .etat-ouvert .fermoir { animation: fermoir-saute 560ms 480ms cubic-bezier(.3, 1.3, .5, 1) forwards; }
 .etat-ouvert .tome-battant { animation: couverture-ouvre 1150ms 820ms cubic-bezier(.55, 0, .25, 1) forwards; }
+/* The gilded title and emblem are composited apart (filters) and ignore backface-visibility in some
+   browsers: hide the front face outright once the cover passes upright (~51% of its swing). */
+.etat-ouvert .tome-couverture { animation: face-avant 1150ms 820ms linear forwards; }
+@keyframes face-avant { 0%, 50.5% { visibility: visible; } 51%, 100% { visibility: hidden; } }
 @keyframes cle-hesite {
   0%, 100% { transform: translateX(calc(-1 * var(--course))) rotateX(0); }
   25% { transform: translateX(calc(-1 * var(--course))) rotateX(18deg); }
