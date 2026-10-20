@@ -1,7 +1,7 @@
 ---
 titre: L'ombre de la Caravane
 court: L'ombre
-resume: La caravane vit de sa réputation. Ce que chacun fait dans l'ombre ne doit jamais l'entacher.
+resume: La caravane vit de sa réputation. Ce que Khajiit fait dans l'ombre ne doit jamais l'entacher.
 icone: cloak-dagger
 auteur: Les Patriarches
 ---
@@ -14,9 +14,9 @@ Si Khajiit enfreint, détourne, trompe ou abuse, Khajiit le fait **sans la cape 
 
 ## Ce que cela veut dire
 
-- Aucune affaire louche ne se conclut au nom de la caravane, ni à ses étals, ni devant ses chariots.
-- Les couleurs de la caravane se portent à visage découvert. Le masque, lui, ne porte aucune couleur.
-- Celui qui se fait prendre répond seul de ses actes. Ce jour-là, la caravane ne le connaît pas.
+- Aucune affaire louche ne se conclut au nom de la caravane, sauf accord des Patriarches.
 - Ce qui se fait dans l'ombre reste dans l'ombre : on n'en parle ni aux clients, ni aux gardes, ni dans ce grimoire.
+
+*Il reste de l'espace sur cette page.*
 
 > Les lunes voient tout, mais la caravane sait détourner le regard.
