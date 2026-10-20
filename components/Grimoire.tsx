@@ -6,7 +6,7 @@ import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
-import { Verrou } from './Fer'
+import { CleRefermer, Verrou } from './Fer'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
@@ -498,6 +498,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
           )}
         </div>
 
+        <CleRefermer onRefermer={refermer} />
       </header>
 
       <main className={`livre-zone ${etroit === null ? 'en-attente' : ''}`}>

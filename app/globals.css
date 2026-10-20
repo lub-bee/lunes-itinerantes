@@ -273,6 +273,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   transition: filter 200ms ease, transform 200ms ease;
 }
 .verrou svg { display: block; width: 100%; height: 100%; }
+.cle-refermer { display: none; }
 .verrou-pene { transition: transform 380ms cubic-bezier(.5, 0, .3, 1); }
 .verrou.tire .verrou-pene { transform: translateX(16px); }
 .verrou:not(:disabled):hover { filter: drop-shadow(2px 4px 4px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 10px rgba(236, 200, 140, 0.35)); }
@@ -302,8 +303,8 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 }
 
 .feuillets {
+  /* No stacking context: turning leaves (z 10) must pass over the brass corners (z 4). */
   position: relative;
-  z-index: 2;
   height: var(--h-livre);
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -312,6 +313,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 
 .page {
   position: relative;
+  z-index: 2;
   overflow: hidden;
   color: var(--encre);
   background-color: var(--parchemin);
@@ -797,8 +799,25 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .couverture::before { inset: 3px; }
   .couverture::after { display: none; }
   .laiton { width: 34px; height: 34px; }
-  .verrou { left: -15px; top: calc(50% - 25px); width: 26px; height: 44px; }
-  .verrou-grave { display: none; }
+  .verrou { display: none; }
+  .cle-refermer {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 0;
+    background: none;
+    filter: drop-shadow(1px 3px 2px rgba(0, 0, 0, 0.7));
+  }
+  .cle-refermer-dessin { display: block; width: 50px; height: auto; transform: rotate(-45deg); transition: transform 380ms cubic-bezier(.5, 0, .3, 1); }
+  .cle-refermer.tourne .cle-refermer-dessin { transform: rotate(-45deg) rotateX(80deg); }
+  .blason p { display: none; }
+  .recherche-globale .plume { left: 11px; width: 16px; height: 16px; }
+  .recherche-globale input { padding: 7px 30px 7px 34px; font-size: 15px; }
+  .recherche-globale.avec-trouvailles input { padding-right: 118px; }
+  .recherche-globale .trouvailles { right: 28px; font-size: 12px; padding: 1px 7px; }
+  .entete { gap: 8px 12px; }
   .bloc-papier { display: none; }
   .feuillets { grid-template-columns: 1fr; min-height: 420px; }
   .page::before { inset: 8px; outline: none; }

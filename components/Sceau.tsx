@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { CoinLaiton, Embleme, Fleuron } from './Ornements'
-import { FiltreFer } from './Fer'
+import { Cle, FiltreFer } from './Fer'
 
 type Etat = 'repos' | 'essai' | 'refus' | 'ouvert'
 
@@ -39,36 +39,6 @@ function Serrure() {
       <path d="M37.5 70L36 98H48L46.5 70A16.1 16.1 0 1 0 37.5 70Z" fill="url(#trou-g)" />
       <path d="M26 58A16 16 0 0 1 58 58" fill="none" stroke="#000" strokeOpacity=".7" strokeWidth="2" />
       <path d="M28 64A15 15 0 0 0 56 64" fill="none" stroke="#d8d2c6" strokeOpacity=".22" strokeWidth="1" />
-    </svg>
-  )
-}
-
-/** Hand-forged iron key, drawn pointing left. The password field sits on its shaft. */
-function Cle() {
-  return (
-    <svg className="cle-dessin" viewBox="0 0 380 120" aria-hidden>
-      <defs>
-        <FiltreFer id="fer-cle" l={380} h={120} />
-        <mask id="anneau-ajoure" maskUnits="userSpaceOnUse" x="0" y="0" width="380" height="120">
-          <rect width="380" height="120" fill="#fff" />
-          <circle cx="334" cy="46" r="10.5" fill="#000" />
-          <circle cx="334" cy="74" r="10.5" fill="#000" />
-          <circle cx="320" cy="60" r="10.5" fill="#000" />
-          <circle cx="348" cy="60" r="10.5" fill="#000" />
-          <circle cx="334" cy="60" r="7" fill="#000" />
-        </mask>
-      </defs>
-      <g filter="url(#fer-cle)">
-        {/* Bit */}
-        <path d="M4 46L11 43L64 44L65 77L57 78L57 103L47 104L46 92L37 92L38 103L25 104L24 86L15 87L14 77L5 76Z" fill="#fff" />
-        {/* Shaft, slightly uneven like hammered iron */}
-        <path d="M58 43C110 40 190 45 270 41L271 79C190 76 112 81 58 77Z" fill="#fff" />
-        {/* Collars */}
-        <path d="M266 33L280 34L281 87L265 86Z" fill="#fff" />
-        <path d="M284 38L293 37L294 83L284 84Z" fill="#fff" />
-        {/* Bow, pierced with a quatrefoil */}
-        <path d="M290 60C290 34 309 15 335 16C359 17 377 36 376 61C375 86 356 104 332 104C308 103 290 85 290 60Z" fill="#fff" mask="url(#anneau-ajoure)" />
-      </g>
     </svg>
   )
 }

@@ -100,3 +100,53 @@ export function Verrou({ onRefermer }: { onRefermer: () => void }) {
     </button>
   )
 }
+
+/** Hand-forged iron key, drawn pointing left (viewBox 380×120). */
+export function Cle({ className = 'cle-dessin', id = 'fer-cle' }: { className?: string; id?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 380 120" aria-hidden>
+      <defs>
+        <FiltreFer id={id} l={380} h={120} />
+        <mask id={`${id}-ajoure`} maskUnits="userSpaceOnUse" x="0" y="0" width="380" height="120">
+          <rect width="380" height="120" fill="#fff" />
+          <circle cx="334" cy="46" r="10.5" fill="#000" />
+          <circle cx="334" cy="74" r="10.5" fill="#000" />
+          <circle cx="320" cy="60" r="10.5" fill="#000" />
+          <circle cx="348" cy="60" r="10.5" fill="#000" />
+          <circle cx="334" cy="60" r="7" fill="#000" />
+        </mask>
+      </defs>
+      <g filter={`url(#${id})`}>
+        {/* Bit */}
+        <path d="M4 46L11 43L64 44L65 77L57 78L57 103L47 104L46 92L37 92L38 103L25 104L24 86L15 87L14 77L5 76Z" fill="#fff" />
+        {/* Shaft, slightly uneven like hammered iron */}
+        <path d="M58 43C110 40 190 45 270 41L271 79C190 76 112 81 58 77Z" fill="#fff" />
+        {/* Collars */}
+        <path d="M266 33L280 34L281 87L265 86Z" fill="#fff" />
+        <path d="M284 38L293 37L294 83L284 84Z" fill="#fff" />
+        {/* Bow, pierced with a quatrefoil */}
+        <path d="M290 60C290 34 309 15 335 16C359 17 377 36 376 61C375 86 356 104 332 104C308 103 290 85 290 60Z" fill="#fff" mask={`url(#${id}-ajoure)`} />
+      </g>
+    </svg>
+  )
+}
+
+/** Narrow screens: the latch gives way to a small iron key in the header that closes the grimoire. */
+export function CleRefermer({ onRefermer }: { onRefermer: () => void }) {
+  const [tourne, setTourne] = useState(false)
+  return (
+    <button
+      type="button"
+      className={`cle-refermer ${tourne ? 'tourne' : ''}`}
+      title="Refermer le grimoire"
+      aria-label="Refermer le grimoire"
+      disabled={tourne}
+      onClick={() => {
+        setTourne(true)
+        setTimeout(onRefermer, 420)
+      }}
+    >
+      <Cle className="cle-refermer-dessin" id="fer-cle-mini" />
+    </button>
+  )
+}
