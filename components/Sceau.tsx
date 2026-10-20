@@ -160,7 +160,7 @@ export default function Sceau() {
             <CoinLaiton className="hd" />
             <CoinLaiton className="bd" />
             <div className="tome-cadre">
-              <Embleme taille={118} className="tome-embleme" />
+              <Embleme taille={150} className="tome-embleme" />
               <h1 className="tome-titre">Lunes Itinérantes</h1>
               <Fleuron className="tome-fleuron" />
             </div>

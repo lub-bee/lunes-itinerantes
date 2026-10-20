@@ -856,9 +856,10 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   --cle-l: 340px;
   --ecart: 44px;
   --plaque: calc(var(--cle-l) * 84 / 340);
-  --marge-serrure: 22px;
-  /* Height of the keyhole on the cover (lower third, clear of the title); the key lines up with it. */
-  --y-trou: calc(var(--tome-l) * 1.42 * 0.77);
+  /* Negative: the plate straddles the fore-edge, its keyhole right on the edge of the cover. */
+  --marge-serrure: calc(var(--plaque) / -2);
+  /* Height of the keyhole (middle of the cover); the key lines up with it. */
+  --y-trou: calc(var(--tome-l) * 1.42 * 0.5);
   /* Distance from the book's right edge to the keyhole, where the key's sheath clips it. */
   --trou: calc(var(--marge-serrure) + var(--plaque) / 2);
   /* The key travels to the keyhole and sinks its bit (and a little shaft) into it. */
@@ -955,8 +956,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding-top: 9%;
+  justify-content: center;
   text-align: center;
   border: 1.5px solid rgba(0, 0, 0, 0.42);
   box-shadow: 1px 1px 0 rgba(255, 215, 170, 0.12), inset 1px 1px 0 rgba(255, 215, 170, 0.1);
@@ -967,7 +967,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   margin: 14px 0 0;
   font-family: var(--f-gothique);
   font-weight: 400;
-  font-size: calc(var(--tome-l) * 0.15);
+  font-size: calc(var(--tome-l) * 0.14);
   line-height: 1.04;
   background: linear-gradient(180deg, #fff0bf 0%, #e3b964 45%, #a87a2c 70%, #e9c878 100%);
   -webkit-background-clip: text;
@@ -1040,12 +1040,11 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .tome-message { min-height: 1.6em; margin: 0; font-style: italic; font-size: 18px; color: var(--or-pale); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); text-align: center; }
 
 @media (max-width: 760px) {
-  .seuil { --tome-l: min(270px, 68vw); --cle-l: min(260px, 76vw); --ecart: 0px; --course: 0px; --marge-serrure: 14px; }
+  .seuil { --tome-l: min(270px, 68vw); --cle-l: min(260px, 76vw); --ecart: 0px; --course: 0px; }
   .table-tome { flex-direction: column; align-items: center; }
   .cle-fourreau { margin: 22px 0 0; padding: 10px 0; }
   .tome-cadre { inset: 20px 18px 20px 36px; }
-  .tome-embleme { height: 78px; width: auto; }
-  .tome-cadre { padding-top: 5%; }
+  .tome-embleme { height: 104px; width: auto; }
   .tome-couverture .laiton { width: 36px; height: 36px; }
   .cle-tige { font-size: 14px; padding: 0 6px; }
 }
