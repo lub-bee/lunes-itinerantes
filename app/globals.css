@@ -279,18 +279,22 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .laiton.bg { bottom: -4px; left: -4px; transform: scaleY(-1); }
 .laiton.bd { bottom: -4px; right: -4px; transform: scale(-1, -1); }
 
-/* Edges of the paper block, seen on both sides. */
-.tranche-papier {
+/* Edges of the paper block (sides and bottom), one piece so the corners meet. */
+.bloc-papier {
   position: absolute;
   top: 24px;
-  bottom: 18px;
-  width: 8px;
+  left: 18px;
+  right: 18px;
+  bottom: 15px;
   z-index: 1;
-  background: repeating-linear-gradient(90deg, #ecdcb5 0 1px, #b49a6a 1px 1.6px, #e4d1a5 1.6px 2.6px, #a58b5c 2.6px 3.2px);
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(180deg, #ecdcb5 0 1px, #a58b5c 1px 1.6px, #e4d1a5 1.6px 2.6px) bottom / 100% 7px no-repeat,
+    repeating-linear-gradient(90deg, #ecdcb5 0 1px, #b49a6a 1px 1.6px, #e4d1a5 1.6px 2.6px, #a58b5c 2.6px 3.2px) left / 8px 100% no-repeat,
+    repeating-linear-gradient(270deg, #ecdcb5 0 1px, #b49a6a 1px 1.6px, #e4d1a5 1.6px 2.6px, #a58b5c 2.6px 3.2px) right / 8px 100% no-repeat,
+    #e4d1a5;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
 }
-.tranche-gauche { left: 18px; border-radius: 3px 0 0 3px; }
-.tranche-droite { right: 18px; border-radius: 0 3px 3px 0; }
 
 .feuillets {
   position: relative;
@@ -299,18 +303,6 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   display: grid;
   grid-template-columns: 1fr 1fr;
   touch-action: pan-y;
-}
-/* Bottom edge of the paper block. */
-.feuillets::after {
-  content: '';
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  bottom: -5px;
-  height: 5px;
-  background: repeating-linear-gradient(180deg, #e4d1a5 0 1px, #a58b5c 1px 1.6px);
-  border-radius: 0 0 3px 3px;
-  z-index: -1;
 }
 
 .page {
@@ -796,7 +788,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .couverture::before { inset: 3px; }
   .couverture::after { display: none; }
   .laiton { width: 34px; height: 34px; }
-  .tranche-papier { display: none; }
+  .bloc-papier { display: none; }
   .feuillets { grid-template-columns: 1fr; min-height: 420px; }
   .page::before { inset: 8px; outline: none; }
 

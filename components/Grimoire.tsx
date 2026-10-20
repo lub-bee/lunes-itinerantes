@@ -539,8 +539,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
           <CoinLaiton className="hd" />
           <CoinLaiton className="bg" />
           <CoinLaiton className="bd" />
-          <div className="tranche-papier tranche-gauche" aria-hidden />
-          <div className="tranche-papier tranche-droite" aria-hidden />
+          <div className="bloc-papier" aria-hidden />
           <div className="feuillets" ref={feuillets} onPointerDown={debutGeste}>
             {etroit === null ? null : etroit ? (
               <>
