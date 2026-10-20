@@ -2,7 +2,7 @@
 titre: L'ombre de la Caravane
 court: L'ombre
 resume: La caravane vit de sa réputation. Ce que Khajiit fait dans l'ombre ne doit jamais l'entacher.
-icone: cloak-dagger
+icone: double-face-mask
 auteur: Les Patriarches
 ---
 
