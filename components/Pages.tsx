@@ -51,7 +51,7 @@ function Defile({ ctx, className, children }: { ctx: Ctx; className?: string; ch
   )
 }
 
-function CitationFin({ texte }: { texte: string }) {
+export function CitationFin({ texte }: { texte: string }) {
   return (
     <blockquote className="citation-fin">
       <p>{texte}</p>
@@ -103,7 +103,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   )
 }
 
-function EnTete({
+export function EnTete({
   surtitre,
   titre,
   sousTitre,
@@ -136,7 +136,7 @@ function EnTete({
   )
 }
 
-function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
+export function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
   return (
     <div className={`frontispice ${compact ? 'compact' : ''}`}>
       <Embleme taille={160} className="frontispice-embleme" />

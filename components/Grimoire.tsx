@@ -7,6 +7,7 @@ import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
+import { ICONE_COPIE } from '@/lib/copie'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
@@ -456,6 +457,27 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               ✕
             </button>
           )}
+          {/* Out of the layout flow (absolute): opens the printable copy of the whole register in a new tab. */}
+          <a
+            className="copie-registre"
+            href="/copie"
+            target="_blank"
+            rel="noopener"
+            title="Faire une copie du registre"
+            aria-label="Faire une copie du registre"
+          >
+            <svg width="0" height="0" aria-hidden className="copie-registre-defs">
+              <defs>
+                <linearGradient id="copie-or" x1="0" y1="0" x2="0.35" y2="1">
+                  <stop offset="0%" stopColor="#fff2c4" />
+                  <stop offset="30%" stopColor="#e3b964" />
+                  <stop offset="62%" stopColor="#a87a2c" />
+                  <stop offset="100%" stopColor="#e9c878" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <Icone corps={icones[ICONE_COPIE]} />
+          </a>
           {indexOuvert && requete && (
             <div className="index-recherche" role="listbox">
               {resultats.length === 0 ? (

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { marked } from 'marked'
 import { parserCsv } from './csv'
+import { ICONE_COPIE } from './copie'
 import { icones } from './icones'
 import { ICONES_ARTISANS, normaliser } from './recherche'
 import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
@@ -152,6 +153,6 @@ export async function chargerLivre(): Promise<Livre> {
     },
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS)]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

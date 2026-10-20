@@ -216,6 +216,35 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .index-plus { padding: 2px 42px; font-style: italic; font-size: 13px; color: var(--encre-pale); }
 .index-vide { margin: 8px 12px; font-style: italic; color: var(--encre-douce); }
 
+/* "Faire une copie du registre": a gilded quill beside the search. Absolutely positioned so that
+   nothing else in the header moves; beside the field on wide screens, under its right end when
+   the header is too tight, next to the iron key on narrow screens. */
+.copie-registre {
+  position: absolute;
+  left: calc(100% + 18px);
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.75)) drop-shadow(0 0 10px rgba(232, 170, 80, 0.22));
+  transition: filter 220ms ease, transform 260ms cubic-bezier(.3, 1.4, .5, 1);
+}
+.copie-registre-defs { position: absolute; width: 0; height: 0; }
+.copie-registre .icone { width: 32px; height: 32px; }
+.copie-registre .icone path { fill: url(#copie-or); }
+.copie-registre:hover, .copie-registre:focus-visible {
+  outline: none;
+  transform: rotate(-8deg) translateY(-1px);
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.75)) drop-shadow(0 0 14px rgba(240, 190, 100, 0.55));
+}
+@media (min-width: 861px) and (max-width: 1139px) {
+  .copie-registre { left: auto; right: 2px; top: calc(100% + 10px); translate: none; width: 36px; height: 36px; }
+  .copie-registre .icone { width: 28px; height: 28px; }
+}
+
 
 /* ═══════════════════════════ Book ═══════════════════════════ */
 
@@ -817,6 +846,9 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .recherche-globale input { padding: 7px 30px 7px 34px; font-size: 15px; }
   .recherche-globale.avec-trouvailles input { padding-right: 118px; }
   .recherche-globale .trouvailles { right: 28px; font-size: 12px; padding: 1px 7px; }
+  /* Next to the iron key, on the first row (the field is the second row). */
+  .copie-registre { left: auto; right: 54px; top: auto; bottom: calc(100% + 14px); translate: none; width: 34px; height: 34px; }
+  .copie-registre .icone { width: 28px; height: 28px; }
   .entete { gap: 8px 12px; }
   .bloc-papier { display: none; }
   .feuillets { grid-template-columns: 1fr; min-height: 420px; }
@@ -1074,3 +1106,146 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .egare h1 { font-family: var(--f-gothique); font-weight: 400; font-size: 52px; color: var(--or-pale); margin: 0; }
 .egare p { font-style: italic; color: #e8d6ae; max-width: 420px; }
 .egare a { color: var(--or); font-family: var(--f-capitales); }
+
+/* ═══════════════════════════ Copy of the register (/copie, printed to PDF) ═══════════════════════════ */
+
+.copie { position: relative; z-index: 1; width: min(210mm, 100%); margin: 0 auto; padding: 18px 16px 40px; color: var(--encre); font-size: 11.5pt; }
+.copie-retour { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 0 14px; font-family: var(--f-capitales); letter-spacing: 0.06em; }
+.copie-retour a { color: var(--or-pale); text-decoration: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.copie-retour a:hover { color: #fff0bf; }
+.copie-retour button { border: 1px solid rgba(201, 162, 78, 0.55); border-radius: 3px; background: rgba(40, 20, 8, 0.55); color: var(--or-pale); font-family: var(--f-capitales); letter-spacing: 0.06em; padding: 4px 12px; }
+.copie-retour button:hover { background: rgba(90, 44, 20, 0.7); }
+
+/* On screen: each part is a sheet of parchment laid on the table. */
+.feuille {
+  position: relative;
+  margin: 0 0 26px;
+  padding: 16mm 15mm 14mm;
+  background-color: var(--parchemin);
+  background-image: var(--taches), var(--grain);
+  box-shadow: inset 0 0 50px rgba(130, 80, 25, 0.28), 0 16px 34px rgba(0, 0, 0, 0.6);
+  border-radius: 2px;
+}
+.feuille::before {
+  content: '';
+  position: absolute;
+  inset: 5mm;
+  border: 1px solid rgba(120, 60, 30, 0.32);
+  outline: 1px solid rgba(120, 60, 30, 0.16);
+  outline-offset: 3px;
+  pointer-events: none;
+}
+
+.copie .titre-page { font-size: 34pt; }
+.copie .surtitre { font-size: 9.5pt; }
+.copie .sous-titre { font-size: 12.5pt; }
+.copie .medaillon { --t: 15mm; }
+.copie .intro { font-size: 12pt; margin-bottom: 6px; }
+.copie .intro.lettrine { display: flow-root; }
+.copie .decompte { font-size: 10.5pt; margin: 2px 0 8px; }
+.copie .signature { font-size: 11pt; }
+
+/* Title page */
+.feuille-titre { min-height: 262mm; display: flex; flex-direction: column; justify-content: center; }
+.copie .frontispice-embleme { height: 62mm; width: auto; animation: none; }
+.copie .frontispice-sur { font-size: 13pt; margin-top: 14px; }
+.copie .frontispice-titre { font-size: 40pt; }
+.copie .frontispice .fleuron { margin: 14px auto; }
+.copie .citation { font-size: 14pt; }
+.copie .frontispice-texte { font-size: 12pt; max-width: 120mm; }
+.copie .consigne { font-size: 10pt; margin-top: 18px; }
+.copie .colophon { font-size: 9pt; }
+
+/* Contents */
+.copie-sommaire { max-width: 140mm; margin: 0 auto; }
+.copie-sommaire h4 { font-size: 13pt; }
+.copie-sommaire a { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; color: inherit; text-decoration: none; font-size: 12.5pt; }
+.copie-sommaire .renvoi { font-size: 10.5pt; }
+.copie-sommaire .renvoi:first-child { min-width: 9mm; }
+.copie-avenir { margin: 2px 4px; font-style: italic; font-size: 11pt; color: var(--encre-pale); }
+
+/* Price ledger, as a real table so the printed header repeats on every page. */
+.copie-registre-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.copie-registre-table thead th {
+  padding: 2px 3px 5px;
+  font-family: var(--f-capitales);
+  font-weight: 400;
+  font-size: 10.5pt;
+  letter-spacing: 0.06em;
+  color: var(--encre-rouge);
+  text-align: right;
+  border-bottom: 3px double rgba(142, 31, 20, 0.5);
+}
+.copie-registre-table thead th.col-article { text-align: left; }
+.copie-registre-table td { padding: 3px 3px 2px; vertical-align: top; border-bottom: 1px solid rgba(110, 80, 45, 0.16); }
+.copie-registre-table tr { break-inside: avoid; }
+/* Never leave a lone row (or the foot of the ledger) alone at the top of a page. */
+.copie-registre-table tbody tr:last-child, .copie .registre-pied { break-before: avoid; }
+.copie-registre-table .col-glyphe { width: 7mm; padding-right: 0; }
+.copie-registre-table .glyphe { width: 15px; height: 15px; }
+.copie-registre-table .noms { display: table-cell; }
+.copie-registre-table .noms > span { display: block; }
+.copie-nom { display: flex !important; align-items: baseline; gap: 6px; }
+.copie-nom .points-conduite { flex: 1; min-width: 12px; margin: 0; height: 4px; }
+.copie .nom-fr { font-size: 12pt; }
+.copie .nom-en { font-size: 10pt; }
+.copie .note-article { font-size: 9pt; }
+.copie-registre-table .prix { width: 19mm; white-space: nowrap; font-size: 12pt; }
+.copie-registre-table .prix-cout { font-size: 10.5pt; padding-top: 5px; }
+.copie-registre-table .a-negocier { font-size: 11pt; }
+.copie .registre-pied { font-size: 9pt; margin-top: 10px; }
+.copie .legende-sceaux { font-size: 9.5pt; margin-top: 4px; }
+.copie .legende-sceaux .glyphe { width: 14px; height: 14px; }
+
+/* Memos */
+.copie .prose { font-size: 12pt; line-height: 1.5; padding: 0; }
+/* The drop cap stays inside its paragraph, even a one-line one. */
+.copie .prose > p:first-child { display: flow-root; }
+.copie-sommaire + .citation-fin { max-width: 140mm; margin-left: auto; margin-right: auto; }
+.copie .prose h2 { font-size: 19pt; break-after: avoid; }
+.copie .prose blockquote, .copie .citation-fin { font-size: 12.5pt; break-inside: avoid; }
+
+.copie-fin { margin: 10px 0 0; text-align: center; font-style: italic; font-size: 12pt; color: var(--or-pale); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.copie-fin .fleuron { color: var(--or); }
+
+/* No page margin: the parchment covers the whole sheet; each part pads every page it spans instead. */
+@page { size: A4; margin: 0; }
+
+@media print {
+  /* The paper colour and the ink must survive "background graphics: off" defaults. */
+  html, body, .copie, .copie * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html:has(.copie), body:has(.copie) { background: var(--parchemin) var(--taches); background-size: 640px 640px; }
+  body:has(.copie)::before, body:has(.copie)::after { display: none; }
+  .copie { width: auto; padding: 0; font-size: 11pt; }
+  .copie-retour { display: none; }
+  .feuille {
+    margin: 0;
+    padding: 17mm 19mm 16mm;
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    break-before: page;
+    /* The padding is repeated on every page a long chapter spans. */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .feuille:first-of-type { break-before: auto; }
+  .feuille::before { display: none; }
+  /* Ruled double frame repeated on every printed page. */
+  .copie::before {
+    content: '';
+    position: fixed;
+    inset: 8mm;
+    border: 1px solid rgba(120, 60, 30, 0.32);
+    outline: 1px solid rgba(120, 60, 30, 0.16);
+    outline-offset: 3px;
+    pointer-events: none;
+  }
+  .feuille-titre { min-height: 290mm; }
+  /* Narrow print width falls under the narrow-screen rules: bring back what they hide. */
+  .copie .decompte { display: block; }
+  .copie .legende-sceaux { display: flex; }
+  .copie-fin { color: var(--encre-douce); text-shadow: none; break-inside: avoid; }
+  .copie-fin .fleuron { color: var(--encre-rouge); }
+  .copie a { color: inherit; text-decoration: none; }
+}

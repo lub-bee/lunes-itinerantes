@@ -87,6 +87,21 @@ Memo pages are covered by the global search.
 3. Set `CATALOGUE_CSV_URL` in Vercel and redeploy. The grimoire re-reads the sheet every 5 minutes;
    if the sheet is unreachable it falls back to `content/marchandises.csv`.
 
+## Copy of the register (PDF export)
+
+The gilded quill next to the search field ("Faire une copie du registre") opens `/copie` in a new tab:
+the whole book laid out as an A4 document (title page, contents, one page per price chapter, the
+memo pages; the unwritten books are only named in the contents). It reads the same data as the
+grimoire (`chargerLivre()`, so the CSV or the published sheet, `chapitres.json` and the memos), so
+the copy is always current. Once fonts are loaded the page opens the browser's print dialog:
+choose **Save as PDF** (enable "Background graphics" if the browser does not keep the parchment).
+The default file name is the page title, *Registre de la Caravane des Lunes Itinérantes*.
+
+- Page: `app/copie/page.tsx` → `components/Copie.tsx`; print styles at the end of `app/globals.css`
+  (`@page` A4, every chapter on a new page, rows never split, ledger header repeated).
+- The quill glyph is `ICONE_COPIE` in `lib/copie.ts` (a game-icons name, loaded with the others).
+- `/copie` is behind the seal like every page.
+
 ## Deploy
 
 Pushing to `main` deploys to production through Vercel's Git integration.
