@@ -6,11 +6,11 @@ icone: scales
 auteur: Les anciens de la caravane
 ---
 
-Chaque article du grimoire porte **trois prix**. Khajiit les explique une fois, et une seule.
+Chaque article du grimoire porte **trois prix**. Khajiit les explique une fois, une seule.
 
 ## Le coût
 
-Ce que l'objet a coûté à la caravane : matières, temps de l'artisan, sueur et fourrure roussie à la forge. **Vendre en dessous, c'est payer le client pour qu'il reparte.**
+Ce que l'objet a coûté à la caravane : matières, temps de l'artisan, sueur et fourrure roussie à la forge. **Vendre en dessous, c'est vendre aux dépens de votre poche.**
 
 ## Le plancher
 
@@ -18,12 +18,12 @@ Le prix le plus bas auquel un marchand de la caravane peut céder l'objet. Pas u
 
 ## Le plafond
 
-Le prix le plus haut que la caravane demande honnêtement. On peut l'annoncer d'abord, puis se laisser « convaincre ».
+Le seul vrai plafond est celui du talent oratoire de Khajiit. Mieux vaut commencer plus haut et se laisser « convaincre ».
 
 ## Quelques usages
 
-- On commence toujours près du plafond. Le client aime gagner ; laisse-le gagner un peu.
-- Un objet marqué **à négocier** n'a pas de prix fixe : demande à un ancien avant de conclure.
-- Si un prix du grimoire semble faux, ne le corrige pas seul : préviens celui qui tient le registre.
+- Le client aime gagner : laissez-le gagner un peu, mais jamais en dessous du plancher.
+- Un objet marqué **à négocier** n'a pas de prix fixe : demandez à un ancien avant de conclure.
+- Si un prix du grimoire semble faux, ne le corrigez pas seul : prévenez celui qui tient le registre.
 
-> Que les lunes guident tes pas, et ta bourse.
+> Que les lunes guident vos pas, et votre bourse.

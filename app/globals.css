@@ -753,7 +753,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .prose { font-size: 17px; line-height: 1.6; text-align: justify; hyphens: auto; padding-right: 6px; }
 .prose h2 { font-family: var(--f-gothique); font-weight: 400; font-size: 29px; color: var(--teinte, var(--encre-rouge)); margin: 18px 0 2px; text-align: left; }
 .prose h3 { font-family: var(--f-capitales); font-weight: 400; font-size: 19px; margin: 14px 0 4px; }
-.prose p:first-child::first-letter {
+.prose > p:first-child::first-letter {
   float: left; font-family: var(--f-gothique); font-size: 2.9em; line-height: 1; padding: 6px 9px 3px; margin: 5px 11px 0 0; color: #f4d886;
   background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--teinte, #8e1f14) 75%, white), var(--teinte, #8e1f14) 55%, color-mix(in srgb, var(--teinte, #8e1f14) 60%, black));
   border: 1.5px solid #b48a3a; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25), inset 0 0 0 3px rgba(244, 216, 134, 0.45);
@@ -761,7 +761,9 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .prose strong { color: var(--encre-rouge); font-weight: 400; font-family: var(--f-capitales); }
 .prose ul { padding-left: 20px; }
 .prose li::marker { content: '❧  '; color: var(--teinte, var(--encre-rouge)); }
-.prose blockquote { margin: 18px 10px; padding: 8px 14px; border-left: 2px solid var(--teinte, var(--encre-rouge)); font-style: italic; color: var(--encre-douce); }
+.prose blockquote { margin: 22px 10px 8px; padding: 0; text-align: center; font-style: italic; font-size: 18px; color: var(--encre-douce); }
+.prose blockquote::before { content: '❦'; display: block; margin-bottom: 6px; font-style: normal; color: var(--teinte, var(--encre-rouge)); opacity: 0.75; }
+.prose blockquote p { margin: 0; text-align: center; }
 .prose a { color: var(--encre-rouge); }
 
 /* ─── Pages still to be written ─── */
