@@ -58,6 +58,9 @@ site, take the last part of the icon's URL. Only the icons in use are sent to th
 recompressed. Swap the file to change the table; its tint is set in `app/globals.css` (`body`).
 `public/textures/cuir.jpg` (the locked book on the login page) is Poly Haven's
 [brown_leather](https://polyhaven.com/a/brown_leather) (CC0), 2K, recompressed.
+`public/textures/fer.jpg` (the forged-iron key and lock) is Poly Haven's
+[rusty_metal_04](https://polyhaven.com/a/rusty_metal_04) (CC0), desaturated and lit by an SVG filter
+(`FiltreFer` in `components/Sceau.tsx`).
 
 ### Memo pages ("pense-bêtes") — `content/pense-betes/*.md`
 

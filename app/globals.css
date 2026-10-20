@@ -989,30 +989,33 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   aspect-ratio: 380 / 120;
   transition: transform 480ms cubic-bezier(.4, .1, .3, 1);
   transform-style: preserve-3d;
-  filter: drop-shadow(3px 5px 4px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(3px 6px 5px rgba(0, 0, 0, 0.75));
 }
 .cle-dessin { position: absolute; inset: 0; width: 100%; height: 100%; }
 .cle-tige {
   position: absolute;
-  left: 17.4%;
-  width: 53.2%;
-  top: 39.2%;
-  height: 21.7%;
+  left: 18.5%;
+  width: 50%;
+  top: 40.5%;
+  height: 21%;
   padding: 0 10px;
   border: 0;
   background: transparent;
-  color: #2a1606;
+  color: #e6dfd2;
   font-size: 17px;
   text-align: center;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   outline: none;
-  text-shadow: 0 1px 0 rgba(255, 236, 180, 0.5);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.25));
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.1);
 }
-.cle-tige::placeholder { color: rgba(42, 22, 6, 0.62); font-style: italic; letter-spacing: 0; }
-.cle-tige:focus { box-shadow: inset 0 0 0 1px rgba(255, 236, 180, 0.6); border-radius: 3px; }
+.cle-tige::placeholder { color: rgba(220, 210, 195, 0.6); font-style: italic; letter-spacing: 0; }
+.cle-tige:focus { box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(230, 220, 200, 0.35); }
 .cle-anneau { position: absolute; left: 74.7%; top: 11.7%; width: 24.2%; height: 76.7%; border: 0; border-radius: 50%; background: transparent; padding: 0; }
-.cle-anneau:not(:disabled):hover { background: radial-gradient(circle, rgba(255, 240, 190, 0.22), transparent 70%); }
-.cle-anneau:focus-visible { outline: 2px solid rgba(255, 236, 180, 0.7); outline-offset: 2px; }
+.cle-anneau:not(:disabled):hover { background: radial-gradient(circle, rgba(230, 225, 215, 0.14), transparent 70%); }
+.cle-anneau:focus-visible { outline: 2px solid rgba(230, 220, 200, 0.6); outline-offset: 2px; }
 
 .etat-essai .cle, .etat-refus .cle, .etat-ouvert .cle { transform: translateX(calc(-1 * var(--course))); }
 .etat-refus .cle { animation: cle-hesite 520ms ease-in-out; }
@@ -1040,6 +1043,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .tome-cadre { inset: 20px 18px 20px 36px; }
   .tome-cadre svg:first-child { width: 64px; height: 64px; }
   .tome-couverture .laiton { width: 36px; height: 36px; }
+  .cle-tige { font-size: 14px; padding: 0 6px; }
 }
 
 .egare { position: relative; z-index: 1; min-height: 100vh; display: grid; place-content: center; text-align: center; padding: 24px 16px; }

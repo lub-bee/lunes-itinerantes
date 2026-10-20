@@ -5,86 +5,97 @@ import { CoinLaiton, Fleuron, Lunes } from './Ornements'
 
 type Etat = 'repos' | 'essai' | 'refus' | 'ouvert'
 
-/** Brass lock plate of the clasp, with its keyhole. */
+/**
+ * Forged-iron look for an SVG shape: a CC0 photo of worn metal (desaturated, darkened), lit as a
+ * relief. The height map mixes the blurred silhouette (bevelled edges) and the photo's own
+ * luminance (pitting, rough patches).
+ */
+function FiltreFer({ id, l, h }: { id: string; l: number; h: number }) {
+  const cote = Math.max(l, h) * 1.2
+  return (
+    <filter id={id} filterUnits="userSpaceOnUse" x="0" y="0" width={l} height={h} colorInterpolationFilters="sRGB">
+      <feImage href="/textures/fer.jpg" x="0" y="0" width={cote} height={cote} preserveAspectRatio="xMidYMid slice" result="photo" />
+      <feColorMatrix in="photo" type="saturate" values="0.12" result="gris" />
+      <feComponentTransfer in="gris" result="sombre">
+        <feFuncR type="linear" slope="0.62" intercept="0.02" />
+        <feFuncG type="linear" slope="0.6" intercept="0.02" />
+        <feFuncB type="linear" slope="0.6" intercept="0.03" />
+      </feComponentTransfer>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2.6" result="biseau" />
+      <feColorMatrix in="photo" type="luminanceToAlpha" result="aspérités" />
+      <feComposite in="biseau" in2="aspérités" operator="arithmetic" k1="0" k2="1" k3="0.45" k4="0" result="relief" />
+      <feDiffuseLighting in="relief" surfaceScale="3.2" diffuseConstant="1.15" lightingColor="#f2ede4" result="diffus">
+        <feDistantLight azimuth="235" elevation="42" />
+      </feDiffuseLighting>
+      <feSpecularLighting in="relief" surfaceScale="3.6" specularConstant="0.5" specularExponent="26" lightingColor="#e9e4da" result="reflet">
+        <feDistantLight azimuth="235" elevation="42" />
+      </feSpecularLighting>
+      <feBlend in="sombre" in2="diffus" mode="multiply" result="eclaire" />
+      <feComposite in="reflet" in2="SourceAlpha" operator="in" result="refletForme" />
+      <feComposite in="eclaire" in2="refletForme" operator="arithmetic" k1="0" k2="1" k3="0.55" k4="0" result="metal" />
+      <feComposite in="metal" in2="SourceAlpha" operator="in" />
+    </filter>
+  )
+}
+
+/** Iron lock plate of the clasp, with its keyhole. */
 function Serrure() {
   return (
     <svg className="serrure" viewBox="0 0 72 116" aria-hidden>
       <defs>
-        <linearGradient id="serrure-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#f8e2a0" />
-          <stop offset="38%" stopColor="#c99a3e" />
-          <stop offset="72%" stopColor="#8a6320" />
-          <stop offset="100%" stopColor="#4f360d" />
-        </linearGradient>
-        <radialGradient id="serrure-rivet" cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#fff1c2" />
-          <stop offset="60%" stopColor="#b98a35" />
-          <stop offset="100%" stopColor="#4f360d" />
+        <FiltreFer id="fer-serrure" l={72} h={116} />
+        <radialGradient id="trou-g" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stopColor="#000" />
+          <stop offset="100%" stopColor="#1c1612" />
         </radialGradient>
       </defs>
-      <path
-        d="M36 2C46 10 60 10 68 6C70 24 66 34 60 40C66 46 70 52 70 58C70 64 66 70 60 76C66 82 70 92 68 110C60 106 46 106 36 114C26 106 12 106 4 110C2 92 6 82 12 76C6 70 2 64 2 58C2 52 6 46 12 40C6 34 2 24 4 6C12 10 26 10 36 2Z"
-        fill="url(#serrure-g)"
-        stroke="#3b2608"
-        strokeWidth="1.4"
-      />
-      <path
-        d="M36 10C44 16 54 17 61 14C62 26 58 34 52 40C58 46 62 52 62 58C62 64 58 70 52 76C58 82 62 90 61 102C54 99 44 100 36 106C28 100 18 99 11 102C10 90 14 82 20 76C14 70 10 64 10 58C10 52 14 46 20 40C14 34 10 26 11 14C18 17 28 16 36 10Z"
-        fill="none"
-        stroke="#fbe7ad"
-        strokeOpacity=".45"
-      />
-      <circle cx="36" cy="52" r="7.5" fill="#140a02" />
-      <path d="M32 56L29.5 72H42.5L40 56Z" fill="#140a02" />
-      <circle cx="36" cy="52" r="7.5" fill="none" stroke="#3b2608" strokeWidth="1.2" />
-      {[
-        [12, 18],
-        [60, 18],
-        [12, 98],
-        [60, 98],
-      ].map(([x, y]) => (
-        <circle key={`${x}-${y}`} cx={x} cy={y} r="3" fill="url(#serrure-rivet)" stroke="#3b2608" strokeWidth=".6" />
-      ))}
+      <g filter="url(#fer-serrure)">
+        <path
+          d="M36 3C46 10 59 11 67 7C69 24 66 34 59 40C66 46 69 52 69 58C69 65 65 70 59 76C66 83 69 92 67 109C59 105 46 106 36 113C26 106 13 105 5 109C3 92 6 83 13 76C7 70 3 65 3 58C3 52 6 46 13 40C6 34 3 24 5 7C13 11 26 10 36 3Z"
+          fill="#fff"
+        />
+        {[
+          [13, 19],
+          [59, 19],
+          [13, 97],
+          [59, 97],
+        ].map(([x, y]) => (
+          <circle key={`${x}-${y}`} cx={x} cy={y} r="3.6" fill="#fff" />
+        ))}
+      </g>
+      <circle cx="36" cy="52" r="7.5" fill="url(#trou-g)" />
+      <path d="M32 56L29.5 72H42.5L40 56Z" fill="url(#trou-g)" />
+      <path d="M28.5 52a7.5 7.5 0 0 1 15 0" fill="none" stroke="#000" strokeOpacity=".6" strokeWidth="1.5" />
     </svg>
   )
 }
 
-/** Ornate brass key, drawn pointing left. The password field sits on its shaft. */
+/** Hand-forged iron key, drawn pointing left. The password field sits on its shaft. */
 function Cle() {
   return (
     <svg className="cle-dessin" viewBox="0 0 380 120" aria-hidden>
       <defs>
-        <linearGradient id="cle-g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fbe7ad" />
-          <stop offset="30%" stopColor="#d7ab4d" />
-          <stop offset="65%" stopColor="#8a6320" />
-          <stop offset="100%" stopColor="#c99a3e" />
-        </linearGradient>
-        <linearGradient id="cle-anneau-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#fbe7ad" />
-          <stop offset="40%" stopColor="#c99a3e" />
-          <stop offset="100%" stopColor="#5b3f12" />
-        </linearGradient>
+        <FiltreFer id="fer-cle" l={380} h={120} />
+        <mask id="anneau-ajoure" maskUnits="userSpaceOnUse" x="0" y="0" width="380" height="120">
+          <rect width="380" height="120" fill="#fff" />
+          <circle cx="334" cy="46" r="10.5" fill="#000" />
+          <circle cx="334" cy="74" r="10.5" fill="#000" />
+          <circle cx="320" cy="60" r="10.5" fill="#000" />
+          <circle cx="348" cy="60" r="10.5" fill="#000" />
+          <circle cx="334" cy="60" r="7" fill="#000" />
+        </mask>
       </defs>
-      {/* Bit */}
-      <path d="M6 44H66V76H58V104H48V92H38V104H26V86H16V76H6Z" fill="url(#cle-g)" stroke="#3b2608" strokeWidth="1.4" strokeLinejoin="round" />
-      {/* Shaft */}
-      <rect x="60" y="42" width="214" height="36" rx="5" fill="url(#cle-g)" stroke="#3b2608" strokeWidth="1.4" />
-      <rect x="66" y="47" width="202" height="26" rx="3" fill="#2a1a08" fillOpacity=".16" stroke="#3b2608" strokeOpacity=".5" />
-      {/* Collar */}
-      <rect x="270" y="34" width="10" height="52" rx="3" fill="url(#cle-g)" stroke="#3b2608" strokeWidth="1.4" />
-      <rect x="284" y="38" width="7" height="44" rx="3" fill="url(#cle-g)" stroke="#3b2608" strokeWidth="1.4" />
-      {/* Bow: a ring with a quatrefoil, the caravan's moon at its heart */}
-      <circle cx="330" cy="60" r="46" fill="url(#cle-anneau-g)" stroke="#3b2608" strokeWidth="1.6" />
-      <path
-        d="M330 24C342 24 348 36 344 46C354 42 366 48 366 60C366 72 354 78 344 74C348 84 342 96 330 96C318 96 312 84 316 74C306 78 294 72 294 60C294 48 306 42 316 46C312 36 318 24 330 24Z"
-        fill="#140a02"
-        fillOpacity=".88"
-        stroke="#3b2608"
-      />
-      <circle cx="330" cy="60" r="13" fill="url(#cle-anneau-g)" stroke="#3b2608" strokeWidth="1.2" />
-      <circle cx="334" cy="56" r="10" fill="#140a02" fillOpacity=".88" />
-      <circle cx="330" cy="60" r="44" fill="none" stroke="#fbe7ad" strokeOpacity=".4" />
+      <g filter="url(#fer-cle)">
+        {/* Bit */}
+        <path d="M4 46L11 43L64 44L65 77L57 78L57 103L47 104L46 92L37 92L38 103L25 104L24 86L15 87L14 77L5 76Z" fill="#fff" />
+        {/* Shaft, slightly uneven like hammered iron */}
+        <path d="M58 43C110 40 190 45 270 41L271 79C190 76 112 81 58 77Z" fill="#fff" />
+        {/* Collars */}
+        <path d="M266 33L280 34L281 87L265 86Z" fill="#fff" />
+        <path d="M284 38L293 37L294 83L284 84Z" fill="#fff" />
+        {/* Bow, pierced with a quatrefoil */}
+        <path d="M290 60C290 34 309 15 335 16C359 17 377 36 376 61C375 86 356 104 332 104C308 103 290 85 290 60Z" fill="#fff" mask="url(#anneau-ajoure)" />
+      </g>
     </svg>
   )
 }
