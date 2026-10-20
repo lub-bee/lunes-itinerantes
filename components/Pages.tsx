@@ -135,11 +135,11 @@ function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
       <div className="frontispice-sur">Grimoire de la</div>
       <h2 className="frontispice-titre">Caravane des Lunes Itinérantes</h2>
       <Fleuron />
-      <p className="citation">« Khajiit a des marchandises, si tu as la pièce. »</p>
+      <p className="citation">« Il n&apos;existe rien qu&apos;un bon Khajiit ne saurait vendre. »</p>
       {!compact && (
         <p className="frontispice-texte">
-          Registre des prix tenu par les marchands de la caravane, de Rorikbourg à Aubétoile. Qu&apos;on le consulte avant chaque vente, et
-          qu&apos;on ne le prête jamais à un Nordique.
+          Registre de la Caravane des Lunes Itinérantes. Qu&apos;on le consulte avant chaque vente, et que jamais d&apos;yeux non
+          Khajiit ne le consultent.
         </p>
       )}
       <p className="consigne">Prix consignés le {dateTamrielique(ctx.livre.consigneLe)}</p>
