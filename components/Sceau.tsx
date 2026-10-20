@@ -2,41 +2,9 @@
 
 import { useRef, useState } from 'react'
 import { CoinLaiton, Embleme, Fleuron } from './Ornements'
+import { FiltreFer } from './Fer'
 
 type Etat = 'repos' | 'essai' | 'refus' | 'ouvert'
-
-/**
- * Forged-iron look for an SVG shape: a CC0 photo of worn metal (desaturated, darkened), lit as a
- * relief. The height map mixes the blurred silhouette (bevelled edges) and the photo's own
- * luminance (pitting, rough patches).
- */
-function FiltreFer({ id, l, h }: { id: string; l: number; h: number }) {
-  const cote = Math.max(l, h) * 1.2
-  return (
-    <filter id={id} filterUnits="userSpaceOnUse" x="0" y="0" width={l} height={h} colorInterpolationFilters="sRGB">
-      <feImage href="/textures/fer.jpg" x="0" y="0" width={cote} height={cote} preserveAspectRatio="xMidYMid slice" result="photo" />
-      <feColorMatrix in="photo" type="saturate" values="0.12" result="gris" />
-      <feComponentTransfer in="gris" result="sombre">
-        <feFuncR type="linear" slope="0.62" intercept="0.02" />
-        <feFuncG type="linear" slope="0.6" intercept="0.02" />
-        <feFuncB type="linear" slope="0.6" intercept="0.03" />
-      </feComponentTransfer>
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2.6" result="biseau" />
-      <feColorMatrix in="photo" type="luminanceToAlpha" result="aspérités" />
-      <feComposite in="biseau" in2="aspérités" operator="arithmetic" k1="0" k2="1" k3="0.45" k4="0" result="relief" />
-      <feDiffuseLighting in="relief" surfaceScale="3.2" diffuseConstant="1.15" lightingColor="#f2ede4" result="diffus">
-        <feDistantLight azimuth="235" elevation="42" />
-      </feDiffuseLighting>
-      <feSpecularLighting in="relief" surfaceScale="3.6" specularConstant="0.5" specularExponent="26" lightingColor="#e9e4da" result="reflet">
-        <feDistantLight azimuth="235" elevation="42" />
-      </feSpecularLighting>
-      <feBlend in="sombre" in2="diffus" mode="multiply" result="eclaire" />
-      <feComposite in="reflet" in2="SourceAlpha" operator="in" result="refletForme" />
-      <feComposite in="eclaire" in2="refletForme" operator="arithmetic" k1="0" k2="1" k3="0.55" k4="0" result="metal" />
-      <feComposite in="metal" in2="SourceAlpha" operator="in" />
-    </filter>
-  )
-}
 
 /**
  * Iron lock plate on the cover. Its keyhole is the key's cross-section at the key's scale

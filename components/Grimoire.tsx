@@ -6,6 +6,7 @@ import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
+import { Verrou } from './Fer'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
@@ -497,10 +498,6 @@ export default function Grimoire({ livre }: { livre: Livre }) {
           )}
         </div>
 
-        <button type="button" className="refermer" onClick={refermer} title="Refermer le grimoire">
-          <Icone corps={icones.padlock} />
-          <span>Refermer</span>
-        </button>
       </header>
 
       <main className={`livre-zone ${etroit === null ? 'en-attente' : ''}`}>
@@ -535,6 +532,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
         </nav>
 
         <div className="couverture">
+          <Verrou onRefermer={refermer} />
           <CoinLaiton className="hg" />
           <CoinLaiton className="hd" />
           <CoinLaiton className="bg" />

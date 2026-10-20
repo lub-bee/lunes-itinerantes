@@ -216,25 +216,6 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .index-plus { padding: 2px 42px; font-style: italic; font-size: 13px; color: var(--encre-pale); }
 .index-vide { margin: 8px 12px; font-style: italic; color: var(--encre-douce); }
 
-.refermer {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  padding: 8px 14px 8px 10px;
-  border-radius: 3px;
-  background-color: var(--cuir);
-  background-image: var(--cuir-relief), linear-gradient(180deg, var(--cuir-clair), var(--cuir-sombre));
-  background-blend-mode: multiply;
-  box-shadow: inset 0 0 0 1px rgba(201, 162, 78, 0.5), inset 0 0 0 3px rgba(0, 0, 0, 0.25), 0 3px 8px rgba(0, 0, 0, 0.5);
-  color: var(--or-pale);
-  font-family: var(--f-capitales);
-  font-size: 14px;
-  letter-spacing: 0.05em;
-  transition: filter 200ms ease, transform 200ms ease;
-}
-.refermer .icone { width: 18px; height: 18px; color: var(--or); }
-.refermer:hover { filter: brightness(1.15); transform: translateY(-1px); }
 
 /* ═══════════════════════════ Book ═══════════════════════════ */
 
@@ -275,6 +256,44 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 }
 .couverture::before { inset: 6px; border: 1.5px solid rgba(214, 174, 90, 0.6); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(0, 0, 0, 0.4); }
 .couverture::after { inset: 10px; border: 1px solid rgba(0, 0, 0, 0.35); box-shadow: 0 1px 0 rgba(255, 220, 180, 0.08); }
+
+/* Iron latch on the left edge of the open book (the lock seen from inside); clicking it closes the grimoire. */
+.verrou {
+  position: absolute;
+  z-index: 5;
+  left: -46px;
+  top: calc(50% - 70px);
+  width: 84px;
+  height: 140px;
+  padding: 0;
+  border: 0;
+  background: none;
+  filter: drop-shadow(2px 4px 4px rgba(0, 0, 0, 0.7));
+  transition: filter 200ms ease, transform 200ms ease;
+}
+.verrou svg { display: block; width: 100%; height: 100%; }
+.verrou-pene { transition: transform 380ms cubic-bezier(.5, 0, .3, 1); }
+.verrou.tire .verrou-pene { transform: translateX(16px); }
+.verrou:not(:disabled):hover { filter: drop-shadow(2px 4px 4px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 10px rgba(236, 200, 140, 0.35)); }
+.verrou:focus-visible { outline: 2px solid rgba(236, 211, 147, 0.7); outline-offset: 4px; border-radius: 8px; }
+/* Hint shown on hover, in the margin left of the book. */
+.verrou::after {
+  content: 'Refermer le grimoire';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  translate: -50% -4px;
+  white-space: nowrap;
+  font-family: var(--f-capitales);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--or-pale);
+  text-shadow: 0 1px 2px #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease, translate 200ms ease;
+}
+.verrou:hover::after, .verrou:focus-visible::after { opacity: 1; translate: -50% 0; }
 
 .laiton { position: absolute; width: 54px; height: 54px; z-index: 4; filter: drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.65)); pointer-events: none; }
 .laiton.hg { top: -4px; left: -4px; }
@@ -789,14 +808,14 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .blason h1 { font-size: 23px; }
   .blason p { font-size: 11px; }
   .blason .embleme { height: 40px; width: auto; }
-  .refermer span { display: none; }
-  .refermer { padding: 8px; }
 
   .livre-zone { width: 100%; margin-top: 14px; }
   .couverture { padding: 10px 12px 12px; border-radius: 8px; }
   .couverture::before { inset: 3px; }
   .couverture::after { display: none; }
   .laiton { width: 34px; height: 34px; }
+  .verrou { left: -14px; top: calc(50% - 36px); width: 44px; height: 73px; }
+  .verrou::after { display: none; }
   .bloc-papier { display: none; }
   .feuillets { grid-template-columns: 1fr; min-height: 420px; }
   .page::before { inset: 8px; outline: none; }

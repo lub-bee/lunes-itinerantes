@@ -152,6 +152,6 @@ export async function chargerLivre(): Promise<Livre> {
     },
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), 'padlock']
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS)]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }
