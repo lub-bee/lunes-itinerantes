@@ -51,6 +51,14 @@ function Defile({ ctx, className, children }: { ctx: Ctx; className?: string; ch
   )
 }
 
+function CitationFin({ texte }: { texte: string }) {
+  return (
+    <blockquote className="citation-fin">
+      <p>{texte}</p>
+    </blockquote>
+  )
+}
+
 function Folio({ n }: { n: number }) {
   return <div className="folio">{romain(n)}</div>
 }
@@ -195,7 +203,12 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
   const corps = (() => {
     switch (page.type) {
       case 'sommaire':
-        return <TableDesMatieres ctx={ctx} />
+        return (
+          <>
+            <TableDesMatieres ctx={ctx} />
+            <CitationFin texte={page.citation} />
+          </>
+        )
       case 'chapitre':
         return <ListeArticles page={page} ctx={ctx} />
       case 'note':
@@ -207,6 +220,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
               <span /><span /><span /><span /><span />
             </div>
             <p>{page.attente}</p>
+            <CitationFin texte={page.citation} />
           </div>
         )
     }

@@ -134,18 +134,21 @@ export async function chargerLivre(): Promise<Livre> {
   }
 
   const pages: Page[] = [
-    { type: 'sommaire', id: 'sommaire', partie: 'sommaire', titre: 'Sommaire', court: 'Sommaire', icone: 'open-book' },
+    { type: 'sommaire', id: 'sommaire', partie: 'sommaire', titre: 'Sommaire', court: 'Sommaire', icone: 'open-book',
+      citation: "Un marchand sans registre est un marchand qui oublie ; un marchand qui oublie est un marchand ruiné." },
     ...chapitres,
     ...(await lireNotes()),
     {
       type: 'avenir', id: 'missives', partie: 'missives', titre: 'Missives en cours', court: 'Missives', icone: 'wax-seal',
       intro: 'Les commandes de la caravane : ingrédients à dénicher, objets à fabriquer, curiosités à rechercher.',
       attente: "L'encre de ce chapitre n'est pas encore sèche. Reviens à la prochaine halte, ami.",
+      citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
     },
     {
       type: 'avenir', id: 'caravane', partie: 'caravane', titre: 'La Caravane', court: 'Caravane', icone: 'lynx-head',
       intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rôle que chacun tient sur la route.',
       attente: 'Le scribe compte encore les moustaches. Ce registre sera bientôt rempli.',
+      citation: "Une caravane n'est forte que de ceux qui marchent avec elle.",
     },
   ]
 

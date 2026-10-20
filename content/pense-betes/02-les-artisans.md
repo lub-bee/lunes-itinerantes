@@ -23,3 +23,5 @@ Vêtements, capuches, gants, bourses et besaces. Ses aiguilles sont plus fines q
 ## Divers
 
 Ce qui n'appartient à aucun atelier : objets exotiques, matières premières et prestations. Le prix se discute au cas par cas.
+
+> La caravane ne vend que ce que ses pattes savent faire, et ses pattes savent tout faire.

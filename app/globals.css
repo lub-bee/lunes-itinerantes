@@ -761,9 +761,9 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .prose strong { color: var(--encre-rouge); font-weight: 400; font-family: var(--f-capitales); }
 .prose ul { padding-left: 20px; }
 .prose li::marker { content: '❧  '; color: var(--teinte, var(--encre-rouge)); }
-.prose blockquote { margin: 22px 10px 8px; padding: 0; text-align: center; font-style: italic; font-size: 18px; color: var(--encre-douce); }
-.prose blockquote::before { content: '❦'; display: block; margin-bottom: 6px; font-style: normal; color: var(--teinte, var(--encre-rouge)); opacity: 0.75; }
-.prose blockquote p { margin: 0; text-align: center; }
+.prose blockquote, .citation-fin { margin: 22px 10px 8px; padding: 0; text-align: center; font-style: italic; font-size: 18px; color: var(--encre-douce); }
+.prose blockquote::before, .citation-fin::before { content: '❦'; display: block; margin-bottom: 6px; font-style: normal; color: var(--teinte, var(--encre-rouge)); opacity: 0.75; }
+.prose blockquote p, .citation-fin p { margin: 0; text-align: center; }
 .prose a { color: var(--encre-rouge); }
 
 /* ─── Pages still to be written ─── */

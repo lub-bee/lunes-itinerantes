@@ -18,10 +18,11 @@ export type Partie = { id: PartieId; titre: string; court: string; couleur: stri
 /** `icone` is a game-icons.net name, resolved to its SVG body in `Livre.icones`. */
 type Base = { id: string; partie: PartieId; titre: string; court: string; icone: string }
 
-export type PageSommaire = Base & { type: 'sommaire' }
+/** `citation`: closing quote at the foot of the right page. */
+export type PageSommaire = Base & { type: 'sommaire'; citation: string }
 export type PageChapitre = Base & { type: 'chapitre'; titreEn: string; intro: string; articles: Article[] }
 export type PageNote = Base & { type: 'note'; resume: string; auteur: string; html: string; texte: string }
-export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string }
+export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string; citation: string }
 
 export type Page = PageSommaire | PageChapitre | PageNote | PageAvenir
 
