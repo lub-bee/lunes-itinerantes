@@ -56,6 +56,8 @@ site, take the last part of the icon's URL. Only the icons in use are sent to th
 
 `public/textures/table.jpg` is Poly Haven's [wood_table](https://polyhaven.com/a/wood_table) (CC0), 2K,
 recompressed. Swap the file to change the table; its tint is set in `app/globals.css` (`body`).
+`public/textures/cuir.jpg` (the locked book on the login page) is Poly Haven's
+[brown_leather](https://polyhaven.com/a/brown_leather) (CC0), 2K, recompressed.
 
 ### Memo pages ("pense-bêtes") — `content/pense-betes/*.md`
 

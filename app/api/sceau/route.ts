@@ -3,7 +3,7 @@ import { COOKIE_SCEAU, DUREE_SCEAU, egaux, jetonAttendu, jetonPour, sceauConfigu
 
 export async function POST(req: Request) {
   if (!sceauConfigure()) {
-    return NextResponse.json({ message: "Le sceau n'a jamais été forgé : le gardien attend ses instructions." }, { status: 503 })
+    return NextResponse.json({ message: "Cette serrure n'a jamais été forgée : le grimoire attend ses instructions." }, { status: 503 })
   }
   const { motDePasse } = (await req.json().catch(() => ({}))) as { motDePasse?: string }
   const jeton = await jetonPour(String(motDePasse ?? '').trim())
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
   if (!jeton || !attendu || !egaux(jeton, attendu)) {
     await new Promise((r) => setTimeout(r, 900))
-    return NextResponse.json({ message: "Le gardien plisse les yeux… Ce n'est pas le mot de la caravane, ami." }, { status: 401 })
+    return NextResponse.json({ message: "La serrure résiste. Ce n'est pas le mot de la caravane, ami." }, { status: 401 })
   }
 
   const rep = NextResponse.json({ ok: true })
