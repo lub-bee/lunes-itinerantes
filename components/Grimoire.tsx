@@ -4,14 +4,29 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { Article, Livre, Page, PartieId } from '@/lib/types'
 import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
-import { Lunes, Plume } from './Ornements'
+import { CoinLaiton, Icone, Lunes, Plume } from './Ornements'
+import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 
-type Tourne = { de: number; vers: number }
+type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
+type Geste = {
+  id: number
+  x0: number
+  y0: number
+  mode: 'coin' | 'glisse'
+  cote: 'droit' | 'gauche' | null
+  avant: boolean
+  lance: boolean
+  trace: { x: number; t: number }[]
+}
 
-const DUREE_TOURNE = 900
-const DECALAGE_FEUILLETS = 110
-const MAX_FEUILLETS = 4
+const DUREE_TOURNE = 1050
+const DECALAGE_FEUILLETS = 140
+const MAX_FEUILLETS = 3
+const TRANCHES = 10
+const TRANCHES_ETROIT = 8
+const SOUPLESSE = 62
+const SOUPLESSE_ETROIT = 44
 const DEBOUNCE_MS = 380
 
 function useMedia(requete: string): boolean | null {
@@ -32,6 +47,8 @@ function etapes(de: number, vers: number): number[] {
   return Array.from({ length: n + 1 }, (_, k) => Math.round(de + ((vers - de) * k) / n))
 }
 
+const borner = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v))
+
 function Surligne({ texte, requete }: { texte: string; requete: string }) {
   const r = plages(texte, requete)
   if (!r.length) return <>{texte}</>
@@ -46,7 +63,7 @@ function Surligne({ texte, requete }: { texte: string; requete: string }) {
 }
 
 export default function Grimoire({ livre }: { livre: Livre }) {
-  const { pages, parties } = livre
+  const { pages, parties, icones } = livre
   const [index, setIndex] = useState(0)
   const [tourne, setTourne] = useState<Tourne | null>(null)
   const enAttente = useRef<number | null>(null)
@@ -56,21 +73,31 @@ export default function Grimoire({ livre }: { livre: Livre }) {
   const [cible, setCible] = useState<string | null>(null)
   const [indexOuvert, setIndexOuvert] = useState(false)
   const scrolls = useRef<Record<string, number>>({})
+  const feuillets = useRef<HTMLDivElement>(null)
   const volets = useRef<HTMLDivElement>(null)
   const champ = useRef<HTMLInputElement>(null)
   const etroit = useMedia('(max-width: 860px)')
   const sansAnimation = useMedia('(prefers-reduced-motion: reduce)')
 
+  // Latest values for the window-level pointer handlers.
   const indexRef = useRef(index)
   indexRef.current = index
+  const tourneRef = useRef(tourne)
+  tourneRef.current = tourne
+  const etroitRef = useRef(etroit)
+  etroitRef.current = etroit
 
-  /* ── Navigation ─────────────────────────────────────────── */
+  /* ── Page turning ───────────────────────────────────────── */
+
+  const moteur = useRef<{ anims: Animation[]; jeton: number } | null>(null)
+  const jeton = useRef(0)
+  const progression = useRef(0)
 
   const aller = useCallback(
     (vers: number, cibleArticle?: string) => {
       if (vers < 0 || vers >= pages.length) return
       if (cibleArticle) setCible(cibleArticle)
-      if (tourne) {
+      if (tourneRef.current) {
         enAttente.current = vers
         return
       }
@@ -79,67 +106,171 @@ export default function Grimoire({ livre }: { livre: Livre }) {
         setIndex(vers)
         return
       }
-      setTourne({ de: indexRef.current, vers })
+      setTourne({ de: indexRef.current, vers, manuel: false })
     },
-    [pages.length, tourne, sansAnimation],
+    [pages.length, sansAnimation],
   )
 
-  // Animate the leaves of the current turn, then settle on the destination.
-  useLayoutEffect(() => {
-    if (!tourne || !volets.current) return
-    const avant = tourne.vers > tourne.de
-    const feuillets = Array.from(volets.current.querySelectorAll<HTMLElement>('[data-volet]'))
-    const n = feuillets.length
-    const animations = feuillets.flatMap((el, k) => {
-      const z = (n - k) * 0.6
-      const fin = avant ? -180 : 180
-      const [a, b] = etroit && !avant ? [-180, 0] : [0, etroit ? -180 : fin]
-      const timing: KeyframeAnimationOptions = {
-        duration: DUREE_TOURNE,
-        delay: k * DECALAGE_FEUILLETS,
-        easing: 'cubic-bezier(.42,.02,.24,1)',
-        fill: 'both',
-      }
-      const anims = [
-        el.animate(
-          [
-            { transform: `rotateY(${a}deg) translateZ(${z}px)` },
-            { transform: `rotateY(${(a + b) / 2}deg) translateZ(${z}px) scaleX(1.02)`, offset: 0.5 },
-            { transform: `rotateY(${b}deg) translateZ(${z}px)` },
-          ],
-          timing,
-        ),
-      ]
-      el.querySelectorAll<HTMLElement>('[data-ombre="recto"]').forEach((o) =>
-        anims.push(o.animate(etroit && !avant ? [{ opacity: 0.6 }, { opacity: 0 }] : [{ opacity: 0 }, { opacity: 0.6 }], timing)),
-      )
-      el.querySelectorAll<HTMLElement>('[data-ombre="verso"]').forEach((o) =>
-        anims.push(o.animate([{ opacity: 0.6 }, { opacity: 0 }], timing)),
-      )
-      return anims
-    })
-    let annule = false
-    Promise.all(animations.map((a) => a.finished))
+  /** Waits for the leaves to land (or fall back), then settles the book. */
+  const conclure = useCallback((anims: Animation[], vers: number | null, j: number) => {
+    Promise.all(anims.map((a) => a.finished))
       .then(() => {
-        if (annule) return
-        setIndex(tourne.vers)
+        if (jeton.current !== j) return
+        moteur.current = null
+        if (vers !== null) setIndex(vers)
         setTourne(null)
       })
       .catch(() => {})
-    return () => {
-      annule = true
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!tourne || !volets.current || !feuillets.current) return
+    const avant = tourne.vers > tourne.de
+    const leaves = Array.from(volets.current.querySelectorAll<HTMLElement>('[data-volet]'))
+    const n = leaves.length
+    const anims = leaves.flatMap((el, k) =>
+      animerFeuillet(el, {
+        sens: etroit || avant ? -1 : 1,
+        inverse: Boolean(etroit) && !avant,
+        manuel: tourne.manuel,
+        duree: DUREE_TOURNE,
+        delai: tourne.manuel ? 0 : k * DECALAGE_FEUILLETS,
+        z: (n - k) * 0.7,
+        souplesse: etroit ? SOUPLESSE_ETROIT : SOUPLESSE,
+      }),
+    )
+    feuillets.current
+      .querySelectorAll<HTMLElement>('[data-portee]')
+      .forEach((el) => anims.push(animerPortee(el, { duree: DUREE_TOURNE + (n - 1) * DECALAGE_FEUILLETS, delai: 0 })))
+
+    const j = ++jeton.current
+    moteur.current = { anims, jeton: j }
+    if (tourne.manuel) {
+      anims.forEach((a) => {
+        a.pause()
+        a.currentTime = progression.current * DUREE_TOURNE
+      })
+    } else {
+      conclure(anims, tourne.vers, j)
     }
-  }, [tourne, etroit])
+  }, [tourne, etroit, conclure])
 
   // A destination requested mid-turn is honoured once the leaves have landed.
   useEffect(() => {
     if (tourne || enAttente.current === null) return
     const vers = enAttente.current
     enAttente.current = null
-    if (vers !== index) setTourne({ de: index, vers })
+    if (vers !== index) setTourne({ de: index, vers, manuel: false })
   }, [tourne, index])
 
-  // Deep links: #armes opens the grimoire on that chapter.
+  /* ── Turning by hand: drag a corner, or swipe on touch screens ── */
+
+  const geste = useRef<Geste | null>(null)
+  const clicIgnore = useRef(false)
+
+  const debutGeste = (e: React.PointerEvent) => {
+    if (tourneRef.current || geste.current || sansAnimation) return
+    const coin = (e.target as HTMLElement).closest<HTMLButtonElement>('.coin')
+    if (coin?.disabled) return
+    if (!coin && e.pointerType !== 'touch') return
+    if (coin) e.preventDefault()
+    geste.current = {
+      id: e.pointerId,
+      x0: e.clientX,
+      y0: e.clientY,
+      mode: coin ? 'coin' : 'glisse',
+      cote: coin ? (coin.classList.contains('coin-droit') ? 'droit' : 'gauche') : null,
+      avant: true,
+      lance: false,
+      trace: [],
+    }
+  }
+
+  useEffect(() => {
+    const avancement = (g: Geste, x: number): number => {
+      const r = feuillets.current!.getBoundingClientRect()
+      if (etroitRef.current) {
+        if (g.mode === 'coin') return borner(g.avant ? (r.right - x) / r.width : (x - r.left) / r.width)
+        return borner((g.avant ? g.x0 - x : x - g.x0) / (r.width * 0.9))
+      }
+      const largeur = r.width / 2
+      const dos = r.left + largeur
+      if (g.mode === 'glisse') return borner((g.avant ? g.x0 - x : x - g.x0) / (largeur * 1.4))
+      // The corner follows the pointer: its screen position is cos(angle) from the spine.
+      const xr = g.avant ? (x - dos) / largeur : (dos - x) / largeur
+      return Math.acos(borner(xr, -1, 1)) / Math.PI
+    }
+
+    const bouger = (e: PointerEvent) => {
+      const g = geste.current
+      if (!g || e.pointerId !== g.id) return
+      const dx = e.clientX - g.x0
+      const dy = e.clientY - g.y0
+      if (!g.lance) {
+        if (g.mode === 'glisse') {
+          if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) {
+            geste.current = null // the finger is scrolling the page
+            return
+          }
+          if (Math.abs(dx) < 14) return
+          g.avant = dx < 0
+        } else {
+          if (Math.hypot(dx, dy) < 5) return
+          g.avant = g.cote === 'droit'
+        }
+        const vers = indexRef.current + (g.avant ? 1 : -1)
+        if (tourneRef.current || vers < 0 || vers >= pages.length) {
+          geste.current = null
+          return
+        }
+        g.lance = true
+        clicIgnore.current = true
+        progression.current = avancement(g, e.clientX)
+        setTourne({ de: indexRef.current, vers, manuel: true })
+      }
+      progression.current = avancement(g, e.clientX)
+      moteur.current?.anims.forEach((a) => (a.currentTime = progression.current * DUREE_TOURNE))
+      g.trace.push({ x: e.clientX, t: e.timeStamp })
+      if (g.trace.length > 6) g.trace.shift()
+    }
+
+    const lacher = (e: PointerEvent) => {
+      const g = geste.current
+      if (!g || e.pointerId !== g.id) return
+      geste.current = null
+      if (!g.lance) return
+      setTimeout(() => (clicIgnore.current = false), 60)
+      const t = tourneRef.current
+      const m = moteur.current
+      if (!t || !m) {
+        setTourne(null)
+        return
+      }
+      // A flick in the turning direction completes the turn even before mid-way.
+      const [a, b] = [g.trace[0], g.trace[g.trace.length - 1]]
+      const vitesse = a && b && b.t > a.t ? ((b.x - a.x) / (b.t - a.t)) * (g.avant ? -1 : 1) : 0
+      const complet = e.type === 'pointerup' && (progression.current > 0.5 || vitesse > 0.45)
+      const restant = complet ? 1 - progression.current : progression.current
+      const rythme = borner(1 / Math.max(restant, 0.15) / 1.6, 1.2, 3.5)
+      m.anims.forEach((anim) => {
+        anim.playbackRate = complet ? rythme : -rythme
+        anim.play()
+      })
+      conclure(m.anims, complet ? t.vers : null, m.jeton)
+    }
+
+    window.addEventListener('pointermove', bouger)
+    window.addEventListener('pointerup', lacher)
+    window.addEventListener('pointercancel', lacher)
+    return () => {
+      window.removeEventListener('pointermove', bouger)
+      window.removeEventListener('pointerup', lacher)
+      window.removeEventListener('pointercancel', lacher)
+    }
+  }, [pages.length, conclure])
+
+  /* ── Deep links ─────────────────────────────────────────── */
+
   useEffect(() => {
     const id = decodeURIComponent(window.location.hash.slice(1))
     const i = pages.findIndex((p) => p.id === id)
@@ -185,32 +316,20 @@ export default function Grimoire({ livre }: { livre: Livre }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requete])
 
-  /* ── Keyboard & swipe ───────────────────────────────────── */
+  /* ── Keyboard ───────────────────────────────────────────── */
 
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
-      const cibleSaisie = (e.target as HTMLElement)?.closest('input, textarea')
-      if (e.key === '/' && !cibleSaisie) {
+      const dansChamp = (e.target as HTMLElement)?.closest('input, textarea')
+      if (e.key === '/' && !dansChamp) {
         e.preventDefault()
         champ.current?.focus()
-      } else if (!cibleSaisie && e.key === 'ArrowRight') aller((enAttente.current ?? indexRef.current) + 1)
-      else if (!cibleSaisie && e.key === 'ArrowLeft') aller((enAttente.current ?? indexRef.current) - 1)
+      } else if (!dansChamp && e.key === 'ArrowRight') aller((enAttente.current ?? indexRef.current) + 1)
+      else if (!dansChamp && e.key === 'ArrowLeft') aller((enAttente.current ?? indexRef.current) - 1)
     }
     window.addEventListener('keydown', f)
     return () => window.removeEventListener('keydown', f)
   }, [aller])
-
-  const toucher = useRef<{ x: number; y: number } | null>(null)
-  const debutToucher = (e: React.TouchEvent) => {
-    toucher.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
-  }
-  const finToucher = (e: React.TouchEvent) => {
-    if (!toucher.current) return
-    const dx = e.changedTouches[0].clientX - toucher.current.x
-    const dy = e.changedTouches[0].clientY - toucher.current.y
-    toucher.current = null
-    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) aller(index + (dx < 0 ? 1 : -1))
-  }
 
   const refermer = async () => {
     await fetch('/api/sceau', { method: 'DELETE' })
@@ -239,10 +358,10 @@ export default function Grimoire({ livre }: { livre: Livre }) {
   const partieActive: PartieId = pages[destination].partie
   const partieOnglets: PartieId = partieActive === 'sommaire' ? 'marchandises' : partieActive
   const onglets = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === partieOnglets)
+  const avant = tourne ? tourne.vers > tourne.de : true
 
   const voletsDoubles = () => {
     if (!tourne) return null
-    const avant = tourne.vers > tourne.de
     const pas = etapes(tourne.de, tourne.vers)
     const bout = (i: number) => i === tourne.de || i === tourne.vers
     return pas.slice(0, -1).map((m, k) => {
@@ -250,30 +369,30 @@ export default function Grimoire({ livre }: { livre: Livre }) {
       const cm = ctx(m, false, !bout(m))
       const cs = ctx(suivante, false, !bout(suivante))
       return (
-        <div key={`${m}-${suivante}`} data-volet className={`volet ${avant ? 'volet-droit' : 'volet-gauche'}`}>
-          <div className={`face recto page ${avant ? 'droite' : 'gauche'}`} inert>
-            {avant ? <PageDroite page={pages[m]} ctx={cm} /> : <PageGauche page={pages[m]} ctx={cm} />}
-            <div className="ombre" data-ombre="recto" />
-          </div>
-          <div className={`face verso page ${avant ? 'gauche' : 'droite'}`} inert>
-            {avant ? <PageGauche page={pages[suivante]} ctx={cs} /> : <PageDroite page={pages[suivante]} ctx={cs} />}
-            <div className="ombre" data-ombre="verso" />
-          </div>
-        </div>
+        <Feuillet
+          key={`${m}-${suivante}`}
+          cote={avant ? 'droit' : 'gauche'}
+          tranches={TRANCHES}
+          recto={avant ? <PageDroite page={pages[m]} ctx={cm} /> : <PageGauche page={pages[m]} ctx={cm} />}
+          verso={avant ? <PageGauche page={pages[suivante]} ctx={cs} /> : <PageDroite page={pages[suivante]} ctx={cs} />}
+          classeRecto={`page ${avant ? 'droite' : 'gauche'}`}
+          classeVerso={`page ${avant ? 'gauche' : 'droite'}`}
+        />
       )
     })
   }
 
-  const gaucheBase = tourne ? (tourne.vers > tourne.de ? tourne.de : tourne.vers) : index
-  const droiteBase = tourne ? (tourne.vers > tourne.de ? tourne.vers : tourne.de) : index
-  const uniqueBase = tourne ? (tourne.vers > tourne.de ? tourne.vers : tourne.de) : index
-  const uniqueVolet = tourne ? (tourne.vers > tourne.de ? tourne.de : tourne.vers) : null
+  const gaucheBase = tourne ? (avant ? tourne.de : tourne.vers) : index
+  const droiteBase = tourne ? (avant ? tourne.vers : tourne.de) : index
+  const uniqueBase = tourne ? (avant ? tourne.vers : tourne.de) : index
+  const uniqueVolet = tourne ? (avant ? tourne.de : tourne.vers) : null
+  const portee = tourne ? <div className="ombre-portee" data-portee aria-hidden /> : null
 
   return (
-    <div className="scene">
+    <div className={`scene ${tourne?.manuel ? 'en-tourne' : ''}`}>
       <header className="entete">
         <div className="blason">
-          <Lunes taille={46} />
+          <Lunes taille={50} />
           <div>
             <h1>Caravane des Lunes Itinérantes</h1>
             <p>Grimoire des marchands</p>
@@ -344,6 +463,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
                 resultats.map((r) => (
                   <section key={r.page.id}>
                     <button type="button" className="index-page" onMouseDown={(e) => e.preventDefault()} onClick={() => aller(r.i)}>
+                      <Icone corps={icones[r.page.icone]} />
                       <span>{r.page.titre}</span>
                       <span className="index-total">
                         {r.total} {r.page.type === 'note' ? 'mention' : 'article'}
@@ -377,8 +497,9 @@ export default function Grimoire({ livre }: { livre: Livre }) {
           )}
         </div>
 
-        <button type="button" className="refermer" onClick={refermer}>
-          Refermer le grimoire
+        <button type="button" className="refermer" onClick={refermer} title="Refermer le grimoire">
+          <Icone corps={icones.padlock} />
+          <span>Refermer</span>
         </button>
       </header>
 
@@ -392,7 +513,8 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               style={{ '--c': p.couleur } as CSSProperties}
               onClick={() => aller(pages.findIndex((pg) => pg.partie === p.id))}
             >
-              <span>{p.court}</span>
+              <Icone corps={icones[p.icone]} className="ruban-icone" />
+              <span className="ruban-nom">{p.court}</span>
             </button>
           ))}
         </nav>
@@ -406,28 +528,36 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               onClick={() => aller(i)}
               title={p.titre}
             >
-              <span className="onglet-initiale">{p.court.slice(0, 1)}</span>
+              <Icone corps={icones[p.icone]} className="onglet-icone" />
               <span className="onglet-nom">{p.court}</span>
             </button>
           ))}
         </nav>
 
         <div className="couverture">
-          <div className="feuillets" onTouchStart={debutToucher} onTouchEnd={finToucher}>
+          <CoinLaiton className="hg" />
+          <CoinLaiton className="hd" />
+          <CoinLaiton className="bg" />
+          <CoinLaiton className="bd" />
+          <div className="tranche-papier tranche-gauche" aria-hidden />
+          <div className="tranche-papier tranche-droite" aria-hidden />
+          <div className="feuillets" ref={feuillets} onPointerDown={debutGeste}>
             {etroit === null ? null : etroit ? (
               <>
                 <div className="page unique">
                   <PageUnique key={pages[uniqueBase].id} page={pages[uniqueBase]} ctx={ctx(uniqueBase, !tourne)} />
+                  {portee}
                 </div>
                 {tourne && uniqueVolet !== null && (
-                  <div className="volets" ref={volets}>
-                    <div data-volet className="volet volet-unique">
-                      <div className="face recto page unique" inert>
-                        <PageUnique page={pages[uniqueVolet]} ctx={ctx(uniqueVolet, false)} />
-                        <div className="ombre" data-ombre="recto" />
-                      </div>
-                      <div className="face verso page unique dos" inert />
-                    </div>
+                  <div className="volets" ref={volets} inert>
+                    <Feuillet
+                      cote="unique"
+                      tranches={TRANCHES_ETROIT}
+                      recto={<PageUnique page={pages[uniqueVolet]} ctx={ctx(uniqueVolet, false)} />}
+                      verso={null}
+                      classeRecto="page unique"
+                      classeVerso="page unique dos"
+                    />
                   </div>
                 )}
               </>
@@ -435,25 +565,35 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               <>
                 <div className="page gauche">
                   <PageGauche key={pages[gaucheBase].id} page={pages[gaucheBase]} ctx={ctx(gaucheBase, !tourne)} />
+                  {portee}
                 </div>
                 <div className="page droite">
                   <PageDroite key={pages[droiteBase].id} page={pages[droiteBase]} ctx={ctx(droiteBase, !tourne)} />
+                  {portee}
                 </div>
                 <div className="pli" aria-hidden />
                 {tourne && (
-                  <div className="volets" ref={volets}>
+                  <div className="volets" ref={volets} inert>
                     {voletsDoubles()}
                   </div>
                 )}
               </>
             )}
-            <button type="button" className="coin coin-gauche" aria-label="Page précédente" disabled={destination === 0} onClick={() => aller(destination - 1)} />
+            <button
+              type="button"
+              className="coin coin-gauche"
+              aria-label="Page précédente"
+              title="Tirer ou cliquer pour revenir en arrière"
+              disabled={destination === 0}
+              onClick={() => !clicIgnore.current && aller(destination - 1)}
+            />
             <button
               type="button"
               className="coin coin-droit"
               aria-label="Page suivante"
+              title="Tirer ou cliquer pour tourner la page"
               disabled={destination === pages.length - 1}
-              onClick={() => aller(destination + 1)}
+              onClick={() => !clicIgnore.current && aller(destination + 1)}
             />
           </div>
         </div>

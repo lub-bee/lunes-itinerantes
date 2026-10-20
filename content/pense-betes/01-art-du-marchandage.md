@@ -2,6 +2,7 @@
 titre: L'art du marchandage
 court: Marchandage
 resume: Comment lire les prix de ce grimoire, et comment ne jamais repartir la bourse plus légère qu'à l'arrivée.
+icone: scales
 auteur: Les anciens de la caravane
 ---
 

@@ -42,8 +42,15 @@ armes,Épée en fer,Iron Sword,8.2,25,30,forgeron,
 ### Chapters — `content/chapitres.json`
 
 Order of the array = order of the pages and side tabs. Each chapter: `id`, `titre` (FR), `titreEn`,
-`court` (tab label) and `intro` (in-character paragraph). Add, rename, reorder or split chapters here,
+`court` (tab label), `icone` (see Icons) and `intro` (in-character paragraph). Add, rename, reorder or split chapters here,
 then update the `chapitre` column of the affected articles.
+
+### Icons
+
+Chapter, tab, ribbon and artisan icons come from [game-icons.net](https://game-icons.net) (CC BY 3.0,
+credited on the title page), through `@iconify-json/game-icons`. A chapter or memo page picks its icon
+with an `icone` field holding the game-icons name (e.g. `beer-stein`, `crossed-swords`): browse the
+site, take the last part of the icon's URL. Only the icons in use are sent to the browser.
 
 ### Memo pages ("pense-bêtes") — `content/pense-betes/*.md`
 
@@ -53,6 +60,7 @@ Drop a Markdown file to add a page. Files are ordered by name (prefix with `03-`
 ---
 titre: Les routes sûres
 court: Routes
+icone: treasure-map
 resume: Short in-character summary shown on the left page.
 auteur: Who wrote it
 ---

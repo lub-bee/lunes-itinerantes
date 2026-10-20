@@ -2,6 +2,7 @@
 titre: Les artisans de la caravane
 court: Artisans
 resume: Qui fabrique quoi. Les sceaux en marge du grimoire indiquent l'atelier d'origine de chaque article.
+icone: anvil
 auteur: Les anciens de la caravane
 ---
 

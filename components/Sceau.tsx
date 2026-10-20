@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Fleuron, Lunes } from './Ornements'
+import { CoinLaiton, Fleuron, Lunes } from './Ornements'
 
 export default function Sceau() {
   const [motDePasse, setMotDePasse] = useState('')
@@ -31,6 +31,10 @@ export default function Sceau() {
   return (
     <main className="seuil">
       <form className={`tome ${etat === 'brise' ? 'ouvert' : ''}`} onSubmit={soumettre}>
+        <CoinLaiton className="hg" />
+        <CoinLaiton className="hd" />
+        <CoinLaiton className="bg" />
+        <CoinLaiton className="bd" />
         <Lunes taille={96} />
         <p className="tome-sur">Grimoire de la</p>
         <h1 className="tome-titre">Caravane des Lunes Itinérantes</h1>

@@ -1,5 +1,20 @@
 import type { Artisan } from '@/lib/types'
-import { ARTISANS } from '@/lib/recherche'
+import { ARTISANS, ICONES_ARTISANS } from '@/lib/recherche'
+
+/** A game-icons.net glyph (512×512, filled with currentColor). */
+export function Icone({ corps, className }: { corps?: string; className?: string }) {
+  if (!corps) return null
+  return <svg className={`icone ${className ?? ''}`} viewBox="0 0 512 512" aria-hidden dangerouslySetInnerHTML={{ __html: corps }} />
+}
+
+export function GlypheArtisan({ artisan, icones }: { artisan: Artisan; icones: Record<string, string> }) {
+  return (
+    <span className={`glyphe glyphe-${artisan}`} title={ARTISANS[artisan]}>
+      <Icone corps={icones[ICONES_ARTISANS[artisan]]} />
+      <span className="visuellement-cache">{ARTISANS[artisan]}</span>
+    </span>
+  )
+}
 
 /** Masser (red, large) and Secunda (pale, small): the wandering moons of the caravan. */
 export function Lunes({ taille = 48, className }: { taille?: number; className?: string }) {
@@ -18,10 +33,14 @@ export function Lunes({ taille = 48, className }: { taille?: number; className?:
           <stop offset="0%" stopColor="#f3d27a" stopOpacity=".45" />
           <stop offset="100%" stopColor="#f3d27a" stopOpacity="0" />
         </radialGradient>
+        <linearGradient id="masser" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#e0694a" />
+          <stop offset="100%" stopColor="#8e2416" />
+        </linearGradient>
       </defs>
       <circle cx="30" cy="34" r="30" fill="url(#lueur)" />
-      <circle cx="26" cy="34" r="20" fill="#c0492f" mask="url(#croissant-masser)" />
-      <circle cx="46" cy="17" r="8" fill="#e9dcc0" mask="url(#croissant-secunda)" />
+      <circle cx="26" cy="34" r="20" fill="url(#masser)" mask="url(#croissant-masser)" />
+      <circle cx="46" cy="17" r="8" fill="#ece0c4" mask="url(#croissant-secunda)" />
       <circle cx="15" cy="10" r="1.2" fill="#f3d27a" />
       <circle cx="56" cy="44" r="1" fill="#f3d27a" />
       <circle cx="40" cy="56" r=".9" fill="#f3d27a" />
@@ -31,31 +50,46 @@ export function Lunes({ taille = 48, className }: { taille?: number; className?:
 
 export function Fleuron({ className }: { className?: string }) {
   return (
-    <svg className={`fleuron ${className ?? ''}`} viewBox="0 0 240 20" aria-hidden>
-      <path d="M8 10H96M144 10H232" stroke="currentColor" strokeWidth="1" />
-      <path d="M96 10c6-8 14-8 24 0c10 8 18 8 24 0c-6 -8 -14 -8 -24 0c-10 8 -18 8 -24 0z" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="120" cy="10" r="2.4" fill="currentColor" />
-      <circle cx="4" cy="10" r="1.6" fill="currentColor" />
-      <circle cx="236" cy="10" r="1.6" fill="currentColor" />
+    <svg className={`fleuron ${className ?? ''}`} viewBox="0 0 240 24" aria-hidden>
+      <path d="M10 12H92M148 12H230" stroke="currentColor" strokeWidth=".9" />
+      <path d="M18 9.5H86M154 9.5H222" stroke="currentColor" strokeWidth=".5" opacity=".6" />
+      <path
+        d="M92 12c5-7 13-8 20-3c3 2 5 3 8 3s5-1 8-3c7-5 15-4 20 3c-5 7-13 8-20 3c-3-2-5-3-8-3s-5 1-8 3c-7 5-15 4-20-3z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+      />
+      <path d="M120 4l3 8l-3 8l-3-8z" fill="currentColor" />
+      <circle cx="5" cy="12" r="2" fill="currentColor" />
+      <circle cx="235" cy="12" r="2" fill="currentColor" />
     </svg>
   )
 }
 
-const TRACES: Record<Artisan, string> = {
-  alchimiste: 'M9.5 3h5M10.5 3v5.5L5.2 17.6A2.2 2.2 0 0 0 7.1 21h9.8a2.2 2.2 0 0 0 1.9-3.4L13.5 8.5V3M7.5 14h9',
-  forgeron: 'M13.5 4.5l6 6-2.6 2.6-6-6zM11.6 8.4L3.5 16.5l4 4 8.1-8.1M15 3l1.5-1.5M21 9l1.5-1.5',
-  couturier: 'M19.5 3.5L5 18M17 3.2a1.8 1.8 0 1 1 3.8 3.8M5 18c-1.6 1.6-2.6 2.2-2 3s2.8-.3 4.4-2.2c1.8-2.1 4-1.8 4.6.2',
-  divers: 'M9 4h6l-1.4 3.2C17 8.4 19.5 11.8 19.5 15A5 5 0 0 1 14.5 20h-5A5 5 0 0 1 4.5 15c0-3.2 2.5-6.6 5.9-7.8zM9.5 13.5h5M12 11v5',
-}
-
-export function SceauArtisan({ artisan }: { artisan: Artisan }) {
+/** Brass corner guard of the binding. Drawn for the top-left corner; CSS mirrors it for the others. */
+export function CoinLaiton({ className }: { className: string }) {
   return (
-    <span className={`sceau sceau-${artisan}`} title={ARTISANS[artisan]}>
-      <svg viewBox="0 0 24 24" aria-hidden>
-        <path d={TRACES[artisan]} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span className="visuellement-cache">{ARTISANS[artisan]}</span>
-    </span>
+    <svg className={`laiton ${className}`} viewBox="0 0 80 80" aria-hidden>
+      <defs>
+        <linearGradient id="laiton-g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#f6dc95" />
+          <stop offset="35%" stopColor="#c99a3e" />
+          <stop offset="70%" stopColor="#8a6320" />
+          <stop offset="100%" stopColor="#5b3f12" />
+        </linearGradient>
+        <radialGradient id="rivet-g" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#fff1c2" />
+          <stop offset="60%" stopColor="#b98a35" />
+          <stop offset="100%" stopColor="#4f360d" />
+        </radialGradient>
+      </defs>
+      <path d="M0 0H80C74 4 68 6 60 8C46 12 38 14 30 22C22 30 14 38 10 52C8 60 6 70 0 80Z" fill="url(#laiton-g)" stroke="#3b2608" strokeWidth="1.2" />
+      <path d="M8 8H58C48 12 36 16 28 26C20 34 14 44 10 58Z" fill="none" stroke="#fbe7ad" strokeOpacity=".55" strokeWidth="1" />
+      <path d="M8 8C20 14 24 18 26 26" fill="none" stroke="#3b2608" strokeOpacity=".5" strokeWidth="1" />
+      <circle cx="11" cy="11" r="3.4" fill="url(#rivet-g)" stroke="#3b2608" strokeWidth=".6" />
+      <circle cx="40" cy="8" r="2.6" fill="url(#rivet-g)" stroke="#3b2608" strokeWidth=".6" />
+      <circle cx="8" cy="40" r="2.6" fill="url(#rivet-g)" stroke="#3b2608" strokeWidth=".6" />
+    </svg>
   )
 }
 

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Livre, Page, PageChapitre } from '@/lib/types'
 import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
-import { Fleuron, Lunes, Plume, SceauArtisan } from './Ornements'
+import { Fleuron, GlypheArtisan, Icone, Lunes, Plume } from './Ornements'
 
 export type Ctx = {
   livre: Livre
@@ -52,7 +52,21 @@ function Defile({ ctx, className, children }: { ctx: Ctx; className?: string; ch
 }
 
 function Folio({ n }: { n: number }) {
-  return <div className="folio">— {romain(n)} —</div>
+  return <div className="folio">{romain(n)}</div>
+}
+
+const teinte = (ctx: Ctx, page: Page) => ({ '--teinte': ctx.livre.parties.find((p) => p.id === page.partie)?.couleur } as CSSProperties)
+
+/** Engraved illustration closing the left page. */
+function Vignette({ page, ctx }: { page: Page; ctx: Ctx }) {
+  if (page.type === 'sommaire') return null
+  return (
+    <div className="vignette" aria-hidden>
+      <div className="medaillon">
+        <Icone corps={ctx.livre.icones[page.icone]} />
+      </div>
+    </div>
+  )
 }
 
 /* ───────────────────────────── Left pages ───────────────────────────── */
@@ -81,8 +95,9 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   })()
   if (compact) return corps
   return (
-    <div className="contenu gauche-contenu">
+    <div className="contenu gauche-contenu" style={teinte(ctx, page)}>
       {corps}
+      <Vignette page={page} ctx={ctx} />
       <Folio n={ctx.index * 2 + 1} />
     </div>
   )
@@ -115,6 +130,7 @@ function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
         </p>
       )}
       <p className="consigne">Prix consignés le {dateTamrielique(ctx.livre.consigneLe)}</p>
+      {!compact && <p className="colophon">Enluminures d&apos;après les graveurs de game-icons.net</p>}
     </div>
   )
 }
@@ -150,9 +166,9 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
             <div><dt>Plafond</dt><dd>le prix fort, à annoncer d&apos;abord</dd></div>
           </dl>
           <div className="legende-sceaux">
-            <span><SceauArtisan artisan="alchimiste" /> Alchimiste</span>
-            <span><SceauArtisan artisan="forgeron" /> Forgeron</span>
-            <span><SceauArtisan artisan="couturier" /> Couturier</span>
+            <span><GlypheArtisan artisan="alchimiste" icones={ctx.livre.icones} /> Alchimiste</span>
+            <span><GlypheArtisan artisan="forgeron" icones={ctx.livre.icones} /> Forgeron</span>
+            <span><GlypheArtisan artisan="couturier" icones={ctx.livre.icones} /> Couturier</span>
           </div>
         </>
       )}
@@ -184,7 +200,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
   })()
   if (integre) return corps
   return (
-    <div className="contenu droite-contenu">
+    <div className="contenu droite-contenu" style={teinte(ctx, page)}>
       <Defile ctx={ctx}>{corps}</Defile>
       <Folio n={ctx.index * 2 + 2} />
     </div>
@@ -194,7 +210,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
 /** Single page for narrow screens: the left page condensed above the right page. */
 export function PageUnique({ page, ctx }: { page: Page; ctx: Ctx }) {
   return (
-    <div className="contenu unique-contenu">
+    <div className="contenu unique-contenu" style={teinte(ctx, page)}>
       <Defile ctx={ctx}>
         <PageGauche page={page} ctx={ctx} compact />
         <PageDroite page={page} ctx={ctx} integre />
@@ -274,10 +290,10 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
   return (
     <div className="registre">
       <div className="registre-entete" role="row">
-        <span>Article</span>
+        <span className="col-article">Article</span>
         <span>Coût</span>
-        <span>Plancher</span>
-        <span>Plafond</span>
+        <span><span className="long">Plancher</span><span className="court">Bas</span></span>
+        <span><span className="long">Plafond</span><span className="court">Haut</span></span>
       </div>
       <div ref={liste} key={generation} className={`registre-corps ${efface ? 'efface' : ''}`}>
         {filtres.map((a, i) => (
@@ -287,12 +303,13 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
             className={`ligne ${generation > 0 ? 'ecrit' : ''} ${ctx.cible === a.id ? 'cible' : ''}`}
             style={{ '--i': Math.min(i, 16) } as React.CSSProperties}
           >
-            <SceauArtisan artisan={a.artisan} />
+            <GlypheArtisan artisan={a.artisan} icones={ctx.livre.icones} />
             <div className="noms">
               <span className="nom-fr"><Surligne texte={a.fr} requetes={requetes} /></span>
               <span className="nom-en"><Surligne texte={a.en} requetes={requetes} /></span>
               {a.note && <span className="note-article">{a.note}</span>}
             </div>
+            <span className="points-conduite" aria-hidden />
             {a.min === null && a.max === null ? (
               <span className="a-negocier">à négocier</span>
             ) : (
@@ -306,7 +323,7 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
         ))}
         {filtres.length === 0 && <p className={`vide ${generation > 0 ? 'ecrit' : ''}`}>{VIDES[requetes.join('').length % VIDES.length]}</p>}
       </div>
-      <p className="registre-pied">Prix exprimés en septims.</p>
+      <p className="registre-pied">Prix exprimés en septims d&apos;or</p>
     </div>
   )
 }

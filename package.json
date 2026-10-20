@@ -12,7 +12,8 @@
     "marked": "15.0.12",
     "next": "15.5.28",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "@iconify-json/game-icons": "^1.2.4"
   },
   "devDependencies": {
     "@types/node": "22.15.30",

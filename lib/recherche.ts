@@ -7,6 +7,13 @@ export const ARTISANS: Record<Artisan, string> = {
   divers: 'Divers',
 }
 
+export const ICONES_ARTISANS: Record<Artisan, string> = {
+  alchimiste: 'fizzing-flask',
+  forgeron: 'anvil',
+  couturier: 'sewing-needle',
+  divers: 'two-coins',
+}
+
 export function normaliser(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
