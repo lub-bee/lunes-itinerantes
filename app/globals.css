@@ -973,7 +973,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
     radial-gradient(ellipse 70% 55% at 45% 38%, rgba(255, 205, 160, 0.14), transparent 70%),
     radial-gradient(ellipse at center, transparent 48%, rgba(12, 4, 0, 0.62) 100%),
     linear-gradient(rgba(70, 24, 8, 0.3), rgba(36, 10, 3, 0.42)),
-    url('/textures/cuir.jpg') center / 560px;
+    var(--cuir-photo, url('/textures/cuir.jpg')) center / 560px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 220, 180, 0.15), inset 0 0 28px rgba(0, 0, 0, 0.45);
 }
 .tome-doublure {
@@ -1209,12 +1209,42 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .copie-fin .fleuron { color: var(--or); }
 
 /* No page margin: the parchment covers the whole sheet; each part pads every page it spans instead. */
+/* Front and back covers: the login page's closed book (components/Couverture.tsx), laid on the
+   table on screen and scaled to the whole sheet in print. */
+.copie-couverture { position: relative; z-index: 2; display: flex; justify-content: center; margin: 0 0 26px; }
+.couverture-imprimee {
+  /* The login cover's geometry (see .seuil) for a 360px-wide board at the A4 ratio. */
+  --tome-l: 360px;
+  --cle-l: 340px;
+  --plaque: calc(var(--cle-l) * 84 / 340);
+  --y-trou: calc(var(--tome-l) * 1.4142 * 0.5);
+  /* The plate straddles the fore-edge as on the login cover, but only as far as the sheet allows:
+     its keyhole stays whole, just inside the edge, and the plate clears the title. */
+  --marge-serrure: -26px;
+  /* Lighter copy of the leather photo, so the PDF stays small. */
+  --cuir-photo: url('/textures/cuir-impression.jpg');
+  position: relative;
+  width: var(--tome-l);
+  height: calc(var(--tome-l) * 1.4142);
+  box-shadow: 0 26px 50px rgba(0, 0, 0, 0.75), 0 6px 14px rgba(0, 0, 0, 0.55);
+  border-radius: 4px 10px 10px 4px;
+}
+.couverture-imprimee .tome-couverture { backface-visibility: visible; -webkit-backface-visibility: visible; }
+/* The back board: hinge on the right, frame mirrored, a small emblem low on the leather. */
+.tome-dos { border-radius: 10px 4px 4px 10px; }
+.copie-dos .couverture-imprimee { border-radius: 10px 4px 4px 10px; }
+.tome-dos .tome-charniere { left: auto; right: 0; transform: scaleX(-1); }
+.tome-dos .tome-cadre { inset: 28px 46px 28px 26px; }
+.tome-dos-embleme { position: absolute; left: 50%; top: 72%; translate: -50% -50%; }
+
 @page { size: A4; margin: 0; }
 
 @media print {
   /* The paper colour and the ink must survive "background graphics: off" defaults. */
   html, body, .copie, .copie * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  html:has(.copie), body:has(.copie) { background: var(--parchemin) var(--taches); background-size: 640px 640px; }
+  /* The --taches stains baked into a light JPEG tile (public/textures/parchemin-impression.jpg):
+     the live SVG filter would be rasterised again on every page and weigh megabytes. */
+  html:has(.copie), body:has(.copie) { background: var(--parchemin) url('/textures/parchemin-impression.jpg'); background-size: 640px 640px; }
   body:has(.copie)::before, body:has(.copie)::after { display: none; }
   .copie { width: auto; padding: 0; font-size: 11pt; }
   .copie-retour { display: none; }
@@ -1229,7 +1259,11 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
   }
-  .feuille:first-of-type { break-before: auto; }
+  .copie-couverture { display: block; width: 210mm; height: 297mm; margin: 0; overflow: hidden; }
+  .copie-dos { break-before: page; }
+  /* 360px board × 2.2047 = 210mm: the whole sheet, edge to edge. */
+  .couverture-imprimee { zoom: 2.2047; box-shadow: none; border-radius: 0; }
+  .couverture-imprimee .tome-couverture { border-radius: 0; }
   .feuille::before { display: none; }
   /* Ruled double frame repeated on every printed page. */
   .copie::before {

@@ -5,6 +5,7 @@ import type { Livre, Page, PageChapitre, PageNote } from '@/lib/types'
 import { prix, romain } from '@/lib/format'
 import { CitationFin, EnTete, Frontispice, type Ctx } from './Pages'
 import { Fleuron, GlypheArtisan } from './Ornements'
+import { DosCouverture, FaceCouverture } from './Couverture'
 
 /**
  * The whole register laid out as a printable document: title page, contents, every price chapter,
@@ -18,7 +19,13 @@ export default function Copie({ livre }: { livre: Livre }) {
     if (lance.current) return
     lance.current = true
     const images = Array.from(document.images).filter((img) => !img.complete)
-    Promise.all([document.fonts.ready, ...images.map((img) => new Promise((r) => (img.onload = img.onerror = r)))]).then(() =>
+    // The covers' textures are CSS backgrounds and SVG filter images, invisible to document.images.
+    const textures = TEXTURES.map((src) => {
+      const img = new Image()
+      img.src = src
+      return img.decode().catch(() => {})
+    })
+    Promise.all([document.fonts.ready, ...textures, ...images.map((img) => new Promise((r) => (img.onload = img.onerror = r)))]).then(() =>
       // Two frames so the layout with the loaded fonts is painted before printing.
       requestAnimationFrame(() => requestAnimationFrame(() => window.print())),
     )
@@ -37,6 +44,12 @@ export default function Copie({ livre }: { livre: Livre }) {
           Recopier encore
         </button>
       </nav>
+
+      <section className="copie-couverture" aria-hidden>
+        <div className="couverture-imprimee">
+          <FaceCouverture />
+        </div>
+      </section>
 
       <section className="feuille feuille-titre" style={teinte(livre, 'sommaire')}>
         <Frontispice ctx={ctx} compact={false} />
@@ -70,9 +83,17 @@ export default function Copie({ livre }: { livre: Livre }) {
         <Fleuron />
         Ici s&apos;arrête la copie. Qu&apos;elle ne quitte jamais la caravane.
       </p>
+
+      <section className="copie-couverture copie-dos" aria-hidden>
+        <div className="couverture-imprimee">
+          <DosCouverture />
+        </div>
+      </section>
     </div>
   )
 }
+
+const TEXTURES = ['/textures/cuir-impression.jpg', '/textures/fer.jpg', '/textures/parchemin-impression.jpg']
 
 const teinte = (livre: Livre, partie: Page['partie']) => ({ '--teinte': livre.parties.find((p) => p.id === partie)?.couleur } as CSSProperties)
 
