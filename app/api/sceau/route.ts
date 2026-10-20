@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
   if (!jeton || !attendu || !egaux(jeton, attendu)) {
     await new Promise((r) => setTimeout(r, 900))
-    return NextResponse.json({ message: "La serrure résiste. Ce n'est pas le mot de la caravane, ami." }, { status: 401 })
+    return NextResponse.json({ message: "La serrure résiste. Ce n'est pas la clef des lunes, ami." }, { status: 401 })
   }
 
   const rep = NextResponse.json({ ok: true })

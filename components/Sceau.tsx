@@ -180,11 +180,11 @@ export default function Sceau() {
             type="password"
             value={motDePasse}
             onChange={(e) => setMotDePasse(e.target.value)}
-            placeholder="Le mot de la caravane"
+            placeholder="Clef des lunes"
             autoComplete="current-password"
             autoFocus
             disabled={etat !== 'repos'}
-            aria-label="Mot de passe de la caravane"
+            aria-label="Clef des lunes (mot de passe)"
           />
           <button type="submit" className="cle-anneau" title="Tourner la clé" aria-label="Tourner la clé" disabled={etat !== 'repos'} />
         </form>
