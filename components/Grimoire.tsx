@@ -141,9 +141,32 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const jeton = useRef(0)
   const progression = useRef(0)
 
+  // An unsigned reader stays on the ex-libris: the page refuses to turn forward (it lifts a little and
+  // falls back) and Azurah's word is written near the plate. Turning back toward it is always allowed.
+  const verrouille = Boolean(registre.marchand?.relie && !registre.marchand.identite && pages[0]?.type === 'exlibris')
+  const verrouilleRef = useRef(verrouille)
+  verrouilleRef.current = verrouille
+  const [refus, setRefus] = useState(0)
+  const resister = useCallback(() => {
+    setRefus((n) => n + 1)
+    const el = feuillets.current?.querySelector<HTMLElement>('.page.droite, .page.unique')
+    el?.animate(
+      [
+        { transform: 'perspective(2200px) rotateY(0deg)' },
+        { offset: 0.32, transform: 'perspective(2200px) rotateY(-15deg)' },
+        { offset: 0.6, transform: 'perspective(2200px) rotateY(-2deg)' },
+        { offset: 0.78, transform: 'perspective(2200px) rotateY(-6deg)' },
+        { transform: 'perspective(2200px) rotateY(0deg)' },
+      ],
+      { duration: 760, easing: 'ease-out' },
+    )
+  }, [])
+  const bloque = (vers: number) => verrouilleRef.current && vers !== 0 && vers > indexRef.current
+
   const aller = useCallback(
     (vers: number, cibleArticle?: string) => {
       if (vers < 0 || vers >= pages.length) return
+      if (bloque(vers)) return resister()
       if (cibleArticle) setCible(cibleArticle)
       if (tourneRef.current) {
         enAttente.current = vers
@@ -156,7 +179,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       }
       setTourne({ de: indexRef.current, vers, manuel: false })
     },
-    [pages.length, sansAnimation],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pages.length, sansAnimation, resister],
   )
 
   /** Waits for the leaves to land (or fall back), then settles the book. */
@@ -271,6 +295,13 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           geste.current = null
           return
         }
+        if (bloque(vers)) {
+          geste.current = null
+          clicIgnore.current = true
+          setTimeout(() => (clicIgnore.current = false), 60)
+          resister()
+          return
+        }
         g.lance = true
         clicIgnore.current = true
         progression.current = avancement(g, e.clientX)
@@ -341,6 +372,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   /* ── First opening: the ex-libris ───────────────────────── */
 
+  const lienInitial = useRef<string | null>(null)
+
   // The pages wait for the reader's signature to be known (a quick call, no sheet), so a reader not yet
   // recognized opens the book on its ex-libris, and a known one on the title page.
   const [pretSignature, setPretSignature] = useState(false)
@@ -349,23 +382,49 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     const t = setTimeout(() => setPretSignature(true), 1500)
     return () => clearTimeout(t)
   }, [registre.marchand])
+  // Not signed: the book opens on the ex-libris whatever the address says; the page asked for opens
+  // once signed. Forgetting one's name (« ce n'est pas mon nom ») turns back to the ex-libris.
   const premiereOuverture = useRef(true)
+  const apresSignature = useRef<string | null>(null)
+  const identite = registre.marchand?.identite ?? null
+  const identiteAvant = useRef<string | null>(null)
   useEffect(() => {
-    if (!registre.marchand || !premiereOuverture.current) return
-    premiereOuverture.current = false
-    if (registre.marchand.relie && !registre.marchand.identite && !window.location.hash) setIndex(0)
-  }, [registre.marchand])
+    if (!registre.marchand) return
+    const relieEtLibre = registre.marchand.relie && !identite
+    if (premiereOuverture.current) {
+      premiereOuverture.current = false
+      if (relieEtLibre) {
+        apresSignature.current = decodeURIComponent(window.location.hash.slice(1)) || null
+        lienInitial.current = ''
+        setIndex(0)
+      }
+    } else if (relieEtLibre && identiteAvant.current) {
+      aller(0)
+    }
+    identiteAvant.current = identite
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registre.marchand, identite])
+  /** Once the ex-libris is signed: the page the address asked for, else the title page. */
+  const signe = useCallback(() => {
+    const voulu = apresSignature.current ? pages.findIndex((p) => p.id === apresSignature.current) : -1
+    apresSignature.current = null
+    aller(voulu > 0 ? voulu : pages.findIndex((p) => p.type === 'sommaire'))
+  }, [pages, aller])
 
   /* ── Deep links ─────────────────────────────────────────── */
 
   // The page named in the address opens once it exists (a missive's page appears only after the
   // registre is read); until then the address keeps it.
-  const lienInitial = useRef<string | null>(null)
   useEffect(() => {
     if (lienInitial.current === null) lienInitial.current = decodeURIComponent(window.location.hash.slice(1))
     if (!lienInitial.current) return
     const i = pages.findIndex((p) => p.id === lienInitial.current)
     if (i < 0) return
+    if (verrouilleRef.current) {
+      apresSignature.current = lienInitial.current
+      lienInitial.current = ''
+      return
+    }
     lienInitial.current = ''
     setIndex(i)
   }, [pages])
@@ -453,6 +512,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       onScroll: interactif ? (v) => (scrolls.current[id] = v) : undefined,
       commande: interactif && commande.ouverte ? { ajouter: commande.ajouter } : undefined,
       registre: ctxRegistre,
+      signe,
+      refus: interactif ? refus : 0,
     }
   }
 
@@ -503,7 +564,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const portee = tourne ? <div className="ombre-portee" data-portee aria-hidden /> : null
 
   return (
-    <div className={`scene ${tourne?.manuel ? 'en-tourne' : ''}`}>
+    <div className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''}`}>
       <header className="entete">
         <div className="blason">
           <Embleme taille={64} className="embleme-entete" />

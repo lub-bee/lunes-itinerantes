@@ -298,8 +298,10 @@ in v2. When the sheet cannot be read, the pages say so in character, with « ren
   small anvil on a row with a recipe opens the craft slip for it. Then the contributors (« a apporté
   X septims de valeur », « Y % du mérite », what each received once closed) and the ledger. A closed
   missive stays readable as it stood when it was closed.
-- **Le coffre**: the stock according to the ledger, « Relever le coffre », and every count: *Compté*
-  (found in the chest), *Attendu* (what the ledger expected), *Écart* (compté − attendu), with who and when.
+- **Le coffre**: the stock according to the ledger, « Relever le coffre », and every count: *Selon le
+  registre* (the stock the ledger computed just before the count), *Compté* (found in the chest),
+  *Écart* (compté − selon le registre, red when not zero), with who and when. An item's first count
+  has nothing to compare with: « premier compte ».
 - **Atelier → Sommaire des recettes**: the crafts present in the « Artisan » column (Alchimiste,
   Brasseur, Forgeron…, each with its count), then **one side tab per craft** (engraved icon, a line of
   introduction for the known ones, « Consigner une recette » with the craft filled in), recipes
@@ -343,7 +345,12 @@ the script's own execution time, `relire` = always 0, `onglets` = whether the an
 
 ### Who holds the pen: the ex-libris (members' whitelist)
 
-The first page of the book is an ex-libris: « Cet ouvrage du grimoire appartient à … ». A reader whose
+The first page of the book is an ex-libris: « Cet ouvrage du grimoire appartient à … », the caravan's
+emblem blind-pressed into the paper of the spread. Until it is signed the book stays there: turning
+forward (corner, arrows, swipe, ribbons, tabs, search) is refused — the leaf lifts and falls back, and
+« Une force divine retient la page. Azurah attend ta signature. » is written by the plate; the order
+scroll stays rolled; the lock stays available. Once signed, the page the address asked for opens. No
+other place asks for a name. A reader whose
 name is not yet recognized opens the book on it and signs: the server matches the name against the
 **Membres** tab (case, accents, apostrophes, spaces and œ/æ ignored: `jzahir` = `J'Zahir`), keeps the
 sheet's spelling in a signed cookie (`caravane_nom`, 400 days), the name is written in ink and the book

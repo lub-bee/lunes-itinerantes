@@ -191,7 +191,8 @@ export function trouverCycle(nom: string, recettes: Map<string, Recette>, chemin
 
 /* ───────────────────────── The Missive chest ───────────────────────── */
 
-export type Releve = { horodatage: string; membre: string; objet: string; compte: number; attendu: number; ecart: number; missive: string }
+/** `premier`: the first time this item appears in the ledger (nothing to compare with: no gap). */
+export type Releve = { horodatage: string; membre: string; objet: string; compte: number; attendu: number; ecart: number; missive: string; premier: boolean }
 export type Stock = Map<string, { nom: string; qte: number }>
 
 const parDate = <T extends { horodatage: string }>(xs: T[]) =>
@@ -208,9 +209,10 @@ export function rejouer(mouvements: Mouvement[]): { stock: Stock; releves: Relev
     if (m.type === 'partage') continue
     const k = cle(m.objet)
     if (!k) continue
+    const premier = !stock.has(k)
     const s = stock.get(k) ?? { nom: m.objet, qte: 0 }
     if (m.type === 'relevé') {
-      releves.push({ horodatage: m.horodatage, membre: m.membre, objet: m.objet, compte: m.quantite, attendu: s.qte, ecart: m.quantite - s.qte, missive: m.missive })
+      releves.push({ horodatage: m.horodatage, membre: m.membre, objet: m.objet, compte: m.quantite, attendu: s.qte, ecart: premier ? 0 : m.quantite - s.qte, missive: m.missive, premier })
       s.qte = m.quantite
     } else {
       s.qte += m.quantite

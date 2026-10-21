@@ -23,7 +23,7 @@ import {
   type Recette,
   type Ressource,
 } from '@/lib/missives'
-import { auCoffre, idMissive, quantite, Signature, type CtxRegistre, type Fiche } from './Missives'
+import { auCoffre, idMissive, quantite, type CtxRegistre, type Fiche } from './Missives'
 import { Icone } from './Ornements'
 
 /*
@@ -188,7 +188,16 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
 /** Forms need a signed member allowed to take the action. */
 function Signe({ env, action, children }: { env: Env; action: ActionRegistre; children: ReactNode }) {
   const m = env.reg.r.marchand
-  if (!m?.identite) return <Signature r={env.reg.r} icones={env.icones} invite="Avant d'écrire au registre, signe de ton nom, tel que la caravane le connaît." />
+  if (!m?.identite) {
+    return (
+      <div className="fiche-non-signe">
+        <p className="fiche-note">Ce registre ne se signe qu&apos;à l&apos;ex-libris du grimoire, une fois pour toutes.</p>
+        <button type="button" className="lien-encre" onClick={() => env.reg.allerA('ex-libris')}>
+          aller à l&apos;ex-libris
+        </button>
+      </div>
+    )
+  }
   if (m.droits && !m.droits[action]) return <p className="message-encre erreur">Cette page du registre est réservée à d&apos;autres pattes que les tiennes.</p>
   return <>{children}</>
 }
@@ -701,7 +710,7 @@ function FormReleve({ env, numero }: { env: Env; numero?: string }) {
         <div className="fiche-releve">
           <div className="fiche-releve-entete">
             <span>Objet</span>
-            <span>Attendu</span>
+            <span>Selon le registre</span>
             <span>Compté</span>
           </div>
           {objets.map((o) => {

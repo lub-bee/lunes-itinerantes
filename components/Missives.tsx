@@ -79,61 +79,40 @@ export function Geste({ icone, children, onClick, disabled }: { icone?: string; 
   )
 }
 
-/** The member's signature: their name once recognized, else a field to sign with it. */
-export function Signature({ r, invite, icones }: { r: EtatRegistre; invite?: string; icones: Record<string, string> }) {
-  const [nom, setNom] = useState('')
-  const [envoi, setEnvoi] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const m = r.marchand
+/**
+ * The member's signature, as written on the ex-libris: never asked again here. Not signed (it should
+ * not happen: the book stays on its ex-libris until it is signed) → a way back to the ex-libris.
+ * « ce n'est pas mon nom » forgets it and turns back to the ex-libris.
+ */
+export function Signature({ reg }: { reg: CtxRegistre }) {
+  const m = reg.r.marchand
   if (!m || !m.relie) return null
   if (m.identite) {
     return (
       <p className="signature-membre">
         Tu signes de la patte de <strong>{m.identite}</strong>
         {!m.discord && (
-          <button type="button" className="lien-encre" onClick={r.oublier}>
+          <button
+            type="button"
+            className="lien-encre"
+            onClick={() => {
+              reg.r.oublier()
+              reg.allerA('ex-libris')
+            }}
+          >
             ce n&apos;est pas mon nom
           </button>
         )}
       </p>
     )
   }
-  const envoyer = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!nom.trim() || envoi) return
-    setEnvoi(true)
-    setMessage(null)
-    const rep = await r.signer(nom.trim())
-    setEnvoi(false)
-    if (!rep.ok) setMessage(rep.message)
-  }
   return (
-    <form className="signature-form" onSubmit={envoyer}>
-      <p className="signature-invite">{invite ?? 'Avant de prendre part aux missives, inscris ton nom tel que la caravane le connaît.'}</p>
-      <div className="signature-ligne">
-        <input
-          type="text"
-          value={nom}
-          maxLength={80}
-          onChange={(e) => setNom(e.target.value)}
-          placeholder="Ton nom de marchand"
-          autoComplete="off"
-          name="nom-membre"
-          aria-label="Ton nom de marchand"
-        />
-        <button type="submit" className="commande-sceller signature-sceller" disabled={envoi || !nom.trim()}>
-          <span className="commande-cire" aria-hidden>
-            <Icone corps={icones['quill']} />
-          </span>
-          {envoi ? 'Le scribe cherche…' : 'Signer'}
-        </button>
-      </div>
-      {message && (
-        <p className="message-encre erreur" role="alert">
-          {message}
-        </p>
-      )}
-    </form>
+    <p className="signature-membre">
+      Ton nom n&apos;est pas encore écrit à l&apos;ex-libris.{' '}
+      <button type="button" className="lien-encre" onClick={() => reg.allerA('ex-libris')}>
+        signer l&apos;ex-libris
+      </button>
+    </p>
   )
 }
 
@@ -165,7 +144,7 @@ export function GaucheMissives({ page, reg, icones, compact }: { page: PageMissi
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && (
         <>
-          <Signature r={r} icones={icones} />
+          <Signature reg={reg} />
           {r.marchand?.droits?.missive !== false && (
             <div className="gestes">
               <Geste icone={icones['scroll-quill']} onClick={() => reg.ouvrir({ genre: 'missive' })}>
@@ -277,7 +256,7 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
       </ul>
       {!close && (
         <>
-          <Signature r={reg.r} icones={icones} invite="Pour écrire au registre de cette missive, signe de ton nom." />
+          <Signature reg={reg} />
           <div className="gestes">
             {permis('releve') && <Geste icone={icones['magnifying-glass']} onClick={() => reg.ouvrir({ genre: 'releve', numero: m.numero })}>Relever le coffre</Geste>}
             {permis('depot') && <Geste icone={icones['open-chest']} onClick={() => reg.ouvrir({ genre: 'depot', numero: m.numero })}>Déposer au coffre</Geste>}
@@ -500,7 +479,7 @@ export function GaucheCoffre({ page, reg, icones, compact }: { page: PageCoffre;
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && (
         <>
-          <Signature r={r} icones={icones} invite="Pour compter le coffre, signe de ton nom." />
+          <Signature reg={reg} />
           {r.marchand?.droits?.releve !== false && (
             <div className="gestes">
               <Geste icone={icones['magnifying-glass']} onClick={() => reg.ouvrir({ genre: 'releve' })}>
@@ -538,17 +517,17 @@ export function DroiteCoffre({ reg }: { reg?: CtxRegistre }) {
       )}
       <h3 className="titre-section">Relevés du coffre</h3>
       <p className="note-encre">
-        <strong>Compté</strong> : ce qu&apos;on a trouvé en ouvrant le coffre. <strong>Attendu</strong> : ce que le registre annonçait.{' '}
-        <strong>Écart</strong> : compté moins attendu.{' '}
-        {ecarts.length ? `${ecarts.length} écart${ecarts.length > 1 ? 's' : ''} à éclaircir.` : 'Aucun écart : la caravane est honnête.'}
+        Ce qu&apos;on a compté en ouvrant le coffre, face à ce que le registre annonçait. Si le coffre et le registre ne disent pas
+        la même chose, quelqu&apos;un a pris ou oublié de consigner.{' '}
+        {ecarts.length ? `${ecarts.length} écart${ecarts.length > 1 ? 's' : ''} à éclaircir.` : 'Aucun écart.'}
       </p>
       {releves.length ? (
         <div className="releves" role="table">
           <div className="releves-entete" role="row">
             <span>Quand, qui</span>
             <span>Objet</span>
+            <span>Selon le registre</span>
             <span>Compté</span>
-            <span>Attendu</span>
             <span>Écart</span>
           </div>
           {[...releves].reverse().map((x, i) => (
@@ -558,9 +537,11 @@ export function DroiteCoffre({ reg }: { reg?: CtxRegistre }) {
                 <em>{x.membre}</em>
               </span>
               <span>{x.objet}</span>
+              <span>{x.premier ? '—' : quantite(x.attendu)}</span>
               <span>{quantite(x.compte)}</span>
-              <span>{quantite(x.attendu)}</span>
-              <strong>{x.ecart ? (x.ecart > 0 ? `+${quantite(x.ecart)}` : quantite(x.ecart)) : 'juste'}</strong>
+              <strong className={x.premier ? 'premier' : ''} title={x.premier ? 'Premier compte de cet objet : rien à comparer.' : undefined}>
+                {x.premier ? 'premier compte' : x.ecart ? (x.ecart > 0 ? `+${quantite(x.ecart)}` : quantite(x.ecart)) : 'juste'}
+              </strong>
             </div>
           ))}
         </div>

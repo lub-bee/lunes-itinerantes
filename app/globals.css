@@ -1827,7 +1827,9 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .inventaire li { display: flex; align-items: baseline; gap: 6px; padding: 2px 2px; font-size: 17px; }
 .inventaire strong { font-weight: 400; font-variant-numeric: tabular-nums lining-nums; }
 .inventaire .negatif { color: var(--encre-rouge); }
-.releves-entete, .releves-ligne { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 54px 56px 50px; }
+.releves-entete, .releves-ligne { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 70px 54px 74px; }
+.releves-entete span { line-height: 1.1; }
+.releves-ligne strong.premier { font-size: 13px; color: var(--encre-pale); }
 .releves-entete span:nth-child(n + 3), .releves-ligne > :nth-child(n + 3) { text-align: right; }
 .releves-ligne { padding: 4px 2px; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 15.5px; font-variant-numeric: tabular-nums lining-nums; }
 .releves-qui { display: flex; flex-direction: column; font-family: var(--f-capitales); font-size: 12.5px; color: var(--encre-pale); }
@@ -2039,7 +2041,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   .besoins-ligne { font-size: 15.5px; }
   .besoins-entete { font-size: 12px; }
   .journal li { grid-template-columns: 1fr; }
-  .releves-entete, .releves-ligne { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 44px 46px 42px; column-gap: 5px; font-size: 14px; }
+  .releves-entete, .releves-ligne { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 54px 44px 56px; column-gap: 5px; font-size: 14px; }
   .releves-entete { font-size: 11.5px; }
   .part { grid-template-columns: minmax(0, 1fr) 70px 38px; }
   .ressources-entete, .ressources-ligne { grid-template-columns: minmax(0, 1fr) 76px 46px; }
@@ -2177,8 +2179,31 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 @keyframes avis { from { opacity: 0; transform: translateY(-14px); } }
 
 /* ─── The ex-libris ─── */
-.contregarde { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-.filigrane { width: auto; height: 46%; opacity: 0.07; filter: grayscale(1) sepia(0.6); }
+/* The emblem blind-pressed into the paper: a faint darker fill, a shadow on the upper-left edges and a
+   light on the lower-right ones (the paper pushed in). Static. */
+.gaufrage { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.gaufrage svg {
+  position: absolute;
+  top: 50%;
+  height: 128%;
+  width: auto;
+  translate: -50% -50%;
+  overflow: visible;
+  filter: drop-shadow(-1.4px -1.6px 0.6px rgba(70, 40, 12, 0.22)) drop-shadow(1.4px 1.6px 0.6px rgba(255, 249, 230, 0.6));
+}
+.gaufrage path { fill: rgba(150, 105, 50, 0.07); }
+.gaufrage-gauche svg { left: 100%; }
+.gaufrage-droite svg { left: 0; }
+.gaufrage-unique svg { left: 50%; height: 122%; filter: drop-shadow(-1.6px -1.8px 0.6px rgba(70, 40, 12, 0.28)) drop-shadow(1.6px 1.8px 0.6px rgba(255, 249, 230, 0.7)); }
+.ex-libris-zone { position: relative; z-index: 1; }
+.ex-libris-etoile { font-size: 20px; color: #b48a3a; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6); }
+/* Azurah's word when an unsigned reader tries to turn the page: ink appearing near the plate. */
+.ex-libris-retenue { margin: 14px 0 0; max-width: 340px; text-align: center; font-style: italic; font-size: 17px; color: var(--encre-rouge); animation: encre-apparait 900ms ease-out both; }
+@keyframes encre-apparait { from { opacity: 0; transform: translateY(-3px); } }
+/* The page lifts a little and falls back (Grimoire.tsx): it turns about the spine. */
+.page.droite, .page.unique { transform-origin: left center; }
+/* Until the ex-libris is signed, the order scroll stays rolled. */
+.scene.verrouillee .commande-bande, .scene.verrouillee .commande-barre { pointer-events: none; opacity: 0.55; }
 .ex-libris-zone { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0; }
 .ex-libris {
   position: relative;

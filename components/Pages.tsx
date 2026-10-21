@@ -6,7 +6,7 @@ import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
-import { ContreGarde, ExLibris } from './ExLibris'
+import { ExLibris, Gaufrage } from './ExLibris'
 import { DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -25,6 +25,10 @@ export type Ctx = {
   commande?: { ajouter: (a: Article) => number }
   /** Missives, recipes and the chest (absent on the faces of a turning leaf: static rendering). */
   registre?: CtxRegistre
+  /** The ex-libris was just signed: open the book where the reader was going. */
+  signe?: () => void
+  /** How many times an unsigned reader tried to turn past the ex-libris (shows Azurah's word). */
+  refus?: number
 }
 
 /** Pages before the title page (the ex-libris) carry no folio: the numbering starts at the title page. */
@@ -90,7 +94,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   const corps = (() => {
     switch (page.type) {
       case 'exlibris':
-        return compact ? null : <ContreGarde />
+        return compact ? null : <Gaufrage cote="gauche" />
       case 'sommaire':
         return <Frontispice ctx={ctx} compact={compact} />
       case 'chapitre':
@@ -268,7 +272,12 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
   const corps = (() => {
     switch (page.type) {
       case 'exlibris':
-        return <ExLibris ctx={ctx} />
+        return (
+          <>
+            <Gaufrage cote={integre ? 'unique' : 'droite'} />
+            <ExLibris ctx={ctx} />
+          </>
+        )
       case 'sommaire':
         return (
           <>

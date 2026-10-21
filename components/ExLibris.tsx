@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Ctx } from './Pages'
-import { Embleme, Icone } from './Ornements'
+import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
+import { Icone } from './Ornements'
 
 /*
  * The ex-libris: a bookplate pasted inside the cover, the first page of the grimoire once the
@@ -15,11 +16,17 @@ import { Embleme, Icone } from './Ornements'
 const PAS_LETTRE = 70
 const APRES_SIGNATURE = 700
 
-/** Left page: the endpaper, the caravan's emblem as a watermark in the paper. */
-export function ContreGarde() {
+/**
+ * The caravan's emblem blind-pressed into the paper of the ex-libris spread: no ink, no gold, only the
+ * light and shadow of the press. Larger than the page, so the page edges cut it; on a spread its
+ * centre sits on the spine and each page shows its half. Static (painted once).
+ */
+export function Gaufrage({ cote }: { cote: 'gauche' | 'droite' | 'unique' }) {
   return (
-    <div className="contregarde" aria-hidden>
-      <Embleme taille={260} className="filigrane" />
+    <div className={`gaufrage gaufrage-${cote}`} aria-hidden>
+      <svg viewBox={EMBLEME_VIEWBOX} preserveAspectRatio="xMidYMid meet">
+        <path d={EMBLEME_TRACE} fillRule="evenodd" />
+      </svg>
     </div>
   )
 }
@@ -69,7 +76,7 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
     setFrais(true)
     // The ink dries, then the book opens on its title page.
     const sommaire = ctx.livre.pages.findIndex((p) => p.type === 'sommaire')
-    setTimeout(() => ctx.aller?.(sommaire), rep.message.length * PAS_LETTRE + APRES_SIGNATURE)
+    setTimeout(() => (ctx.signe ? ctx.signe() : ctx.aller?.(sommaire)), rep.message.length * PAS_LETTRE + APRES_SIGNATURE)
   }
 
   return (
@@ -83,7 +90,7 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
         <div className="ex-libris-titre">Ex-libris</div>
         <div className="ex-libris-lunes" aria-hidden>
           <span className="lune">☾</span>
-          <Embleme taille={58} className="ex-libris-embleme" />
+          <span className="ex-libris-etoile">✦</span>
           <span className="lune">☽</span>
         </div>
         <p className="ex-libris-texte">Cet ouvrage du grimoire appartient à</p>
@@ -132,6 +139,11 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
         </p>
         <div className="ex-libris-pied">Caravane des Lunes Itinérantes</div>
       </div>
+      {!m?.identite && Boolean(ctx.refus) && (
+        <p key={ctx.refus} className="ex-libris-retenue" role="status">
+          Une force divine retient la page. Azurah attend ta signature.
+        </p>
+      )}
       {m?.identite && !m.discord && (
         <button type="button" className="lien-encre ex-libris-autre" tabIndex={tab} onClick={r?.oublier}>
           ce n&apos;est pas mon nom

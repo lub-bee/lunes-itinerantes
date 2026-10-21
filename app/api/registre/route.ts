@@ -177,11 +177,13 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
         if (vus.has(cle(objet))) return []
         vus.add(cle(objet))
         const compte = entier(l.compte, 0, 1_000_000, `Compte de ${objet}`)
-        const attendu = stock.get(cle(objet))?.qte ?? 0
+        const connu = stock.get(cle(objet))
+        const attendu = connu?.qte ?? 0
         const ecart = compte - attendu
-        return [{ horodatage: quand, action: '', missive: mot(b.missive, 40), membre: qui.nom, objet, quantite: compte, note: `attendu ${attendu}${ecart ? `, écart ${signee(ecart)}` : ', juste'}` }]
+        const note = !connu ? 'premier compte' : `selon le registre ${attendu}${ecart ? `, écart ${signee(ecart)}` : ', juste'}`
+        return [{ horodatage: quand, action: '', missive: mot(b.missive, 40), membre: qui.nom, objet, quantite: compte, note }]
       })
-      const ecarts = mouvements.filter((m) => !m.note.endsWith('juste')).length
+      const ecarts = mouvements.filter((m) => m.note.includes('écart')).length
       return {
         action,
         charge: { mouvements },
