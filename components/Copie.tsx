@@ -74,6 +74,12 @@ export default function Copie({ livre }: { livre: Livre }) {
           <EnTete surtitre="Pense-bête" titre={page.titre} icone={livre.icones[page.icone]}>
             {page.resume && <p className="intro">{page.resume}</p>}
             {page.auteur && <p className="signature">Consigné par {page.auteur}</p>}
+            {page.citation && (
+              <blockquote className="citation-fin citation-note">
+                <p>{page.citation}</p>
+                {page.citationAuteur && <p className="citation-auteur">— {page.citationAuteur}</p>}
+              </blockquote>
+            )}
           </EnTete>
           <div className="prose" dangerouslySetInnerHTML={{ __html: page.html }} />
         </section>
