@@ -1143,7 +1143,8 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 /* Unroll: the veil slides down from above clipping the paper, which slides up by as much (so stays
    still); the roll hangs at the veil's bottom edge. Clipping only while unrolling. */
 .commande-voile, .commande-masque { position: absolute; inset: 0; }
-.commande-feuille[data-deroule] .commande-masque { overflow: hidden; }
+/* clip, not hidden: a clipped box cannot be scrolled, even by script (hidden as a fallback). */
+.commande-feuille[data-deroule] .commande-masque { overflow: hidden; overflow: clip; }
 /* No hit-testing while it moves (the pointer resting on « Rouler » would restyle and repaint the
    sheet at every frame). */
 .commande-feuille[data-deroule] { pointer-events: none; }

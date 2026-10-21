@@ -573,10 +573,21 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
   useEffect(() => setQte(String(l.qte)), [l.qte])
   const ref = useRef<HTMLDivElement>(null)
 
-  // Fresh ink when the article is written or its quantity grows from the ledger.
+  // Fresh ink when the article is written or its quantity grows from the ledger, not when the sheet
+  // is unrolled again (the last written line would be inked anew, and scrolled to mid-unroll).
+  const vueAuMontage = useRef(nouvelle)
   useEffect(() => {
-    if (!nouvelle || !ref.current) return
-    ref.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (!nouvelle || !ref.current || nouvelle === vueAuMontage.current) return
+    // Scroll the list of lines only: scrollIntoView would also scroll every clipping ancestor,
+    // e.g. the unroll's mask, shifting the whole sheet up while it unrolls.
+    const liste = ref.current.closest<HTMLElement>('.commande-lignes')
+    if (liste) {
+      const l = ref.current.getBoundingClientRect()
+      const c = liste.getBoundingClientRect()
+      const entete = liste.querySelector<HTMLElement>('.commande-colonnes')?.offsetHeight ?? 0
+      if (l.top < c.top + entete) liste.scrollBy({ top: l.top - c.top - entete, behavior: 'smooth' })
+      else if (l.bottom > c.bottom) liste.scrollBy({ top: l.bottom - c.bottom, behavior: 'smooth' })
+    }
     ref.current.classList.remove('encre-fraiche')
     void ref.current.offsetWidth
     ref.current.classList.add('encre-fraiche')
