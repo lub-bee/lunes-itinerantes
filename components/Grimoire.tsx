@@ -350,17 +350,18 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   /* ── Pages added or moved (missives read from the sheet) ── */
 
-  // The open page stays open when missive pages appear before it.
-  const idCourant = useRef<string | null>(null)
+  // The open page stays open when pages appear before it (ex-libris, missives, crafts): the page
+  // shown is looked up in the previous list of pages, then found again in the new one.
+  const pagesAvant = useRef(pages)
   useLayoutEffect(() => {
-    const i = idCourant.current === null ? -1 : pages.findIndex((p) => p.id === idCourant.current)
+    const avant = pagesAvant.current
+    pagesAvant.current = pages
+    if (avant === pages) return
+    const id = avant[indexRef.current]?.id
+    const i = id ? pages.findIndex((p) => p.id === id) : -1
     if (i >= 0 && i !== indexRef.current) setIndex(i)
     else if (indexRef.current >= pages.length) setIndex(pages.length - 1)
   }, [pages])
-  useEffect(() => {
-    idCourant.current = pages[index]?.id ?? null
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index])
   // A page asked for by id (e.g. a missive just written) is opened once it exists.
   useEffect(() => {
     if (!versId) return
@@ -379,7 +380,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const [pretSignature, setPretSignature] = useState(false)
   useEffect(() => {
     if (registre.marchand) return setPretSignature(true)
-    const t = setTimeout(() => setPretSignature(true), 1500)
+    const t = setTimeout(() => setPretSignature(true), 3000)
     return () => clearTimeout(t)
   }, [registre.marchand])
   // Not signed: the book opens on the ex-libris whatever the address says; the page asked for opens

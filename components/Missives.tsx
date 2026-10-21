@@ -639,7 +639,6 @@ export function DroiteAtelier({ page, reg, interactif, icones }: { page: PageAte
               role="button"
               tabIndex={tab}
               className="ligne matiere"
-              title={x.origine ? `Origine : ${x.origine}` : undefined}
               onClick={() => reg.ouvrir({ genre: 'ressource', nom: x.nom })}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return
@@ -650,7 +649,6 @@ export function DroiteAtelier({ page, reg, interactif, icones }: { page: PageAte
               <span className="noms">
                 <span className="nom-fr">{x.nom}</span>
                 {x.en && <span className="nom-en">{x.en}</span>}
-                {x.origine && <span className="matiere-origine">{x.origine}</span>}
               </span>
               <span className="points-conduite" aria-hidden />
               <span className="prix">{prix(x.prix)}</span>
@@ -720,10 +718,9 @@ export function DroiteMetier({ page, reg, interactif, anglais }: { page: PageMet
                 </span>
                 <span className="points" />
                 <span className="renvoi">
-                  {x.ingredients.map((i) => i.nom).join(', ')}
                   {c && (() => {
                     const cout = coutMatieres(arbre(x.produit, x.rendement, c.recettes), r.donnees!.ressources).cout
-                    return cout ? <b> · {prix(cout)} septims</b> : null
+                    return cout ? <b>{prix(cout)} septims</b> : null
                   })()}
                 </span>
               </button>
