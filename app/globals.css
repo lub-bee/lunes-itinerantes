@@ -1101,6 +1101,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   outline: none;
   transition: border-color 200ms ease, background 200ms ease;
 }
+.commande-vendeur-nom { flex: 1; padding: 2px 4px; font-weight: 400; font-size: 18px; font-style: italic; border-bottom: 1.5px solid rgba(90, 64, 41, 0.25); }
 .commande-vendeur input { flex: 1; padding: 2px 4px; font-size: 18px; font-style: italic; }
 .commande-vendeur input::placeholder, .commande-prix::placeholder { color: var(--encre-pale); font-style: italic; }
 .commande-vendeur input:focus, .commande-prix:focus, .commande-qte input:focus { border-color: var(--encre-rouge); background: rgba(255, 250, 235, 0.4); }
@@ -1542,6 +1543,43 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 .cle-anneau:not(:disabled):hover { background: radial-gradient(circle, rgba(230, 225, 215, 0.14), transparent 70%); }
 .cle-anneau:focus-visible { outline: 2px solid rgba(230, 220, 200, 0.6); outline-offset: 2px; }
 
+/* Discord mode: the shaft is engraved « Présenter son sceau » and turning it presents the seal. */
+.cle-tige-sceau {
+  display: grid;
+  place-items: center;
+  padding: 0 6px;
+  font-family: var(--f-capitales);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: #ddd5c6;
+  cursor: pointer;
+  transition: color 200ms ease, box-shadow 200ms ease;
+}
+.cle-tige-sceau:not(:disabled):hover, .cle-tige-sceau:focus-visible {
+  color: #f4ecdc;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(230, 220, 200, 0.35), 0 0 12px rgba(236, 200, 140, 0.25);
+}
+.cle-tige-sceau:disabled { cursor: default; }
+/* The other way in, when both are open: below everything, out of the flow. */
+.seuil-variante {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  translate: -50% 0;
+  padding: 4px 8px;
+  border: 0;
+  border-bottom: 1px dotted rgba(201, 162, 78, 0.45);
+  background: none;
+  font-style: italic;
+  font-size: 15px;
+  color: rgba(236, 211, 147, 0.7);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  animation: apparition 600ms 400ms ease both;
+}
+.seuil-variante:hover, .seuil-variante:focus-visible { outline: none; color: var(--or-pale); border-bottom-color: var(--or-pale); }
+
 .etat-essai .cle, .etat-refus .cle, .etat-ouvert .cle { transform: translateX(calc(-1 * var(--course))); }
 .etat-refus .cle { animation: cle-hesite 520ms ease-in-out; }
 .etat-ouvert .cle { animation: cle-tourne 420ms 80ms cubic-bezier(.5, 0, .3, 1) forwards, cle-efface 300ms 560ms ease forwards; }
@@ -1572,6 +1610,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .tome-embleme { height: 104px; width: auto; }
   .tome-couverture .laiton { width: 36px; height: 36px; }
   .cle-tige { font-size: 14px; padding: 0 6px; }
+  .cle-tige-sceau { font-size: 12.5px; letter-spacing: 0.03em; padding: 0 4px; }
 }
 
 .egare { position: relative; z-index: 1; min-height: 100vh; display: grid; place-content: center; text-align: center; padding: 24px 16px; }

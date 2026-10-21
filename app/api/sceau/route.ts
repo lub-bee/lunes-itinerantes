@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
-import { COOKIE_SCEAU, DUREE_SCEAU, egaux, jetonAttendu, jetonPour, sceauConfigure } from '@/lib/sceau'
+import { COOKIE_CONNU, COOKIE_MEMBRE, COOKIE_SCEAU, COOKIE_SILENCE, DUREE_SCEAU, egaux, jetonAttendu, jetonPour, motDePasseAccepte, sceauConfigure } from '@/lib/sceau'
 
 export async function POST(req: Request) {
   if (!sceauConfigure()) {
     return NextResponse.json({ message: "Cette serrure n'a jamais été forgée : le grimoire attend ses instructions." }, { status: 503 })
+  }
+  if (!motDePasseAccepte()) {
+    return NextResponse.json({ message: 'Cette serrure ne connaît plus les mots : présente ton sceau, ami.' }, { status: 403 })
   }
   const { motDePasse } = (await req.json().catch(() => ({}))) as { motDePasse?: string }
   const jeton = await jetonPour(String(motDePasse ?? '').trim())
@@ -27,6 +30,7 @@ export async function POST(req: Request) {
 
 export async function DELETE() {
   const rep = NextResponse.json({ ok: true })
-  rep.cookies.set(COOKIE_SCEAU, '', { path: '/', maxAge: 0 })
+  // Closing the grimoire forgets every seal, and the "known visitor" mark (no silent way back in).
+  for (const nom of [COOKIE_SCEAU, COOKIE_MEMBRE, COOKIE_CONNU, COOKIE_SILENCE]) rep.cookies.set(nom, '', { path: '/', maxAge: 0 })
   return rep
 }

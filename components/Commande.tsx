@@ -55,6 +55,8 @@ export function useCommande() {
   const [envoi, setEnvoi] = useState(false)
   const [pret, setPret] = useState(false)
   const [nouvelle, setNouvelle] = useState<{ id: string; n: number } | null>(null)
+  /** Seller known from the session (Discord): their name signs the order and is not editable. */
+  const [membre, setMembre] = useState<string | null>(null)
   /** The next sheet mount unrolls from the strip (not on reload). */
   const deroule = useRef(false)
   const lignesRef = useRef(lignes)
@@ -66,6 +68,10 @@ export function useCommande() {
     if (c?.ouverte) setOuverte(true)
     setVendeur(lire<string>(CLE_VENDEUR) ?? '')
     setPret(true)
+    fetch('/api/marchand')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r: { discord?: boolean; nom?: string } | null) => r?.discord && r.nom && setMembre(r.nom))
+      .catch(() => {})
   }, [])
   useEffect(() => {
     if (pret) ecrire(CLE_COMMANDE, lignes.length || ouverte ? { lignes, ouverte } : null)
@@ -114,13 +120,14 @@ export function useCommande() {
 
   const sceller = useCallback(async () => {
     const actives = lignesRef.current.filter((l) => !l.rayee)
-    if (!vendeur.trim()) return setMessage({ genre: 'erreur', texte: 'Qui tient la plume ? Inscris le nom du vendeur.' })
+    const signe = membre ?? vendeur.trim()
+    if (!signe) return setMessage({ genre: 'erreur', texte: 'Qui tient la plume ? Inscris le nom du vendeur.' })
     if (!actives.length) return setMessage({ genre: 'erreur', texte: 'Une commande sans article ne se scelle pas.' })
     if (actives.some((l) => lirePrix(l.prix) === null)) {
       return setMessage({ genre: 'erreur', texte: 'Un article attend encore son prix. Fixe-le avant de sceller.' })
     }
     const envoyee: CommandeEnvoyee = {
-      vendeur: vendeur.trim(),
+      vendeur: signe,
       lignes: actives.map((l) => ({ id: l.id, article: l.fr, articleEn: l.en, quantite: l.qte, prixUnitaire: lirePrix(l.prix)!, min: l.min, max: l.max })),
     }
     setEnvoi(true)
@@ -139,9 +146,9 @@ export function useCommande() {
     } finally {
       setEnvoi(false)
     }
-  }, [vendeur])
+  }, [vendeur, membre])
 
-  return { lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
+  return { membre, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
 }
 
 export type EtatCommande = ReturnType<typeof useCommande>
@@ -296,17 +303,26 @@ export function FeuilleCommande({
         </button>
       </header>
 
-      <label className="commande-vendeur">
-        <span>Vendeur</span>
-        <input
-          type="text"
-          value={c.vendeur}
-          maxLength={80}
-          onChange={(e) => c.setVendeur(e.target.value)}
-          placeholder="Qui tient la plume ?"
-          autoComplete="off"
-        />
-      </label>
+      {c.membre ? (
+        <div className="commande-vendeur">
+          <span>Vendeur</span>
+          <strong className="commande-vendeur-nom" title="Le nom de ton sceau signe la commande">
+            {c.membre}
+          </strong>
+        </div>
+      ) : (
+        <label className="commande-vendeur">
+          <span>Vendeur</span>
+          <input
+            type="text"
+            value={c.vendeur}
+            maxLength={80}
+            onChange={(e) => c.setVendeur(e.target.value)}
+            placeholder="Qui tient la plume ?"
+            autoComplete="off"
+          />
+        </label>
+      )}
 
       <div className="commande-lignes">
         {c.lignes.length === 0 ? (

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { COOKIE_SCEAU, egaux, jetonAttendu } from '@/lib/sceau'
+import { lireSession } from '@/lib/sceau'
 import { chargerArticles } from '@/lib/livre'
 import { calculerLigne, totaux, type CommandeEnvoyee } from '@/lib/commande'
 
@@ -24,16 +24,17 @@ function numeroCommande(maintenant: Date): string {
 
 export async function POST(req: NextRequest) {
   // The middleware already guards /api/*; checked again so the route never relies on it alone.
-  const jeton = req.cookies.get(COOKIE_SCEAU)?.value
-  const attendu = await jetonAttendu()
-  if (!jeton || !attendu || !egaux(jeton, attendu)) return refus("Le sceau de la caravane manque à cette commande.", 401)
+  const session = await lireSession(req.cookies)
+  if (!session.valide) return refus('Le sceau de la caravane manque à cette commande.', 401)
 
   const url = process.env.COMMANDES_SCRIPT_URL
   const secret = process.env.COMMANDES_JETON
   if (!url || !secret) return refus("Aucun coursier n'attend à la porte : le registre des commandes n'est pas encore relié.", 503)
 
   const corps = (await req.json().catch(() => null)) as Partial<CommandeEnvoyee> | null
-  const vendeur = typeof corps?.vendeur === 'string' ? corps.vendeur.trim().slice(0, 80) : ''
+  // A Discord member signs with their own name; only shared-password sessions type one.
+  const vendeur =
+    session.genre === 'discord' ? session.membre.nom : typeof corps?.vendeur === 'string' ? corps.vendeur.trim().slice(0, 80) : ''
   if (!vendeur) return refus('Qui tient la plume ? Le nom du vendeur manque.', 400)
   const brutes = Array.isArray(corps?.lignes) ? corps.lignes : []
   if (!brutes.length) return refus('Une commande sans article ne se scelle pas.', 400)

@@ -8,17 +8,79 @@ Stack: Next.js 15 (App Router) · React 19 · plain CSS · no database. Hosted o
 
 ## Access
 
-The whole site sits behind a shared password ("the seal"), checked by `middleware.ts`.
+The whole site sits behind "the seal", checked by `middleware.ts` (`lib/sceau.ts`). Two ways in:
+
+- **Discord** (when the `DISCORD_*` variables are set): each member presents their own seal. The key on
+  the lock page reads « Présenter son sceau »; turning it goes through Discord, and only a member of the
+  caravan's server holding one of the allowed roles gets in. See *Members' seals (Discord)*.
+- **Shared password** (when Discord is not configured): the key's shaft is the password field. With
+  Discord configured, `SCEAU_MOT_DE_PASSE_COMMUN=1` keeps it as a second way in during the transition
+  (« ou murmurer la clef des lunes » under the book).
 
 | Env var | Purpose |
 |---|---|
-| `CARAVANE_MOT_DE_PASSE` | The caravan's shared password. Changing it logs everyone out. |
-| `CARAVANE_SECRET` | Random secret signing the session cookie (`openssl rand -hex 32`). |
+| `CARAVANE_MOT_DE_PASSE` | The caravan's shared password. Changing it logs out every password session. |
+| `CARAVANE_SECRET` | Random secret signing the session cookies (`openssl rand -hex 32`). Changing it logs everyone out. |
+| `DISCORD_CLIENT_ID` | Discord application's client ID. |
+| `DISCORD_CLIENT_SECRET` | Discord application's client secret. |
+| `DISCORD_GUILD_ID` | ID of the caravan's Discord server. |
+| `DISCORD_ROLE_IDS` | Comma-separated role IDs that open the grimoire (any one is enough). |
+| `DISCORD_ROLE_PATRIARCHE` | Optional — role ID marking a Patriarch (carried in the session, unused for now). |
+| `SCEAU_MOT_DE_PASSE_COMMUN` | Optional — `1` keeps the shared password alongside Discord. |
 | `CATALOGUE_CSV_URL` | Optional — published CSV of the price sheet (see below). |
 | `COMMANDES_SCRIPT_URL` | Optional — URL of the Apps Script web app receiving sealed orders (see *Order mode*). |
 | `COMMANDES_JETON` | Optional — shared secret checked by that Apps Script (script property `JETON`). |
 
-Session lasts 30 days. Local dev: copy `.env.example` to `.env.local`, fill it, `npm run dev`.
+A password session lasts 30 days. Local dev: copy `.env.example` to `.env.local`, fill it, `npm run dev`.
+
+## Members' seals (Discord)
+
+How it works: OAuth2 authorization code, scopes `identify guilds.members.read`, no bot. Back from
+Discord (`/api/discord/retour`), the server reads the visitor's membership of `DISCORD_GUILD_ID`
+(`GET /users/@me/guilds/{guild}/member`) and lets them in only if they hold one of `DISCORD_ROLE_IDS`.
+The session cookie (signed with `CARAVANE_SECRET`) holds the Discord id, the display name (server
+nickname, else Discord display name, else username), the Patriarch flag and a 24 h expiry. When it
+expires, a returning visitor is sent back through Discord with `prompt=none`, which comes straight back
+if they still hold the role (seamless) and refuses them in character if the role was taken away.
+Closing the grimoire (iron latch, or the key on mobile) forgets the session.
+
+On the order sheet the seller is the session's name (fixed; `/api/commande` reads it from the cookie,
+never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name.
+
+Refusals shown on the lock page: not a member of the server, member without the role, Discord
+refused or failed, tampered request.
+
+### Setting it up
+
+1. Open <https://discord.com/developers/applications> → **New Application** (e.g. *Grimoire de la
+   Caravane*). Its icon and name are what members see on Discord's consent screen.
+2. **OAuth2** page: copy the **Client ID**; **Reset Secret** → copy the **Client Secret**.
+3. Same page, **Redirects** → add both:
+   - `https://caravane-lunes-itinerantes.vercel.app/api/discord/retour`
+   - `http://localhost:3917/api/discord/retour`
+
+   (and the URL of any other deployment, e.g. a test Vercel project:
+   `https://<its-domain>/api/discord/retour`). The redirect URI is derived from the domain the site is
+   opened on, so it must be listed exactly.
+4. In Discord: *User Settings → Advanced → Developer Mode* ON. Then right-click the caravan's server
+   icon → **Copy Server ID** (= `DISCORD_GUILD_ID`); *Server Settings → Roles* → right-click each role
+   that may enter → **Copy Role ID** (= `DISCORD_ROLE_IDS`, comma-separated), and the Patriarchs' role
+   if wanted (= `DISCORD_ROLE_PATRIARCHE`).
+5. On Vercel (choose the environments when asked):
+   ```
+   vercel env add DISCORD_CLIENT_ID
+   vercel env add DISCORD_CLIENT_SECRET
+   vercel env add DISCORD_GUILD_ID
+   vercel env add DISCORD_ROLE_IDS          # e.g. 112233445566778899,998877665544332211
+   vercel env add DISCORD_ROLE_PATRIARCHE   # optional
+   vercel env add SCEAU_MOT_DE_PASSE_COMMUN # optional: 1 = keep the shared password during the transition
+   ```
+   then redeploy. `CARAVANE_SECRET` must be set (it already is for the password).
+6. To go back to the password only, remove `DISCORD_CLIENT_ID` (any missing `DISCORD_*` variable turns
+   Discord off).
+
+Local testing without Discord: `DISCORD_API_URL` and `DISCORD_AUTHORIZE_URL` point the OAuth calls at a
+mock server (development only; leave them unset in production).
 
 ## Editing the content
 
