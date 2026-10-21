@@ -578,6 +578,8 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 .signature { font-style: italic; text-align: right; color: var(--encre-douce); }
+.citation-note { margin-top: 34px; }
+.citation-note .citation-auteur { margin-top: 4px; font-size: 0.85em; }
 
 .recherche-locale { position: relative; display: block; margin: 6px auto 12px; max-width: 360px; }
 .recherche-locale .plume { position: absolute; left: 4px; top: 50%; width: 18px; height: 18px; translate: 0 -50%; color: var(--encre-douce); }

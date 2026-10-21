@@ -105,6 +105,8 @@ async function lireNotes(): Promise<PageNote[]> {
         icone: meta.icone || 'scroll-unfurled',
         resume: meta.resume || '',
         auteur: meta.auteur || '',
+        citation: meta.citation || '',
+        citationAuteur: meta.citation_auteur || '',
         html: marked.parse(corps, { async: false }),
         texte: `${titre} ${meta.resume ?? ''} ${corps.replace(/[#*_>`\-[\]()]/g, ' ')}`,
       }
