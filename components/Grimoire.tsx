@@ -482,7 +482,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
             </svg>
             <Icone corps={icones[ICONE_COPIE]} />
           </a>
-          {/* Order mode: a strip of paper on the table under the field (absolute, desktop only). */}
+          {/* Order mode: a rolled scroll on the table under the field (absolute, desktop only). */}
           {etroit === false && <BandeCommande c={commande} bande={bande} icones={icones} />}
           {indexOuvert && requete && (
             <div className="index-recherche" role="listbox">
@@ -622,7 +622,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               onClick={() => !clicIgnore.current && aller(destination + 1)}
             />
             {etroit === false && commande.ouverte && (
-              <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} />
+              <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={Boolean(tourne)} />
             )}
           </div>
         </div>

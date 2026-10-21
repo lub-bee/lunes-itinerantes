@@ -7,15 +7,18 @@ import { calculerLigne, centimes, LIBELLES_STATUT, lirePrix, statut, type Comman
 import { Icone } from './Ornements'
 
 /*
- * Order mode. Desktop: a paper strip lies on the table under the search field; clicking it carries
+ * Order mode. Desktop: a rolled scroll lies on the table under the search field; clicking it unrolls
  * the order sheet onto the left page of the open book. While the sheet is out, clicking a row of a
- * price ledger writes the article on it. Mobile: the strip is folded at the bottom of the screen.
- * The order lives in localStorage until it is sealed (sent to /api/commande) or thrown away.
+ * price ledger writes the article on it; when a page turns, the sheet is lifted aside onto the table
+ * and laid back once the leaf has landed. Mobile: the scroll lies rolled at the bottom of the screen.
+ * The order lives in localStorage until it is sealed (sent to /api/commande) or thrown away. The
+ * seller's typed name is kept in localStorage and in a cookie set by /api/marchand (Safari wipes
+ * script storage after 7 days without a visit; a server cookie lasts).
  */
 
 const CLE_COMMANDE = 'caravane.commande'
 const CLE_VENDEUR = 'caravane.vendeur'
-const DUREE_DEROULE = 950
+const DUREE_DEROULE = 1050
 const DUREE_CONFIRMATION = 3500
 
 export type Message = { genre: 'ok' | 'erreur' | 'conseil'; texte: string }
@@ -57,28 +60,47 @@ export function useCommande() {
   const [nouvelle, setNouvelle] = useState<{ id: string; n: number } | null>(null)
   /** Seller known from the session (Discord): their name signs the order and is not editable. */
   const [membre, setMembre] = useState<string | null>(null)
-  /** The next sheet mount unrolls from the strip (not on reload). */
+  /** The next sheet mount unrolls from the scroll on the table (not on reload). */
   const deroule = useRef(false)
   const lignesRef = useRef(lignes)
   lignesRef.current = lignes
+  /** Seller name last known to be in the cookie (avoids posting it back unchanged). */
+  const vendeurServeur = useRef<string | null>(null)
 
   useEffect(() => {
     const c = lire<{ lignes?: LigneCommande[]; ouverte?: boolean }>(CLE_COMMANDE)
     if (c && Array.isArray(c.lignes)) setLignes(c.lignes.filter((l) => l && typeof l.id === 'string'))
     if (c?.ouverte) setOuverte(true)
-    setVendeur(lire<string>(CLE_VENDEUR) ?? '')
+    const local = lire<string>(CLE_VENDEUR)
+    if (local) setVendeur(local)
     setPret(true)
     fetch('/api/marchand')
       .then((r) => (r.ok ? r.json() : null))
-      .then((r: { discord?: boolean; nom?: string } | null) => r?.discord && r.nom && setMembre(r.nom))
+      .then((r: { discord?: boolean; nom?: string; vendeur?: string } | null) => {
+        if (r?.discord && r.nom) setMembre(r.nom)
+        // Local storage wiped (Safari, cleared site data): the cookie still knows the seller.
+        else if (!local && r?.vendeur) {
+          vendeurServeur.current = r.vendeur
+          setVendeur((v) => v || r.vendeur!)
+        }
+      })
       .catch(() => {})
   }, [])
   useEffect(() => {
     if (pret) ecrire(CLE_COMMANDE, lignes.length || ouverte ? { lignes, ouverte } : null)
   }, [lignes, ouverte, pret])
+  // The seller's name stays until it is edited: browser storage at once, the cookie shortly after.
   useEffect(() => {
-    if (pret) ecrire(CLE_VENDEUR, vendeur || null)
-  }, [vendeur, pret])
+    if (!pret || membre) return
+    ecrire(CLE_VENDEUR, vendeur.trim() ? vendeur : null)
+    const nom = vendeur.trim()
+    if (nom === (vendeurServeur.current ?? '')) return
+    const t = setTimeout(() => {
+      vendeurServeur.current = nom
+      fetch('/api/marchand', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendeur: nom }) }).catch(() => {})
+    }, 700)
+    return () => clearTimeout(t)
+  }, [vendeur, pret, membre])
 
   useEffect(() => {
     if (message?.genre !== 'ok' && message?.genre !== 'conseil') return
@@ -167,8 +189,12 @@ const CLASSES_STATUT = { 'à perte': 'perte', honnête: 'honnete', 'excellente a
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
 
-/* ─────────────────────────── Desktop strip on the table ─────────────────────────── */
+/* ─────────────────────────── Desktop: the rolled scroll on the table ─────────────────────────── */
 
+/**
+ * A scroll lying on the table, its free end unrolled away from the reader: the label is written on
+ * that flat end, the roll itself (spiral ends, red ribbon, wax seal) lies nearest the reader.
+ */
 export function BandeCommande({ c, bande, icones }: { c: EtatCommande; bande: RefObject<HTMLButtonElement | null>; icones: Record<string, string> }) {
   const b = bilan(c.lignes)
   const [revenue, setRevenue] = useState(false)
@@ -181,26 +207,29 @@ export function BandeCommande({ c, bande, icones }: { c: EtatCommande; bande: Re
     <button
       ref={bande}
       type="button"
-      className={`commande-bande ${c.ouverte ? 'emportee' : ''} ${revenue ? 'revenue' : ''} ${c.pret ? '' : 'en-attente'}`}
+      className={`commande-bande ${c.ouverte ? 'emportee' : ''} ${revenue ? 'revenue' : ''} ${c.pret ? '' : 'en-attente'} ${c.lignes.length ? 'avec-lignes' : ''}`}
       onClick={c.ouvrir}
       tabIndex={c.ouverte ? -1 : 0}
       aria-hidden={c.ouverte}
-      title="Préparer une commande"
+      title={c.lignes.length ? 'Reprendre la commande' : 'Préparer une commande'}
     >
-      <span className="commande-bande-sceau" aria-hidden>
-        <Icone corps={icones['tied-scroll']} />
-      </span>
-      <span className="commande-bande-texte">
+      <span className="rouleau-feuille">
         <span className="commande-bande-titre">
           <span className="long">{c.lignes.length ? 'Reprendre la commande' : 'Préparer une commande'}</span>
           <span className="court">Commande</span>
         </span>
+      </span>
+      <span className="rouleau-cylindre" data-cylindre>
+        <span className="rouleau-lien" aria-hidden />
         {c.lignes.length > 0 && (
           <span className="commande-bande-sous">
             <span className="long">{pluriel(b.lignes, 'ligne')} · </span>
             {prix(b.total)} septims
           </span>
         )}
+      </span>
+      <span className="commande-bande-sceau" aria-hidden>
+        <Icone corps={icones['wax-seal']} />
       </span>
     </button>
   )
@@ -214,15 +243,20 @@ export function FeuilleCommande({
   mobile,
   bande,
   sansAnimation,
+  ecartee = false,
 }: {
   c: EtatCommande
   icones: Record<string, string>
   mobile: boolean
   bande?: RefObject<HTMLElement | null>
   sansAnimation: boolean
+  /** A page is turning: the sheet is lifted off the left page onto the table, then laid back. */
+  ecartee?: boolean
 }) {
   const feuille = useRef<HTMLElement>(null)
+  const corps = useRef<HTMLDivElement>(null)
   const rouleau = useRef<HTMLDivElement>(null)
+  const lien = useRef<HTMLSpanElement>(null)
   const [confirmer, setConfirmer] = useState(false)
   const [repli, setRepli] = useState(false)
   const b = bilan(c.lignes)
@@ -233,35 +267,81 @@ export function FeuilleCommande({
     return () => clearTimeout(t)
   }, [confirmer])
 
-  /** Keyframes carrying the sheet from the strip (desktop) and unrolling it down the page. */
+  /**
+   * Keyframes carrying the scroll from the table (desktop) and unrolling it down the page: the sheet
+   * flies at the scale of the scroll on the table, only its unrolled end showing above the roll; then
+   * the roll travels down the page, thinner and thinner, and the paper appears behind it.
+   */
   const animations = useCallback((): Animation[] | null => {
     const el = feuille.current
-    const src = bande?.current?.getBoundingClientRect()
-    if (!el || !src || !src.width || mobile || sansAnimation) return null
+    const papier = corps.current
+    const btn = bande?.current
+    const src = btn?.getBoundingClientRect()
+    const cyl = btn?.querySelector('[data-cylindre]')?.getBoundingClientRect()
+    if (!el || !papier || !src || !cyl || !src.width || mobile || sansAnimation) return null
     const r = el.getBoundingClientRect()
-    const s = src.width / r.width
+    const largeur = el.offsetWidth
+    const hauteur = el.offsetHeight
+    const s = src.width / largeur
     const dx = src.left - r.left
     const dy = src.top - r.top
-    const bord = Math.max(0, r.height - src.height / s)
+    // Unrolled end on the table, then the roll, both in sheet pixels.
+    const bout = Math.max(12, (cyl.top - src.top) / s)
+    const epais0 = Math.max(16, cyl.height / s)
+    const epais1 = 15
+    const bord = Math.max(0, hauteur - bout)
     const temps: KeyframeAnimationOptions = { duration: DUREE_DEROULE, fill: 'both' }
+    const vol = 'cubic-bezier(.3,.1,.25,1)'
+    const deroule = 'cubic-bezier(.45,.05,.3,1)'
     const anims = [
       el.animate(
         [
-          { offset: 0, transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(3deg)`, clipPath: `inset(0 0 ${bord}px 0)`, easing: 'cubic-bezier(.3,.1,.25,1)' },
-          { offset: 0.48, transform: 'translate(0, 0) scale(1) rotate(0deg)', clipPath: `inset(0 0 ${bord}px 0)`, easing: 'cubic-bezier(.45,.05,.3,1)' },
-          { offset: 1, transform: 'translate(0, 0) scale(1) rotate(0deg)', clipPath: 'inset(0 0 0px 0)' },
+          { offset: 0, transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(-1deg)`, easing: vol },
+          { offset: 0.44, transform: 'translate(0, 0) scale(1) rotate(0deg)' },
+          { offset: 1, transform: 'translate(0, 0) scale(1) rotate(0deg)' },
+        ],
+        temps,
+      ),
+      papier.animate(
+        [
+          { offset: 0, clipPath: `inset(0 0 ${bord}px 0)` },
+          { offset: 0.44, clipPath: `inset(0 0 ${bord}px 0)`, easing: deroule },
+          { offset: 1, clipPath: 'inset(0 0 0px 0)' },
         ],
         temps,
       ),
     ]
     if (rouleau.current) {
+      // The paper enters the roll a little below its top edge.
+      const y = (bordure: number, e: number) => `translateY(${bordure - e * 0.18}px)`
+      // Same timing as the paper's clip, so the roll stays on the edge it is unrolling.
       anims.push(
         rouleau.current.animate(
           [
-            { offset: 0, transform: `translateY(${r.height - bord}px)`, opacity: 1 },
-            { offset: 0.48, transform: `translateY(${r.height - bord}px)`, opacity: 1, easing: 'cubic-bezier(.45,.05,.3,1)' },
-            { offset: 0.94, transform: `translateY(${r.height - 4}px)`, opacity: 1 },
-            { offset: 1, transform: `translateY(${r.height - 4}px)`, opacity: 0 },
+            { offset: 0, transform: y(bout, epais0), height: `${epais0}px` },
+            { offset: 0.44, transform: y(bout, epais0), height: `${epais0}px`, easing: deroule },
+            { offset: 1, transform: y(hauteur, epais1), height: `${epais1}px` },
+          ],
+          temps,
+        ),
+        rouleau.current.animate(
+          [
+            { offset: 0, opacity: 1 },
+            { offset: 0.94, opacity: 1 },
+            { offset: 1, opacity: 0 },
+          ],
+          temps,
+        ),
+      )
+    }
+    if (lien.current) {
+      anims.push(
+        lien.current.animate(
+          [
+            { offset: 0, opacity: 1 },
+            { offset: 0.36, opacity: 1 },
+            { offset: 0.5, opacity: 0 },
+            { offset: 1, opacity: 0 },
           ],
           temps,
         ),
@@ -289,95 +369,119 @@ export function FeuilleCommande({
   return (
     <aside
       ref={feuille}
-      className={`commande-feuille ${mobile ? 'mobile' : ''} ${repli ? 'repli' : ''}`}
+      className={`commande-feuille ${mobile ? 'mobile' : ''} ${repli ? 'repli' : ''} ${ecartee && !mobile ? 'ecartee' : ''}`}
       aria-label="Bon de commande"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className="commande-rouleau" ref={rouleau} aria-hidden />
-      <span className="commande-clou" aria-hidden />
-      <header className="commande-tete">
-        <div className="commande-surtitre">Caravane des Lunes Itinérantes</div>
-        <h2 className="commande-titre">Bon de commande</h2>
-        <button type="button" className="commande-replier" onClick={replier} title={mobile ? 'Replier la feuille' : 'Replier la feuille sur la table'}>
-          Replier
-        </button>
-      </header>
+      {/* Rough deckled edge of the rag paper (applied to the paper layer only, the ink stays crisp). */}
+      <svg className="commande-defs" width="0" height="0" aria-hidden focusable="false">
+        <filter id="commande-barbes" x="-3%" y="-3%" width="106%" height="106%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.09 0.07" numOctaves="3" seed="5" result="b" />
+          <feDisplacementMap in="SourceGraphic" in2="b" scale="7" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
+      <div className="commande-corps" ref={corps}>
+        <div className="commande-papier" aria-hidden />
+        <span className="commande-clou" aria-hidden />
+        <header className="commande-tete">
+          <div className="commande-surtitre">Caravane des Lunes Itinérantes</div>
+          <h2 className="commande-titre">Bon de commande</h2>
+          <button type="button" className="commande-replier" onClick={replier} title={mobile ? 'Replier la feuille' : 'Rouler la feuille et la reposer sur la table'}>
+            {mobile ? 'Replier' : 'Rouler'}
+          </button>
+        </header>
 
-      {c.membre ? (
-        <div className="commande-vendeur">
-          <span>Vendeur</span>
-          <strong className="commande-vendeur-nom" title="Le nom de ton sceau signe la commande">
-            {c.membre}
-          </strong>
-        </div>
-      ) : (
-        <label className="commande-vendeur">
-          <span>Vendeur</span>
-          <input
-            type="text"
-            value={c.vendeur}
-            maxLength={80}
-            onChange={(e) => c.setVendeur(e.target.value)}
-            placeholder="Qui tient la plume ?"
-            autoComplete="off"
-          />
-        </label>
-      )}
-
-      <div className="commande-lignes">
-        {c.lignes.length === 0 ? (
-          <p className="commande-vide">
-            {mobile
-              ? 'Replie la feuille et touche un article du registre : Khajiit l’inscrira ici.'
-              : 'Désigne un article dans le registre de droite : Khajiit l’inscrira ici.'}
-          </p>
+        {c.membre ? (
+          <div className="commande-vendeur">
+            <span>Vendeur</span>
+            <strong className="commande-vendeur-nom" title="Le nom de ton sceau signe la commande">
+              {c.membre}
+            </strong>
+          </div>
         ) : (
-          c.lignes.map((l) => <LigneFeuille key={l.id} l={l} c={c} icones={icones} nouvelle={c.nouvelle?.id === l.id ? c.nouvelle.n : 0} />)
+          <label className="commande-vendeur">
+            <span>Vendeur</span>
+            <input
+              type="text"
+              value={c.vendeur}
+              maxLength={80}
+              onChange={(e) => c.setVendeur(e.target.value)}
+              placeholder="Qui tient la plume ?"
+              autoComplete="off"
+              name="vendeur"
+            />
+          </label>
         )}
-      </div>
 
-      <footer className="commande-pied">
-        <div className="commande-totaux">
-          <span>
-            Total mini <b>{prix(b.totalMini)}</b>
-          </span>
-          <span>
-            Total idéal <b>{prix(b.totalIdeal)}</b>
-          </span>
+        <div className="commande-lignes">
+          {c.lignes.length === 0 ? (
+            <p className="commande-vide">
+              {mobile
+                ? 'Replie la feuille et touche un article du registre : Khajiit l’inscrira ici.'
+                : 'Désigne un article dans le registre de droite : Khajiit l’inscrira ici.'}
+            </p>
+          ) : (
+            <>
+              <div className="commande-colonnes" aria-hidden>
+                <span className="col-article">Article</span>
+                <span className="col-qte">Qté</span>
+                <span className="col-prix">Prix</span>
+                <span className="col-somme">Somme</span>
+                <span />
+              </div>
+              {c.lignes.map((l) => (
+                <LigneFeuille key={l.id} l={l} c={c} icones={icones} nouvelle={c.nouvelle?.id === l.id ? c.nouvelle.n : 0} />
+              ))}
+            </>
+          )}
         </div>
-        <div className="commande-total">
-          <span className="commande-total-mot">Total</span>
-          <span className="commande-total-points" aria-hidden />
-          <strong>{prix(b.total)}</strong>
-          <span className="commande-total-unite">septims</span>
-        </div>
-        {b.lignes > 0 && b.total > 0 && <div className={`commande-statut statut-${CLASSES_STATUT[b.statut]}`}>{LIBELLES_STATUT[b.statut]}</div>}
-        {c.message && (
-          <p className={`commande-message ${c.message.genre}`} role={c.message.genre === 'erreur' ? 'alert' : 'status'}>
-            {c.message.texte}
-          </p>
-        )}
-        <div className="commande-actions">
-          <button
-            type="button"
-            className={`commande-jeter ${confirmer ? 'confirmer' : ''}`}
-            disabled={!c.lignes.length || c.envoi}
-            onClick={() => {
-              if (!confirmer) return setConfirmer(true)
-              setConfirmer(false)
-              c.jeter()
-            }}
-          >
-            {confirmer ? 'Vraiment ? Au feu !' : 'Jeter la commande'}
-          </button>
-          <button type="button" className="commande-sceller" disabled={c.envoi} onClick={c.sceller}>
-            <span className="commande-cire" aria-hidden>
-              <Icone corps={icones['wax-seal']} />
+
+        <footer className="commande-pied">
+          <div className="commande-totaux">
+            <span>
+              Total mini <b>{prix(b.totalMini)}</b>
             </span>
-            {c.envoi ? 'Le coursier part…' : 'Sceller la commande'}
-          </button>
-        </div>
-      </footer>
+            {b.lignes > 0 && b.total > 0 && <span className={`commande-statut statut-${CLASSES_STATUT[b.statut]}`}>{LIBELLES_STATUT[b.statut]}</span>}
+            <span>
+              Total idéal <b>{prix(b.totalIdeal)}</b>
+            </span>
+          </div>
+          <div className="commande-total">
+            <span className="commande-total-mot">Total</span>
+            <span className="commande-total-points" aria-hidden />
+            <strong>{prix(b.total)}</strong>
+            <span className="commande-total-unite">septims</span>
+          </div>
+          {c.message && (
+            <p className={`commande-message ${c.message.genre}`} role={c.message.genre === 'erreur' ? 'alert' : 'status'}>
+              {c.message.texte}
+            </p>
+          )}
+          <div className="commande-actions">
+            <button
+              type="button"
+              className={`commande-jeter ${confirmer ? 'confirmer' : ''}`}
+              disabled={!c.lignes.length || c.envoi}
+              onClick={() => {
+                if (!confirmer) return setConfirmer(true)
+                setConfirmer(false)
+                c.jeter()
+              }}
+            >
+              {confirmer ? 'Vraiment ? Au feu !' : 'Jeter la commande'}
+            </button>
+            <button type="button" className="commande-sceller" disabled={c.envoi} onClick={c.sceller}>
+              <span className="commande-cire" aria-hidden>
+                <Icone corps={icones['wax-seal']} />
+              </span>
+              {c.envoi ? 'Le coursier part…' : 'Sceller la commande'}
+            </button>
+          </div>
+        </footer>
+      </div>
+      <div className="commande-rouleau" ref={rouleau} aria-hidden>
+        <span className="commande-rouleau-lien" ref={lien} />
+      </div>
     </aside>
   )
 }
@@ -399,15 +503,48 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
 
   const fixerQte = (v: number) => c.regler(l.id, { qte: Math.max(1, Math.min(9999, Math.round(v) || 1)) })
   const sansPrix = lirePrix(l.prix) === null
+  const negocie = l.min === null && l.max === null
+  const bornes = negocie ? 'à négocier' : `${prix(l.min)}–${prix(l.max)}`
+  const sous = !l.rayee && calc?.sousPlancher
 
   return (
-    <div ref={ref} className={`commande-ligne ${l.rayee ? 'rayee' : ''}`}>
-      <div className="commande-ligne-nom">
+    <div ref={ref} className={`commande-ligne ${l.rayee ? 'rayee' : ''} ${sous ? 'sous-plancher' : ''}`}>
+      <div className="commande-ligne-nom" title={`${l.fr} — ${l.en}${negocie ? ' — à négocier' : ` — plancher ${prix(l.min)}, plafond ${prix(l.max)}`}`}>
         <span className="fr">{l.fr}</span>
-        <span className="repere">
-          {l.min === null && l.max === null ? 'à négocier' : `plancher ${prix(l.min)} · plafond ${prix(l.max)}`}
-        </span>
+        <sup className="repere">{bornes}</sup>
       </div>
+      <span className="commande-qte">
+        <button type="button" aria-label="Un de moins" disabled={l.rayee || l.qte <= 1} onClick={() => fixerQte(l.qte - 1)}>
+          −
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={qte}
+          disabled={l.rayee}
+          aria-label={`Quantité de ${l.fr}`}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 4)
+            setQte(v)
+            if (Number(v) >= 1) c.regler(l.id, { qte: Number(v) })
+          }}
+          onBlur={() => fixerQte(Number(qte))}
+        />
+        <button type="button" aria-label="Un de plus" disabled={l.rayee} onClick={() => fixerQte(l.qte + 1)}>
+          +
+        </button>
+      </span>
+      <input
+        className={`commande-prix ${sansPrix ? 'a-fixer' : ''}`}
+        type="text"
+        inputMode="decimal"
+        value={l.prix}
+        disabled={l.rayee}
+        placeholder="prix ?"
+        aria-label={`Prix unitaire de ${l.fr}`}
+        onChange={(e) => c.regler(l.id, { prix: e.target.value.replace(/[^\d.,]/g, '').slice(0, 10) })}
+      />
+      <span className="commande-ligne-total">{calc ? prix(calc.total) : '—'}</span>
       <button
         type="button"
         className="commande-rayer"
@@ -415,51 +552,15 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
         title={l.rayee ? 'Rétablir la ligne' : 'Rayer la ligne'}
         aria-label={l.rayee ? `Rétablir ${l.fr}` : `Rayer ${l.fr}`}
       >
-        {l.rayee ? 'rétablir' : <Icone corps={icones['quill']} />}
+        <Icone corps={icones['quill']} />
       </button>
-      <div className="commande-calcul">
-        <span className="commande-qte">
-          <button type="button" aria-label="Un de moins" disabled={l.rayee || l.qte <= 1} onClick={() => fixerQte(l.qte - 1)}>
-            −
-          </button>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={qte}
-            disabled={l.rayee}
-            aria-label={`Quantité de ${l.fr}`}
-            onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, '').slice(0, 4)
-              setQte(v)
-              if (Number(v) >= 1) c.regler(l.id, { qte: Number(v) })
-            }}
-            onBlur={() => fixerQte(Number(qte))}
-          />
-          <button type="button" aria-label="Un de plus" disabled={l.rayee} onClick={() => fixerQte(l.qte + 1)}>
-            +
-          </button>
-        </span>
-        <span className="signe">×</span>
-        <input
-          className={`commande-prix ${sansPrix ? 'a-fixer' : ''}`}
-          type="text"
-          inputMode="decimal"
-          value={l.prix}
-          disabled={l.rayee}
-          placeholder="prix ?"
-          aria-label={`Prix unitaire de ${l.fr}`}
-          onChange={(e) => c.regler(l.id, { prix: e.target.value.replace(/[^\d.,]/g, '').slice(0, 10) })}
-        />
-        <span className="signe">=</span>
-        <span className="commande-ligne-total">{calc ? prix(calc.total) : '—'}</span>
-      </div>
-      {!l.rayee && calc?.sousPlancher && <p className="commande-alerte">Sous le plancher — Khajiit y perd sa fourrure !</p>}
-      {!l.rayee && sansPrix && <p className="commande-alerte douce">À négocier : inscris le prix convenu.</p>}
+      {sous && <p className="commande-alerte">sous le plancher ({prix(l.min)}) — à perte</p>}
+      {!l.rayee && sansPrix && <p className="commande-alerte douce">à négocier : inscris le prix convenu</p>}
     </div>
   )
 }
 
-/* ─────────────────────────── Mobile: the strip folded at the bottom ─────────────────────────── */
+/* ─────────────────────────── Mobile: the scroll rolled at the bottom ─────────────────────────── */
 
 export function BarreCommande({ c, icones }: { c: EtatCommande; icones: Record<string, string> }) {
   const b = bilan(c.lignes)

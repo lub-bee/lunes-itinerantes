@@ -198,26 +198,38 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
 
 ## Order mode (bon de commande)
 
-- **Desktop**: a strip of paper lies on the table under the search field (« Préparer une commande »).
-  Clicking it carries the order sheet onto the left page of the open book. While the sheet is out,
-  clicking a row of a price ledger writes the article on it (×1, or +1 if already there). Page turns,
-  ribbons, tabs and search keep working; « Replier » folds the sheet back into the strip, the order kept.
-- **Mobile**: the strip is folded at the bottom of the screen. Tap it to start an order: ledger rows
-  become tappable, the strip shows the article count and the total; tap it to unroll the sheet over
-  the page, « Ranger » leaves order mode (the lines are kept).
-- Each line: quantity (± or typed), unit price (defaults to the ceiling; empty for *à négocier*
-  articles, which must be priced before sealing), line total, a quill to strike the line out
-  (struck lines are not sent). A price under the floor gets a red warning (not blocking).
+- **Desktop**: a rolled scroll lies on the table under the search field (« Préparer une commande »
+  written on its unrolled end; red ribbon and wax seal on the roll; once lines exist the roll carries
+  their count and total). Clicking it carries the scroll to the left page of the open book and unrolls
+  it there into the order sheet. While the sheet is out, clicking a row of a price ledger writes the
+  article on it (×1, or +1 if already there). Ribbons, tabs and search keep working. When a page turns
+  (click, keys, or a corner dragged by hand), the sheet is lifted aside onto the table and laid back
+  once the leaf has landed. « Rouler » rolls the sheet back up onto the table, the order kept.
+- **Mobile**: the scroll lies rolled at the bottom of the screen. Tap it to start an order: ledger
+  rows become tappable, the roll shows the article count and the total; tap it to unroll the sheet
+  over the page, « Ranger » leaves order mode (the lines are kept).
+- The sheet is rag paper (`public/textures/chiffon.jpg`, a generated 512 px tile: cloudy formation,
+  laid and chain lines, fibres, foxing), greyer than the book's parchment, with deckled edges (SVG
+  displacement filter on the paper layer only), a visible thickness and a cast shadow.
+- One compact ledger row per article, under the column heads « Article · Qté · Prix · Somme »: name
+  (floor–ceiling in small superscript; the English name in the tooltip), quantity (± or typed), unit
+  price (defaults to the ceiling; empty for *à négocier* articles, which must be priced before
+  sealing), line sum, a quill to strike the line out (struck lines are not sent). A price under the
+  floor turns red with a one-line warning under the row (not blocking). Long orders scroll inside the
+  sheet; the column heads and the footer stay in view.
 - Footer: Total mini (Σ qty × floor), Total idéal (Σ qty × ceiling), **Total** (Σ lines) and a status
   stamp: *À perte* (< mini), *Marché honnête*, *Excellente affaire* (≥ idéal). An *à négocier* line
   counts its own price as mini and idéal, so it never tips the status.
-- The order and the seller's name live in the browser (`localStorage`) until the order is sealed or
-  thrown away (« Jeter la commande », confirmed by a second click).
+- The order lives in the browser (`localStorage`) until it is sealed or thrown away (« Jeter la
+  commande », confirmed by a second click). The seller's typed name (password sessions) is kept until
+  it is edited: in `localStorage` and in the `caravane_vendeur` cookie (400 days, set by
+  `POST /api/marchand`), so it survives a reload, closing/reopening the grimoire and wiped browser
+  storage.
 - « Sceller la commande » posts to `/api/commande` (behind the seal like every route). The server
   re-reads floor and ceiling from the catalogue, recomputes every total, gives the order a number
   (`C-YYMMDD-XXXXX`, JST day) and forwards it to the Apps Script with `COMMANDES_JETON`. The script
   URL and token never reach the browser. Without them, sealing answers an in-character error.
-- Code: `components/Commande.tsx` (strip, sheet, mobile strip, state), `lib/commande.ts` (maths shared
+- Code: `components/Commande.tsx` (scroll, sheet, mobile roll, state), `lib/commande.ts` (maths shared
   with the route), `app/api/commande/route.ts`, `scripts/apps-script/commandes.gs`; styles in the
   *Order mode* section of `app/globals.css`.
 
