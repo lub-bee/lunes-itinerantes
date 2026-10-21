@@ -4,6 +4,7 @@ import { marked } from 'marked'
 import { parserCsv } from './csv'
 import { ICONE_COPIE } from './copie'
 import { ICONES_COMMANDE } from './commande'
+import { ICONES_MISSIVES } from './missives'
 import { icones } from './icones'
 import { ICONES_ARTISANS, normaliser } from './recherche'
 import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
@@ -190,10 +191,17 @@ export async function chargerLivre(): Promise<Livre> {
     ...chapitres,
     ...(await lireNotes()),
     {
-      type: 'avenir', id: 'missives', partie: 'missives', titre: 'Missives en cours', court: 'Missives', icone: 'wax-seal',
-      intro: 'Les commandes de la caravane : ingrédients à dénicher, objets à fabriquer, curiosités à rechercher.',
-      attente: "L'encre de ce chapitre n'est pas encore sèche. Reviens à la prochaine halte, ami.",
+      type: 'missives', id: 'missives', partie: 'missives', titre: 'Missives', court: 'Missives', icone: 'wax-seal',
+      intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
       citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
+    },
+    {
+      type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', court: 'Le coffre', icone: 'open-chest',
+      intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
+    },
+    {
+      type: 'atelier', id: 'atelier', partie: 'missives', titre: "L'atelier", court: 'Atelier', icone: 'cauldron',
+      intro: 'Les recettes des artisans et la valeur des matières. Chacun peut en consigner une nouvelle ou corriger une quantité : un registre juste fait des parts justes.',
     },
     {
       type: 'avenir', id: 'caravane', partie: 'caravane', titre: 'La Caravane', court: 'Caravane', icone: 'lynx-head',
@@ -203,6 +211,6 @@ export async function chargerLivre(): Promise<Livre> {
     },
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

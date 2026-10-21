@@ -5,6 +5,7 @@ import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
 import { calculerLigne, centimes, LIBELLES_STATUT, lirePrix, statut, type CommandeEnvoyee, type LigneCommande } from '@/lib/commande'
 import { Icone } from './Ornements'
+import type { EtatRegistre } from './Registre'
 
 /*
  * Order mode. Desktop: a rolled scroll lies on the table under the search field; clicking it unrolls
@@ -12,8 +13,11 @@ import { Icone } from './Ornements'
  * price ledger writes the article on it; when a page turns, the sheet is lifted aside onto the table
  * and laid back once the leaf has landed. Mobile: the scroll lies rolled at the bottom of the screen.
  * The order lives in localStorage until it is sealed (sent to /api/commande) or thrown away. The
- * seller's typed name is kept in localStorage and in a cookie set by /api/marchand (Safari wipes
- * script storage after 7 days without a visit; a server cookie lasts).
+ * seller is the member's name once recognized (Discord seal, or a name signed and checked against the
+ * caravan's list: components/Registre.tsx, shared with the missives). Until then the typed name is
+ * kept in localStorage and in a cookie set by /api/marchand (Safari wipes script storage after 7 days
+ * without a visit; a server cookie lasts); pressing Enter or leaving the field asks the server to
+ * recognize it.
  */
 
 const CLE_COMMANDE = 'caravane.commande'
@@ -49,7 +53,8 @@ export function calculer(l: LigneCommande) {
   return p === null ? null : calculerLigne(l.qte, p, l.min, l.max)
 }
 
-export function useCommande() {
+export function useCommande(reg: EtatRegistre) {
+  const info = reg.marchand
   const [lignes, setLignes] = useState<LigneCommande[]>([])
   const [ouverte, setOuverte] = useState(false)
   const [deployee, setDeployee] = useState(false)
@@ -58,8 +63,12 @@ export function useCommande() {
   const [envoi, setEnvoi] = useState(false)
   const [pret, setPret] = useState(false)
   const [nouvelle, setNouvelle] = useState<{ id: string; n: number } | null>(null)
-  /** Seller known from the session (Discord): their name signs the order and is not editable. */
-  const [membre, setMembre] = useState<string | null>(null)
+  /** Seller known from the session (Discord) or recognized on the caravan's list: their name signs the order. */
+  const membre = info ? (info.discord ? info.nom : info.identite) : null
+  /** Answer of the last attempt to have the typed name recognized. */
+  const [avisNom, setAvisNom] = useState<string | null>(null)
+  const essaye = useRef('')
+  const local = useRef<string | null>(null)
   /** The next sheet mount unrolls from the scroll on the table (not on reload). */
   const deroule = useRef(false)
   const lignesRef = useRef(lignes)
@@ -71,21 +80,31 @@ export function useCommande() {
     const c = lire<{ lignes?: LigneCommande[]; ouverte?: boolean }>(CLE_COMMANDE)
     if (c && Array.isArray(c.lignes)) setLignes(c.lignes.filter((l) => l && typeof l.id === 'string'))
     if (c?.ouverte) setOuverte(true)
-    const local = lire<string>(CLE_VENDEUR)
-    if (local) setVendeur(local)
+    local.current = lire<string>(CLE_VENDEUR)
+    if (local.current) setVendeur(local.current)
     setPret(true)
-    fetch('/api/marchand')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((r: { discord?: boolean; nom?: string; vendeur?: string } | null) => {
-        if (r?.discord && r.nom) setMembre(r.nom)
-        // Local storage wiped (Safari, cleared site data): the cookie still knows the seller.
-        else if (!local && r?.vendeur) {
-          vendeurServeur.current = r.vendeur
-          setVendeur((v) => v || r.vendeur!)
-        }
-      })
-      .catch(() => {})
   }, [])
+  // Local storage wiped (Safari, cleared site data): the cookie still knows the seller.
+  useEffect(() => {
+    if (!info || info.discord || local.current || !info.vendeur) return
+    vendeurServeur.current = info.vendeur
+    setVendeur((v) => v || info.vendeur)
+  }, [info])
+
+  /** Asks the server to recognize the typed name on the caravan's list (it then signs the order). */
+  const reconnaitre = useCallback(async () => {
+    const nom = vendeur.trim()
+    if (!info?.relie || membre || !nom || nom === essaye.current) return
+    essaye.current = nom
+    setAvisNom(null)
+    const r = await reg.signer(nom)
+    if (!r.ok) setAvisNom(r.message)
+  }, [info?.relie, membre, vendeur, reg])
+  const oublierNom = useCallback(() => {
+    essaye.current = ''
+    setAvisNom(null)
+    reg.oublier()
+  }, [reg])
   useEffect(() => {
     if (pret) ecrire(CLE_COMMANDE, lignes.length || ouverte ? { lignes, ouverte } : null)
   }, [lignes, ouverte, pret])
@@ -170,7 +189,7 @@ export function useCommande() {
     }
   }, [vendeur, membre])
 
-  return { membre, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
+  return { membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
 }
 
 export type EtatCommande = ReturnType<typeof useCommande>
@@ -444,23 +463,33 @@ export function FeuilleCommande({
         {c.membre ? (
           <div className="commande-vendeur">
             <span>Vendeur</span>
-            <strong className="commande-vendeur-nom" title="Le nom de ton sceau signe la commande">
+            <strong className="commande-vendeur-nom" title="Ton nom signe la commande">
               {c.membre}
             </strong>
+            {!c.discord && (
+              <button type="button" className="commande-vendeur-changer" onClick={c.oublierNom} title="Ce n'est pas mon nom">
+                changer
+              </button>
+            )}
           </div>
         ) : (
-          <label className="commande-vendeur">
-            <span>Vendeur</span>
-            <input
-              type="text"
-              value={c.vendeur}
-              maxLength={80}
-              onChange={(e) => c.setVendeur(e.target.value)}
-              placeholder="Qui tient la plume ?"
-              autoComplete="off"
-              name="vendeur"
-            />
-          </label>
+          <>
+            <label className="commande-vendeur">
+              <span>Vendeur</span>
+              <input
+                type="text"
+                value={c.vendeur}
+                maxLength={80}
+                onChange={(e) => c.setVendeur(e.target.value)}
+                onBlur={c.reconnaitre}
+                onKeyDown={(e) => e.key === 'Enter' && c.reconnaitre()}
+                placeholder="Qui tient la plume ?"
+                autoComplete="off"
+                name="vendeur"
+              />
+            </label>
+            {c.avisNom && <p className="commande-alerte commande-avis-nom">{c.avisNom}</p>}
+          </>
         )}
 
         <div className="commande-lignes">

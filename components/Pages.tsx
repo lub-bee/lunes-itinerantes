@@ -5,6 +5,8 @@ import type { Article, Livre, Page, PageChapitre } from '@/lib/types'
 import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
+import { cle } from '@/lib/missives'
+import { DroiteAtelier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
   livre: Livre
@@ -20,6 +22,8 @@ export type Ctx = {
   onScroll?: (v: number) => void
   /** Order mode: present while the order sheet is out; clicking a ledger row writes the article on it. */
   commande?: { ajouter: (a: Article) => number }
+  /** Missives, recipes and the chest (absent on the faces of a turning leaf: static rendering). */
+  registre?: CtxRegistre
 }
 
 const EFFACEMENT_MS = 320
@@ -87,6 +91,38 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
                 {page.citationAuteur && <p className="citation-auteur">— {page.citationAuteur}</p>}
               </blockquote>
             )}
+          </EnTete>
+        )
+      case 'missives':
+        return (
+          <EnTete surtitre="Livre des Missives" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheMissives page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'missive': {
+        const m = ctx.registre?.r.calcul?.etats.find((e) => e.missive.numero === page.numero)?.missive
+        return (
+          <EnTete
+            surtitre={`Missive n° ${page.numero}`}
+            titre={page.titre}
+            sousTitre={m?.commanditaire ? `pour ${m.commanditaire}` : undefined}
+            icone={ctx.livre.icones[page.icone]}
+            compact={compact}
+          >
+            <GaucheMissive page={page} reg={ctx.registre} icones={ctx.livre.icones} />
+          </EnTete>
+        )
+      }
+      case 'coffre':
+        return (
+          <EnTete surtitre="Livre des Missives" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheCoffre page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'atelier':
+        return (
+          <EnTete surtitre="Livre des Missives" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} interactif={ctx.interactif} />
           </EnTete>
         )
       case 'avenir':
@@ -221,6 +257,19 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
         return <ListeArticles page={page} ctx={ctx} />
       case 'note':
         return <div className="prose" dangerouslySetInnerHTML={{ __html: page.html }} />
+      case 'missives':
+        return (
+          <>
+            <DroiteMissives reg={ctx.registre} interactif={ctx.interactif} />
+            <CitationFin texte={page.citation} />
+          </>
+        )
+      case 'missive':
+        return <DroiteMissive page={page} reg={ctx.registre} />
+      case 'coffre':
+        return <DroiteCoffre reg={ctx.registre} />
+      case 'atelier':
+        return <DroiteAtelier reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} />
       case 'avenir':
         return (
           <div className="attente">
@@ -326,6 +375,12 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
     setTimeout(() => setGouttes((g) => g.filter((d) => d.n !== n)), 1100)
   }
 
+  // Recipes: outside order mode a row opens the article's recipe slip; a small cauldron marks the
+  // articles that have one and opens it in both modes.
+  const reg = ctx.interactif && ctx.registre?.r.donnees?.relie ? ctx.registre : undefined
+  const recettes = ctx.registre?.r.calcul?.recettes
+  const voirRecette = (a: Article) => reg?.ouvrir({ genre: 'recette', nom: a.fr })
+
   const filtres = page.articles.filter((a) => articleCorrespond(a, montre.requete) && articleCorrespond(a, montre.locale))
   const requetes = [montre.requete, montre.locale].filter(Boolean)
 
@@ -336,7 +391,7 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
   }, [ctx.cible, ctx.interactif, generation])
 
   return (
-    <div className={`registre ${ctx.commande ? 'en-commande' : ''}`}>
+    <div className={`registre ${ctx.commande ? 'en-commande' : reg ? 'en-recettes' : ''}`}>
       <div className="registre-entete" role="row">
         <span className="col-article">Article</span>
         <span>Coût</span>
@@ -363,7 +418,21 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
                     }
                   },
                 }
-              : {})}
+              : reg
+                ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    title: `Voir la recette de ${a.fr}`,
+                    onClick: () => voirRecette(a),
+                    onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                      if (e.target !== e.currentTarget) return
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        voirRecette(a)
+                      }
+                    },
+                  }
+                : {})}
           >
             {gouttes
               .filter((d) => d.id === a.id)
@@ -375,7 +444,29 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
               ))}
             <GlypheArtisan artisan={a.artisan} icones={ctx.livre.icones} />
             <div className="noms">
-              <span className="nom-fr"><Surligne texte={a.fr} requetes={requetes} /></span>
+              <span className="nom-fr">
+                <Surligne texte={a.fr} requetes={requetes} />
+                {recettes?.has(cle(a.fr)) &&
+                  (reg ? (
+                    <button
+                      type="button"
+                      className="glyphe-recette"
+                      title={`Recette de ${a.fr}`}
+                      aria-label={`Recette de ${a.fr}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        voirRecette(a)
+                      }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <Icone corps={ctx.livre.icones['cauldron']} />
+                    </button>
+                  ) : (
+                    <span className="glyphe-recette" aria-hidden>
+                      <Icone corps={ctx.livre.icones['cauldron']} />
+                    </span>
+                  ))}
+              </span>
               <span className="nom-en"><Surligne texte={a.en} requetes={requetes} /></span>
               {a.note && <span className="note-article">{a.note}</span>}
             </div>

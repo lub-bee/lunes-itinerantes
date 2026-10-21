@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import type { Article, Livre, Page, PartieId } from '@/lib/types'
+import type { Article, Livre, Page, PageChapitre, PageMissive, PartieId } from '@/lib/types'
 import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
@@ -9,6 +9,9 @@ import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
 import { ICONE_COPIE } from '@/lib/copie'
 import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Commande'
+import { useRegistre } from './Registre'
+import { idMissive, type CtxRegistre, type Fiche } from './Missives'
+import { FicheVolante } from './Fiche'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
@@ -65,8 +68,31 @@ function Surligne({ texte, requete }: { texte: string; requete: string }) {
   return <>{out}</>
 }
 
-export default function Grimoire({ livre }: { livre: Livre }) {
-  const { pages, parties, icones } = livre
+const COURT_MAX = 18
+
+export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
+  const { parties, icones } = livreServeur
+  const articles = useMemo(() => livreServeur.pages.flatMap((p) => (p.type === 'chapitre' ? (p as PageChapitre).articles : [])), [livreServeur])
+  const registre = useRegistre(articles)
+
+  // One page per missive, after the list of missives: open ones (oldest first), then closed ones.
+  const livre = useMemo((): Livre => {
+    const etats = registre.calcul?.etats ?? []
+    const vues: PageMissive[] = [...etats.filter((e) => e.missive.statut !== 'close'), ...etats.filter((e) => e.missive.statut === 'close')].map((e) => ({
+      type: 'missive',
+      id: idMissive(e.missive.numero),
+      partie: 'missives',
+      numero: e.missive.numero,
+      titre: e.missive.titre,
+      court: e.missive.titre.length > COURT_MAX ? `${e.missive.titre.slice(0, COURT_MAX - 1).trimEnd()}…` : e.missive.titre,
+      icone: e.missive.statut === 'close' ? 'wax-seal' : 'tied-scroll',
+    }))
+    if (!vues.length) return livreServeur
+    const apres = livreServeur.pages.findIndex((p) => p.type === 'missives') + 1
+    return { ...livreServeur, pages: [...livreServeur.pages.slice(0, apres), ...vues, ...livreServeur.pages.slice(apres)] }
+  }, [livreServeur, registre.calcul])
+  const { pages } = livre
+
   const [index, setIndex] = useState(0)
   const [tourne, setTourne] = useState<Tourne | null>(null)
   const enAttente = useRef<number | null>(null)
@@ -81,7 +107,9 @@ export default function Grimoire({ livre }: { livre: Livre }) {
   const champ = useRef<HTMLInputElement>(null)
   const etroit = useMedia('(max-width: 860px)')
   const sansAnimation = useMedia('(prefers-reduced-motion: reduce)')
-  const commande = useCommande()
+  const commande = useCommande(registre)
+  const [fiche, setFiche] = useState<Fiche | null>(null)
+  const [versId, setVersId] = useState<string | null>(null)
   const bande = useRef<HTMLButtonElement>(null)
 
   // Latest values for the window-level pointer handlers.
@@ -274,14 +302,43 @@ export default function Grimoire({ livre }: { livre: Livre }) {
     }
   }, [pages.length, conclure])
 
+  /* ── Pages added or moved (missives read from the sheet) ── */
+
+  // The open page stays open when missive pages appear before it.
+  const idCourant = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    const i = idCourant.current === null ? -1 : pages.findIndex((p) => p.id === idCourant.current)
+    if (i >= 0 && i !== indexRef.current) setIndex(i)
+    else if (indexRef.current >= pages.length) setIndex(pages.length - 1)
+  }, [pages])
+  useEffect(() => {
+    idCourant.current = pages[index]?.id ?? null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index])
+  // A page asked for by id (e.g. a missive just written) is opened once it exists.
+  useEffect(() => {
+    if (!versId) return
+    const i = pages.findIndex((p) => p.id === versId)
+    if (i < 0) return
+    setVersId(null)
+    aller(i)
+  }, [versId, pages, aller])
+
   /* ── Deep links ─────────────────────────────────────────── */
 
+  // The page named in the address opens once it exists (a missive's page appears only after the
+  // registre is read); until then the address keeps it.
+  const lienInitial = useRef<string | null>(null)
   useEffect(() => {
-    const id = decodeURIComponent(window.location.hash.slice(1))
-    const i = pages.findIndex((p) => p.id === id)
+    if (lienInitial.current === null) lienInitial.current = decodeURIComponent(window.location.hash.slice(1))
+    if (!lienInitial.current) return
+    const i = pages.findIndex((p) => p.id === lienInitial.current)
+    if (i < 0) return
+    lienInitial.current = ''
     if (i > 0) setIndex(i)
   }, [pages])
   useEffect(() => {
+    if (lienInitial.current) return
     window.history.replaceState(null, '', index === 0 ? window.location.pathname : `#${pages[index].id}`)
   }, [index, pages])
 
@@ -336,6 +393,12 @@ export default function Grimoire({ livre }: { livre: Livre }) {
     return () => window.removeEventListener('keydown', f)
   }, [aller])
 
+  // A slip goes when the page turns.
+  const destinationFiche = tourne?.vers ?? index
+  useEffect(() => setFiche(null), [destinationFiche])
+
+  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, ouvrir: setFiche, allerA: setVersId }), [registre])
+
   const refermer = async () => {
     await fetch('/api/sceau', { method: 'DELETE' })
     window.location.href = '/sceau'
@@ -357,6 +420,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
       scrollInitial: scrolls.current[id],
       onScroll: interactif ? (v) => (scrolls.current[id] = v) : undefined,
       commande: interactif && commande.ouverte ? { ajouter: commande.ajouter } : undefined,
+      registre: ctxRegistre,
     }
   }
 
@@ -635,6 +699,9 @@ export default function Grimoire({ livre }: { livre: Livre }) {
             {etroit === false && commande.ouverte && (
               <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
             )}
+            {etroit === false && fiche && !tourne && (
+              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile={false} fermer={() => setFiche(null)} />
+            )}
           </div>
         </div>
       </main>
@@ -642,6 +709,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
       {etroit && (
         <>
           {commande.ouverte && commande.deployee && <FeuilleCommande c={commande} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} />}
+          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile fermer={() => setFiche(null)} />}
           <BarreCommande c={commande} icones={icones} />
         </>
       )}

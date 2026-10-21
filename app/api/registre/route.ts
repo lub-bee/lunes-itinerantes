@@ -117,7 +117,7 @@ const signee = (q: number) => (q > 0 ? `+${q}` : String(q))
 
 /* ───────────────────────── Writes ───────────────────────── */
 
-type Ecriture = { action: ActionRegistre; charge: Record<string, unknown>; message: string }
+type Ecriture = { action: ActionRegistre; charge: Record<string, unknown>; message: string; numero?: string }
 
 async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: Lu, qui: Identite): Promise<Ecriture> {
   const articles = await chargerArticles()
@@ -160,6 +160,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
           missive: { numero: n, horodatage: quand, titre, commanditaire: mot(b.commanditaire, 120), echeance: mot(b.echeance, 80), membre: qui.nom, lignes: [...lignes.values()] },
         },
         message: `La missive « ${titre} » est scellée dans le registre (n° ${n}).`,
+        numero: n,
       }
     }
 
@@ -317,5 +318,5 @@ export async function POST(req: NextRequest) {
   } catch {
     donnees = null
   }
-  return NextResponse.json({ ok: true, message: e.message, donnees })
+  return NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })
 }

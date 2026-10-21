@@ -110,13 +110,18 @@ function SommaireCopie({ livre }: { livre: Livre }) {
       {livre.parties
         .filter((p) => p.id !== 'sommaire')
         .map((partie) => {
-          const pages = livre.pages.filter((p) => p.partie === partie.id)
-          const avenir = pages.every((p) => p.type === 'avenir')
+          // Only chapters and memos are copied; the missives live in the grimoire alone.
+          const pages = livre.pages.filter((p) => p.partie === partie.id && (p.type === 'chapitre' || p.type === 'note'))
+          const avenir = pages.length === 0
           return (
             <section key={partie.id}>
               <h4 style={{ color: partie.couleur }}>{partie.titre}</h4>
               {avenir ? (
-                <p className="copie-avenir">L&apos;encre de ce livre n&apos;est pas encore sèche.</p>
+                <p className="copie-avenir">
+                  {partie.id === 'missives'
+                    ? 'Les missives vivent dans le grimoire : leur encre bouge trop pour être copiée.'
+                    : <>L&apos;encre de ce livre n&apos;est pas encore sèche.</>}
+                </p>
               ) : (
                 <ol>
                   {pages.map((p, i) => (

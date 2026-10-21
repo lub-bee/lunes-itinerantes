@@ -8,7 +8,12 @@ import { normaliser } from './recherche'
 export const ICONES_MISSIVES = ['cauldron', 'open-chest', 'anvil-impact', 'hand-truck', 'two-coins', 'magnifying-glass', 'scroll-quill', 'wheat', 'quill']
 
 /** Comparable name: no case, accents, apostrophes, spaces or punctuation ("Ma’Dran-jo" = "madranjo"). */
-export const cle = (s: string) => normaliser(String(s ?? '')).replace(/[^a-z0-9]+/g, '')
+export const cle = (s: string) =>
+  normaliser(String(s ?? ''))
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, '')
 
 /** Default share of a reward split equally between every member of the caravan (the rest goes by merit). */
 export const PART_COMMUNE_DEFAUT = 20
@@ -283,6 +288,8 @@ export type Partage = {
   nbMembres: number
   /** Pool shared by merit (what the equal part leaves). */
   merite: number
+  /** Septims too few to split equally when nobody brought anything (stay with the caravan). */
+  reste: number
   /** Participants: base (when on the members' list) + their merit share. */
   parts: { membre: string; base: number; merite: number; total: number; part: number }[]
 }
@@ -290,23 +297,25 @@ export type Partage = {
 /**
  * Splits a reward: `partCommune` % (rounded down to whole septims per member) goes equally to every
  * member of the caravan, participants or not; the rest goes to participants pro rata to the value
- * they brought (equally to every member if nobody brought anything). `membres`: names of every member
+ * they brought. If nobody brought anything, the whole reward goes in equal parts (`reste`: the few
+ * septims that do not divide evenly). `membres`: names of every member
  * (server), or only how many they are (page preview: participants are then assumed on the list).
  */
 export function partager(recompense: number, partCommune: number, membres: string[] | number, contribs: Contribution[]): Partage {
   const total = Math.max(0, Math.round(recompense))
-  const pc = Math.min(100, Math.max(0, partCommune))
+  const participants = contribs.filter((c) => c.total > 0)
+  // Nobody brought anything: everything goes in equal parts.
+  const pc = participants.length ? Math.min(100, Math.max(0, partCommune)) : 100
   const nbMembres = typeof membres === 'number' ? membres : membres.length
   const base = nbMembres > 0 ? Math.floor((total * pc) / 100 / nbMembres) : 0
-  const merite = total - base * nbMembres
+  const merite = participants.length ? total - base * nbMembres : 0
   const surListe = (m: string) => (typeof membres === 'number' ? true : membres.some((x) => cle(x) === cle(m)))
-  const participants = contribs.filter((c) => c.total > 0)
   const parts = participants.map((c) => ({ membre: c.membre, base: surListe(c.membre) ? base : 0, merite: 0, total: 0, part: c.part }))
   if (participants.length) {
     repartir(merite, participants.map((c) => c.total)).forEach((v, i) => (parts[i].merite = v))
   }
   for (const p of parts) p.total = p.base + p.merite
-  return { recompense: total, partCommune: pc, base, nbMembres, merite, parts }
+  return { recompense: total, partCommune: pc, base, nbMembres, merite, reste: total - base * nbMembres - merite, parts }
 }
 
 /* ───────────────────────── One missive, computed ───────────────────────── */
