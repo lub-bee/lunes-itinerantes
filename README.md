@@ -198,7 +198,7 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
 
 ## Order mode (bon de commande)
 
-- **Desktop**: a rolled scroll lies on the table under the search field (« Préparer une commande »
+- **Desktop**: a rolled scroll lies on the table under the search field (« Bon de commande »
   written on its unrolled end; red ribbon and wax seal on the roll; once lines exist the roll carries
   their count and total). Clicking it carries the scroll to the left page of the open book and unrolls
   it there into the order sheet. While the sheet is out, clicking a row of a price ledger writes the
