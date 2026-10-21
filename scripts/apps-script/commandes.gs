@@ -24,16 +24,19 @@
  *      'releve' | 'depot' | 'fabrication' | 'livraison'
  *                    { mouvements: [{ horodatage, action, missive, membre, objet, quantite, note }] }
  *                                                                            → Mouvements rows (Type set from the action)
- *      'cloture'     { cloture: { numero, action, horodatage, membre, recompense, partCommune,
+ *      'cloture'     { cloture: { numero, action, horodatage, membre, statut ('livrée' | 'inachevée'),
+ *                                 recompense, partCommune, note, livraisons: [{ objet, quantite }],
  *                                 partage: [{ membre, montant, note }] } }
  *                                                                            → the missive's Missives rows closed,
- *                                                                              one Mouvements row 'partage' per member
+ *                                                                              its 'livraison' rows (goods leaving the
+ *                                                                              chest) and one 'partage' row per member
  *      'recette'     { recette: { produit, ancienProduit?, rendement, artisan, note,
  *                                 ingredients: [{ ingredient, quantite }] } } → the product's Recettes rows replaced
  *                                                                              (no ingredient = recipe removed)
- *      'ressource'   { ressource: { nom, ancienNom?, en, categorie, valeur, note } }
+ *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }
  *                                                                            → the Ressources row updated, or added
- *    Answer: { ok: true, ... } or { ok: false, erreur }.
+ *    Answer: { ok: true, ..., onglets } (every tab read again after the write, as for 'lire', so the
+ *    grimoire needs no second call) or { ok: false, erreur }.
  */
 
 /** Name of the tab receiving the orders (created when missing). */
@@ -59,8 +62,8 @@ var COLONNES = [
 ];
 
 /**
- * MAPPING OF THE OTHER TABS — per tab: its name and its columns as [header, field]. Headers are
- * found by name (case, accents and punctuation ignored), so the columns may sit in any order;
+ * MAPPING OF THE OTHER TABS — per tab: its name and its columns as [header, field, older headers?].
+ * Headers are found by name (case, accents and punctuation ignored), so the columns may sit in any order;
  * a missing column is added at the end of row 1 on the first write. `lecture: true` marks a tab
  * the grimoire only reads (never written, no header created).
  */
@@ -72,7 +75,11 @@ var ONGLETS = {
   },
   ressources: {
     nom: 'Ressources',
-    colonnes: [['Ressource', 'nom'], ['Nom EN', 'en'], ['Catégorie', 'categorie'], ['Valeur', 'valeur'], ['Note', 'note']],
+    // Older headers still read: Catégorie / Sorte → Origine, Valeur → Prix courant.
+    colonnes: [
+      ['Ressource', 'nom'], ['Nom EN', 'en'], ['Origine', 'origine', ['Catégorie', 'Sorte']],
+      ['Prix courant', 'prix', ['Valeur']], ['Bonne affaire', 'bonneAffaire'], ['Note', 'note'],
+    ],
   },
   recettes: {
     nom: 'Recettes',
@@ -84,7 +91,7 @@ var ONGLETS = {
       ['N° missive', 'numero'], ['Écrite le', 'horodatage'], ['Titre', 'titre'], ['Commanditaire', 'commanditaire'],
       ['Échéance', 'echeance'], ['Statut', 'statut'], ['Produit', 'produit'], ['Quantité', 'quantite'],
       ['Écrite par', 'ecritePar'], ['Récompense', 'recompense'], ['Part commune (%)', 'partCommune'],
-      ['Close le', 'closeLe'], ['Close par', 'closePar'],
+      ['Close le', 'closeLe'], ['Close par', 'closePar'], ['Note de clôture', 'noteCloture'],
     ],
   },
   mouvements: {
@@ -122,7 +129,7 @@ function doPost(e) {
 
   var ecrire = ECRITURES[action];
   if (!ecrire) return repondre({ ok: false, erreur: 'unknown action ' + action });
-  return avecVerrou(function () { return ecrire(corps, action); });
+  return avecVerrou(function () { return ecrire(corps, action); }, true);
 }
 
 function doGet() {
@@ -140,7 +147,7 @@ function sceller(c) {
     });
     feuille.getRange(feuille.getLastRow() + 1, 1, lignes.length, COLONNES.length).setValues(lignes);
     return { ok: true, numero: c.numero, lignes: lignes.length };
-  });
+  }, false);
 }
 
 /**
@@ -195,33 +202,48 @@ function cleEntete(s) {
     .replace(/\u0153/g, 'oe').replace(/\u00e6/g, 'ae').replace(/[^a-z0-9]+/g, '');
 }
 
-/** 0-based column of each field in a header row (-1 when absent). */
+/** 0-based column of each field in a header row (-1 when absent); older header names count too. */
 function indexColonnes(entete, def) {
   var noms = entete.map(cleEntete);
   var index = {};
-  def.colonnes.forEach(function (col) { index[col[1]] = noms.indexOf(cleEntete(col[0])); });
+  def.colonnes.forEach(function (col) {
+    var i = noms.indexOf(cleEntete(col[0]));
+    (col[2] || []).forEach(function (ancien) { if (i < 0) i = noms.indexOf(cleEntete(ancien)); });
+    index[col[1]] = i;
+  });
   return index;
 }
 
 /* ───────────────────────── Writing ───────────────────────── */
 
-function avecVerrou(f) {
-  // One writer at a time: two members writing together must not overwrite each other's rows.
+/**
+ * Runs one write under the script lock (two members writing together must not overwrite each other's
+ * rows), then answers with every tab read afresh, so the grimoire needs no second call to see it.
+ * Sealed orders keep their v2 answer (no tabs).
+ */
+function avecVerrou(f, avecOnglets) {
   var verrou = LockService.getScriptLock();
   try {
     verrou.waitLock(20000);
   } catch (err) {
     return repondre({ ok: false, erreur: 'sheet busy' });
   }
+  var res;
   try {
-    var res = f();
-    SpreadsheetApp.flush();
-    return repondre(res);
+    res = f();
   } catch (err) {
     return repondre({ ok: false, erreur: String(err) });
   } finally {
     verrou.releaseLock();
   }
+  if (avecOnglets && res.ok) {
+    try {
+      res.onglets = toutLire();
+    } catch (err) {
+      // The write is done; the grimoire will read the tabs itself.
+    }
+  }
+  return repondre(res);
 }
 
 /**
@@ -246,44 +268,49 @@ function preparer(def) {
   } else if (connues < def.colonnes.length) {
     var fin = premiere.length;
     while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
-    def.colonnes.forEach(function (col) {
-      if (index[col[1]] >= 0) return;
-      feuille.getRange(1, fin + 1).setValue(col[0]).setFontWeight('bold');
-      premiere[fin] = col[0];
-      fin++;
-    });
+    var ajout = def.colonnes.filter(function (col) { return index[col[1]] < 0; }).map(function (col) { return col[0]; });
+    feuille.getRange(1, fin + 1, 1, ajout.length).setValues([ajout]).setFontWeight('bold');
+    premiere = premiere.slice(0, fin).concat(ajout);
   }
   var cols = {};
   var idx = indexColonnes(premiere, def);
-  Object.keys(idx).forEach(function (k) { cols[k] = idx[k] + 1; });
-  return { feuille: feuille, cols: cols };
+  var large = 0;
+  Object.keys(idx).forEach(function (k) {
+    cols[k] = idx[k] + 1;
+    large = Math.max(large, cols[k]);
+  });
+  return { feuille: feuille, cols: cols, largeur: large };
 }
 
-/** Appends objects as rows (each field in its own column, other cells left blank). */
-function ajouter(def, objets) {
+/** An object as a row of `largeur` cells (each field in its own column, other cells left blank). */
+function enLigne(p, o, base) {
+  var ligne = base ? base.slice() : [];
+  for (var i = ligne.length; i < p.largeur; i++) ligne.push('');
+  Object.keys(o).forEach(function (k) { if (p.cols[k]) ligne[p.cols[k] - 1] = o[k]; });
+  return ligne.slice(0, Math.max(p.largeur, ligne.length));
+}
+
+/** Appends objects as rows, in one call. */
+function ajouter(def, objets, p) {
   if (!objets.length) return 0;
-  var p = preparer(def);
-  var largeur = 0;
-  Object.keys(p.cols).forEach(function (k) { largeur = Math.max(largeur, p.cols[k]); });
-  var lignes = objets.map(function (o) {
-    var ligne = [];
-    for (var i = 0; i < largeur; i++) ligne.push('');
-    Object.keys(o).forEach(function (k) { if (p.cols[k]) ligne[p.cols[k] - 1] = o[k]; });
-    return ligne;
-  });
-  p.feuille.getRange(p.feuille.getLastRow() + 1, 1, lignes.length, largeur).setValues(lignes);
+  p = p || preparer(def);
+  var lignes = objets.map(function (o) { return enLigne(p, o).slice(0, p.largeur); });
+  p.feuille.getRange(p.feuille.getLastRow() + 1, 1, lignes.length, p.largeur).setValues(lignes);
   return lignes.length;
 }
 
-/** 1-based sheet rows whose `champ` matches one of `valeurs` (compared like headers). */
-function lignesOu(p, champ, valeurs) {
-  var res = [];
+/** The data rows of a tab (row 2 onwards), `largeur` cells each, in one call. */
+function donnees(p) {
   var dernier = p.feuille.getLastRow();
-  if (dernier < 2 || !p.cols[champ]) return res;
-  var cles = valeurs.filter(function (v) { return v; }).map(cleEntete);
-  var col = p.feuille.getRange(2, p.cols[champ], dernier - 1, 1).getValues();
-  for (var i = 0; i < col.length; i++) if (cles.indexOf(cleEntete(col[i][0])) >= 0) res.push(i + 2);
-  return res;
+  if (dernier < 2) return [];
+  return p.feuille.getRange(2, 1, dernier - 1, p.largeur).getValues();
+}
+
+/** Whether a row's `champ` matches one of `valeurs` (compared like headers). */
+function correspond(p, ligne, champ, valeurs) {
+  if (!p.cols[champ]) return false;
+  var v = cleEntete(ligne[p.cols[champ] - 1]);
+  return valeurs.some(function (x) { return x && cleEntete(x) === v; });
 }
 
 function mouvements(corps, action) {
@@ -317,50 +344,65 @@ var ECRITURES = {
   fabrication: mouvements,
   livraison: mouvements,
 
+  /** Closes a missive: livrée (its deliveries recorded) or inachevée; the reward's split as 'partage' rows. */
   cloture: function (corps) {
     var c = corps.cloture;
     if (!c || !c.numero) return { ok: false, erreur: 'no missive' };
     var p = preparer(ONGLETS.missives);
-    var lignes = lignesOu(p, 'numero', [c.numero]);
-    if (!lignes.length) return { ok: false, erreur: 'unknown missive ' + c.numero };
+    var lignes = donnees(p);
     var quand = new Date(c.horodatage);
-    lignes.forEach(function (r) {
-      p.feuille.getRange(r, p.cols.statut).setValue('close');
-      p.feuille.getRange(r, p.cols.recompense).setValue(c.recompense);
-      p.feuille.getRange(r, p.cols.partCommune).setValue(c.partCommune);
-      p.feuille.getRange(r, p.cols.closeLe).setValue(quand);
-      p.feuille.getRange(r, p.cols.closePar).setValue(c.membre);
+    var touchees = 0;
+    lignes.forEach(function (l, i) {
+      if (!correspond(p, l, 'numero', [c.numero])) return;
+      lignes[i] = enLigne(p, {
+        statut: c.statut || 'livrée', recompense: c.recompense, partCommune: c.partCommune,
+        closeLe: quand, closePar: c.membre, noteCloture: c.note || '',
+      }, l);
+      touchees++;
     });
-    ajouter(ONGLETS.mouvements, (c.partage || []).map(function (x) {
+    if (!touchees) return { ok: false, erreur: 'unknown missive ' + c.numero };
+    p.feuille.getRange(2, 1, lignes.length, p.largeur).setValues(lignes);
+    var livraisons = (c.livraisons || []).map(function (m) {
+      return { horodatage: quand, action: c.action || '', missive: c.numero, membre: c.membre, type: 'livraison', objet: m.objet, quantite: m.quantite, note: m.note || '' };
+    });
+    var partage = (c.partage || []).map(function (x) {
       return { horodatage: quand, action: c.action || '', missive: c.numero, membre: x.membre, type: 'partage', objet: 'Septims', quantite: x.montant, note: x.note || '' };
-    }));
+    });
+    ajouter(ONGLETS.mouvements, livraisons.concat(partage));
     return { ok: true, numero: c.numero };
   },
 
+  /** Replaces a product's recipe rows (the tab rewritten in one call; no ingredient = recipe removed). */
   recette: function (corps) {
     var r = corps.recette;
     if (!r || !r.produit) return { ok: false, erreur: 'no product' };
     var p = preparer(ONGLETS.recettes);
-    var anciennes = lignesOu(p, 'produit', [r.produit, r.ancienProduit]);
-    for (var i = anciennes.length - 1; i >= 0; i--) p.feuille.deleteRow(anciennes[i]);
-    var n = ajouter(ONGLETS.recettes, (r.ingredients || []).map(function (ing) {
-      return { produit: r.produit, ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' };
-    }));
-    return { ok: true, produit: r.produit, lignes: n };
+    var lignes = donnees(p);
+    var gardees = lignes.filter(function (l) { return !correspond(p, l, 'produit', [r.produit, r.ancienProduit]); });
+    var nouvelles = (r.ingredients || []).map(function (ing) {
+      return enLigne(p, { produit: r.produit, ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' });
+    });
+    var toutes = gardees.concat(nouvelles);
+    if (lignes.length) p.feuille.getRange(2, 1, lignes.length, p.largeur).clearContent();
+    if (toutes.length) p.feuille.getRange(2, 1, toutes.length, p.largeur).setValues(toutes);
+    return { ok: true, produit: r.produit, lignes: nouvelles.length };
   },
 
+  /** Updates a resource's row, or adds it (one call either way). */
   ressource: function (corps) {
     var r = corps.ressource;
     if (!r || !r.nom) return { ok: false, erreur: 'no resource' };
     var p = preparer(ONGLETS.ressources);
-    var lignes = lignesOu(p, 'nom', [r.ancienNom || r.nom]);
-    var valeurs = { nom: r.nom, en: r.en || '', categorie: r.categorie || '', valeur: r.valeur === null || r.valeur === undefined ? '' : r.valeur, note: r.note || '' };
-    if (!lignes.length) {
-      ajouter(ONGLETS.ressources, [valeurs]);
-      return { ok: true, nom: r.nom, ajoutee: true };
+    var nombre = function (v) { return v === null || v === undefined ? '' : v; };
+    var valeurs = { nom: r.nom, en: r.en || '', origine: r.origine || '', prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: r.note || '' };
+    var lignes = donnees(p);
+    for (var i = 0; i < lignes.length; i++) {
+      if (!correspond(p, lignes[i], 'nom', [r.ancienNom || r.nom])) continue;
+      p.feuille.getRange(i + 2, 1, 1, p.largeur).setValues([enLigne(p, valeurs, lignes[i])]);
+      return { ok: true, nom: r.nom, ajoutee: false };
     }
-    Object.keys(valeurs).forEach(function (k) { p.feuille.getRange(lignes[0], p.cols[k]).setValue(valeurs[k]); });
-    return { ok: true, nom: r.nom, ajoutee: false };
+    ajouter(ONGLETS.ressources, [valeurs], p);
+    return { ok: true, nom: r.nom, ajoutee: true };
   },
 };
 
