@@ -243,21 +243,27 @@ export function FeuilleCommande({
   mobile,
   bande,
   sansAnimation,
-  ecartee = false,
+  ecartee = null,
 }: {
   c: EtatCommande
   icones: Record<string, string>
   mobile: boolean
   bande?: RefObject<HTMLElement | null>
   sansAnimation: boolean
-  /** A page is turning: the sheet is lifted off the left page onto the table, then laid back. */
-  ecartee?: boolean
+  /**
+   * A page is turning: the sheet is lifted off the left page onto the table, then laid back after
+   * `retour` ms (as soon as the leaf has cleared the left page), or when the prop goes back to null
+   * (hand-dragged turns: once the leaf has snapped). The object must be stable for one turn.
+   */
+  ecartee?: { retour: number | null } | null
 }) {
   const feuille = useRef<HTMLElement>(null)
+  const voile = useRef<HTMLDivElement>(null)
+  const corps = useRef<HTMLDivElement>(null)
   const rouleau = useRef<HTMLDivElement>(null)
+  const ombre = useRef<HTMLDivElement>(null)
   const lien = useRef<HTMLSpanElement>(null)
   const [confirmer, setConfirmer] = useState(false)
-  const [repli, setRepli] = useState(false)
   const b = bilan(c.lignes)
 
   useEffect(() => {
@@ -265,6 +271,21 @@ export function FeuilleCommande({
     const t = setTimeout(() => setConfirmer(false), DUREE_CONFIRMATION)
     return () => clearTimeout(t)
   }, [confirmer])
+
+  // Lifted aside / laid back through a data attribute toggled on the element itself: no React render
+  // in the middle of a page turn, and the CSS transitions (transform only) run on the compositor.
+  useLayoutEffect(() => {
+    const el = feuille.current
+    if (!el || mobile) return
+    if (!ecartee) {
+      delete el.dataset.ecartee
+      return
+    }
+    el.dataset.ecartee = ''
+    if (ecartee.retour === null) return
+    const t = setTimeout(() => delete el.dataset.ecartee, ecartee.retour)
+    return () => clearTimeout(t)
+  }, [ecartee, mobile])
 
   /** Animations of the unroll in flight (cancelled when a new one starts). */
   const enCours = useRef<Animation[]>([])
@@ -274,19 +295,18 @@ export function FeuilleCommande({
    * flies at the scale of the scroll on the table, only its unrolled end showing above the roll; then
    * the roll travels down the page, thinner and thinner, and the paper appears behind it.
    *
-   * One animation on the sheet drives everything: its transform, and two registered custom properties
-   * (`--deroule-vu`, the height of paper revealed, and `--deroule-epais`, the roll's thickness) from
-   * which the CSS derives both the paper's clip and the roll's position. Clip and roll are thus laid
-   * out in the same frame, always: the roll cannot drift off the paper's edge (two separate
-   * animations could, the roll's transform running on the compositor while the clip waits for the
-   * main thread).
+   * Transforms and opacity only, so the compositor plays it at full frame rate. The reveal is a
+   * counter-translation: the veil (clipping its content, the roll hung at its bottom edge) slides
+   * down from above while the paper inside slides up by the same amount and so stays still. Veil,
+   * paper and roll share the same keyframe offsets and easings: the roll sits on the paper's edge at
+   * every frame by construction.
    */
-  const animations = useCallback((): Animation[] | null => {
+  const animations = useCallback((enroule = false): Animation[] | null => {
     const el = feuille.current
     const btn = bande?.current
     const src = btn?.getBoundingClientRect()
     const cyl = btn?.querySelector('[data-cylindre]')?.getBoundingClientRect()
-    if (!el || !src || !cyl || !src.width || mobile || sansAnimation) return null
+    if (!el || !voile.current || !corps.current || !rouleau.current || !src || !cyl || !src.width || mobile || sansAnimation) return null
     enCours.current.forEach((a) => a.cancel())
     const r = el.getBoundingClientRect()
     const largeur = el.offsetWidth
@@ -298,29 +318,52 @@ export function FeuilleCommande({
     const bout = Math.max(12, (cyl.top - src.top) / s)
     const epais0 = Math.max(16, cyl.height / s)
     const epais1 = 15
-    const temps: KeyframeAnimationOptions = { duration: DUREE_DEROULE, fill: 'both' }
+    // The roll is laid out once at a middle thickness, then only scaled.
+    const epais = Math.round(Math.sqrt(epais0 * epais1))
+    rouleau.current.style.height = `${epais}px`
+    // Hung at the veil's bottom edge, the paper entering it a little below its top (scaled from there).
+    rouleau.current.style.top = `calc(100% - ${(epais * 0.18).toFixed(2)}px)`
+    const cache = hauteur - bout
+    // Rolling back plays the same keyframes in reverse (a positive rate, so it stays on the compositor).
+    const temps: KeyframeAnimationOptions = { duration: DUREE_DEROULE, fill: 'both', direction: enroule ? 'reverse' : 'normal' }
     const vol = 'cubic-bezier(.3,.1,.25,1)'
     const deroule = 'cubic-bezier(.45,.05,.3,1)'
     const pose = 'translate(0, 0) scale(1) rotate(0deg)'
     // A data attribute, not a class: React rewrites className on every render (e.g. « Rouler »).
     el.dataset.deroule = ''
+    const glisse = (y0: number) => [
+      { offset: 0, transform: `translateY(${y0}px)` },
+      { offset: 0.44, transform: `translateY(${y0}px)`, easing: deroule },
+      { offset: 1, transform: 'translateY(0px)' },
+    ]
     const anims = [
       el.animate(
         [
-          { offset: 0, transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(-1deg)`, '--deroule-vu': `${bout}px`, '--deroule-epais': `${epais0}px`, easing: vol },
-          { offset: 0.44, transform: pose, '--deroule-vu': `${bout}px`, '--deroule-epais': `${epais0}px`, easing: deroule },
-          { offset: 1, transform: pose, '--deroule-vu': `${hauteur}px`, '--deroule-epais': `${epais1}px` },
+          { offset: 0, transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(-1deg)`, easing: vol },
+          { offset: 0.44, transform: pose },
+          { offset: 1, transform: pose },
+        ],
+        temps,
+      ),
+      voile.current.animate(glisse(-cache), temps),
+      corps.current.animate(glisse(cache), temps),
+      rouleau.current.animate(
+        [
+          { offset: 0, transform: `scaleY(${epais0 / epais})`, opacity: 1 },
+          { offset: 0.44, transform: `scaleY(${epais0 / epais})`, opacity: 1, easing: deroule },
+          { offset: 0.94, opacity: 1 },
+          { offset: 1, transform: `scaleY(${epais1 / epais})`, opacity: 0 },
         ],
         temps,
       ),
     ]
-    if (rouleau.current) {
+    if (ombre.current) {
       anims.push(
-        rouleau.current.animate(
+        ombre.current.animate(
           [
-            { offset: 0, opacity: 1 },
-            { offset: 0.94, opacity: 1 },
-            { offset: 1, opacity: 0 },
+            { offset: 0, opacity: 0 },
+            { offset: 0.88, opacity: 0 },
+            { offset: 1, opacity: 1 },
           ],
           temps,
         ),
@@ -365,17 +408,15 @@ export function FeuilleCommande({
 
   const replier = () => {
     if (mobile) return c.setDeployee(false)
-    const anims = animations()
+    const anims = animations(true)
     if (!anims) return c.ranger()
-    setRepli(true)
-    anims.forEach((a) => a.reverse())
     Promise.all(anims.map((a) => a.finished)).then(() => enCours.current === anims && c.ranger(), () => {})
   }
 
   return (
     <aside
       ref={feuille}
-      className={`commande-feuille ${mobile ? 'mobile' : ''} ${repli ? 'repli' : ''} ${ecartee && !mobile ? 'ecartee' : ''}`}
+      className={`commande-feuille ${mobile ? 'mobile' : ''}`}
       aria-label="Bon de commande"
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -386,7 +427,10 @@ export function FeuilleCommande({
           <feDisplacementMap in="SourceGraphic" in2="b" scale="7" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
-      <div className="commande-corps">
+      <div className="commande-ombre" ref={ombre} aria-hidden />
+      <div className="commande-voile" ref={voile}>
+      <div className="commande-masque">
+      <div className="commande-corps" ref={corps}>
         <div className="commande-papier" aria-hidden />
         <span className="commande-clou" aria-hidden />
         <header className="commande-tete">
@@ -485,8 +529,10 @@ export function FeuilleCommande({
           </div>
         </footer>
       </div>
+      </div>
       <div className="commande-rouleau" ref={rouleau} aria-hidden>
         <span className="commande-rouleau-lien" ref={lien} />
+      </div>
       </div>
     </aside>
   )

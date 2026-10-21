@@ -360,6 +360,17 @@ export default function Grimoire({ livre }: { livre: Livre }) {
     }
   }
 
+  // The order sheet is lifted aside for the turn and laid back as soon as the leaf has cleared the
+  // left page: a forward leaf lands on it (back just before it settles flat), a backward leaf leaves
+  // it (back once past the vertical). Hand-dragged turns: back when the leaf has snapped.
+  const ecartee = useMemo(() => {
+    if (!tourne) return null
+    if (tourne.manuel) return { retour: null }
+    const n = Math.min(Math.abs(tourne.vers - tourne.de), MAX_FEUILLETS)
+    const dernier = (n - 1) * DECALAGE_FEUILLETS
+    return { retour: tourne.vers > tourne.de ? dernier + DUREE_TOURNE - 60 : dernier + DUREE_TOURNE * 0.56 }
+  }, [tourne])
+
   const destination = tourne?.vers ?? index
   const partieActive: PartieId = pages[destination].partie
   const partieOnglets: PartieId = partieActive === 'sommaire' ? 'marchandises' : partieActive
@@ -622,7 +633,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               onClick={() => !clicIgnore.current && aller(destination + 1)}
             />
             {etroit === false && commande.ouverte && (
-              <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={Boolean(tourne)} />
+              <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
             )}
           </div>
         </div>

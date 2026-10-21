@@ -1108,11 +1108,14 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   scale: 1;
   transform-origin: 0 0;
   font-size: 16px;
-  /* Laid back once the leaf has landed. */
-  transition: translate 480ms cubic-bezier(.3, .7, .25, 1), rotate 480ms cubic-bezier(.3, .7, .25, 1), scale 480ms ease;
+  /* Its own compositor layer: flown, lifted aside and laid back by transforms only, never repainted. */
+  will-change: transform;
+  /* Laid back (ease-out) as soon as the leaf has cleared the left page. */
+  transition: translate 330ms cubic-bezier(.15, .7, .3, 1), rotate 330ms cubic-bezier(.15, .7, .3, 1), scale 330ms cubic-bezier(.15, .7, .3, 1);
 }
-/* Lifted off the left page onto the leather and the table, so the leaf can turn. */
-.commande-feuille.ecartee {
+/* Lifted off the left page onto the leather and the table, so the leaf can turn (data attribute set
+   by Commande.tsx, no React render during the turn). */
+.commande-feuille[data-ecartee] {
   translate: calc(-100% + 4px) -16px;
   rotate: 2.5deg;
   scale: 0.94;
@@ -1121,6 +1124,31 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   transition-timing-function: cubic-bezier(.4, .1, .3, 1);
 }
 .commande-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+/* Cast shadow of the sheet on the page: a plain box-shadow layer (cheap, rasterized once); it only
+   fades in with opacity at the end of the unroll, and a deeper one fades in while lifted aside. */
+.commande-ombre, .commande-ombre::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.commande-ombre { box-shadow: 2px 6px 6px rgba(25, 12, 0, 0.4), 8px 16px 20px rgba(20, 10, 0, 0.32); }
+.commande-ombre::after {
+  content: '';
+  box-shadow: 6px 14px 12px rgba(10, 5, 0, 0.4), 16px 30px 30px rgba(10, 5, 0, 0.36);
+  opacity: 0;
+  transition: opacity 330ms ease-out;
+}
+.commande-feuille[data-ecartee] .commande-ombre::after { opacity: 1; transition-duration: 440ms; }
+/* Unroll: the veil slides down from above clipping the paper, which slides up by as much (so stays
+   still); the roll hangs at the veil's bottom edge. Clipping only while unrolling. */
+.commande-voile, .commande-masque { position: absolute; inset: 0; }
+.commande-feuille[data-deroule] .commande-masque { overflow: hidden; }
+/* No hit-testing while it moves (the pointer resting on « Rouler » would restyle and repaint the
+   sheet at every frame). */
+.commande-feuille[data-deroule] { pointer-events: none; }
+/* Layers kept for the sheet's lifetime: no re-raster when an unroll starts or ends. */
+.commande-feuille:not(.mobile) .commande-voile, .commande-feuille:not(.mobile) .commande-corps { will-change: transform; }
 .commande-corps {
   position: absolute;
   inset: 0;
@@ -1141,12 +1169,9 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
     var(--chiffon);
   background-size: auto, auto, 512px 512px;
   box-shadow: inset 0 0 30px rgba(110, 96, 66, 0.3), inset 0 0 5px rgba(110, 96, 66, 0.35);
-  /* Deckled edge, then the paper's thickness (two thin darker rims) and its shadow on the page. */
-  filter: url(#commande-barbes) drop-shadow(0 1px 0 #b9b099) drop-shadow(1px 1px 0 #8e8468) drop-shadow(2px 6px 5px rgba(25, 12, 0, 0.42)) drop-shadow(8px 16px 20px rgba(20, 10, 0, 0.34));
-  transition: filter 440ms ease;
-}
-.commande-feuille.ecartee .commande-papier {
-  filter: url(#commande-barbes) drop-shadow(0 1px 0 #b9b099) drop-shadow(1px 1px 0 #8e8468) drop-shadow(6px 14px 10px rgba(10, 5, 0, 0.5)) drop-shadow(16px 30px 30px rgba(10, 5, 0, 0.4));
+  /* Deckled edge and the paper's thickness (two thin darker rims); the cast shadow is .commande-ombre.
+     Static: painted once into the sheet's layer, never animated. */
+  filter: url(#commande-barbes) drop-shadow(0 1px 0 #b9b099) drop-shadow(1px 1px 0 #8e8468);
 }
 /* Ruled frame of the sheet. */
 .commande-corps::before {
@@ -1156,19 +1181,16 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   border: 1px solid rgba(142, 31, 20, 0.24);
   pointer-events: none;
 }
-/* While the sheet unrolls, one Web Animation on it (Commande.tsx) drives these two properties; the
-   paper's clip and the roll are both derived from them, so the roll stays on the paper's edge. */
-@property --deroule-vu { syntax: '<length>'; inherits: true; initial-value: 0px; }
-@property --deroule-epais { syntax: '<length>'; inherits: true; initial-value: 15px; }
-.commande-feuille[data-deroule] .commande-corps { clip-path: inset(0 0 calc(100% - var(--deroule-vu)) 0); }
-/* The roll travelling down the page: the paper enters it a little below its top. */
+/* The roll travelling down the page, hung at the veil's bottom edge (top and height set once per
+   unroll by Commande.tsx, then only scaled): the paper enters it a little below its top. */
 .commande-rouleau {
   position: absolute;
   z-index: 3;
   left: -7px;
   right: -7px;
-  top: calc(var(--deroule-vu) - var(--deroule-epais) * 0.18);
-  height: var(--deroule-epais);
+  top: 100%;
+  height: 15px;
+  transform-origin: 50% 18%;
   opacity: 0;
   pointer-events: none;
   border-radius: 6px / 50%;
@@ -1551,7 +1573,8 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
     animation: deroule-feuille 420ms cubic-bezier(.2, .8, .3, 1) both;
   }
   .commande-feuille.mobile .commande-corps { padding: 20px 14px 11px 16px; }
-  .commande-feuille.mobile .commande-papier { filter: url(#commande-barbes) drop-shadow(0 1px 0 #b9b099) drop-shadow(1px 1px 0 #8e8468) drop-shadow(0 -6px 22px rgba(0, 0, 0, 0.7)); }
+  .commande-feuille.mobile { will-change: auto; }
+  .commande-feuille.mobile .commande-ombre { box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.7); }
   .commande-feuille.mobile .commande-titre { font-size: 27px; }
   .commande-feuille.mobile .commande-replier { top: -10px; right: -4px; font-size: 14px; padding: 4px 6px; }
   .commande-feuille.mobile .commande-total-mot, .commande-feuille.mobile .commande-total strong { font-size: 27px; }
@@ -1562,7 +1585,7 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   .commande-feuille.mobile .commande-ligne-nom .repere { margin-left: 3px; }
   .commande-feuille.mobile .commande-totaux { font-size: 13px; }
   .commande-feuille.mobile .commande-statut { font-size: 12px; padding: 1px 6px 0; letter-spacing: 0.05em; }
-  @keyframes deroule-feuille { from { clip-path: inset(92% 0 0 0); transform: translateY(30px); } to { clip-path: inset(0 0 0 0); } }
+  @keyframes deroule-feuille { from { transform: translateY(calc(100% + 20px)); } }
 }
 
 @media (prefers-reduced-motion: reduce) {
