@@ -191,7 +191,8 @@ function lireOnglet(def) {
 
 /** Comparable header: lower case, no accents, letters and digits only. */
 function cleEntete(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/\u0153/g, 'oe').replace(/\u00e6/g, 'ae').replace(/[^a-z0-9]+/g, '');
 }
 
 /** 0-based column of each field in a header row (-1 when absent). */
