@@ -276,9 +276,10 @@ top of `commandes.gs` (header + value per column); the payload also carries `art
 
 Ribbons, in order: a bare **Sommaire** ribbon (its shape only, no word), **Marchandises** (price
 chapters), **Atelier** (« Recettes », « Matières premières »), **Missives** (the list, one page per
-missive, « Le coffre ») and **Caravane** (the memo pages, then the roster still to be written). When the
-sheet is linked (see below), an **ex-libris** comes first, before the title page; folios still start at
-the title page.
+missive, « Le coffre »; only missives in progress get a side tab, closed ones are opened from the list)
+and **Caravane** (the roster still to be written, then the memo pages). When the sheet is linked (see
+below), an **ex-libris** is the page before the title page: the book opens on it for a reader not yet
+signed, and turning back from the title spread always reaches it; folios still start at the title page.
 
 ## Missives, the chest and the workshop (v3)
 
@@ -318,9 +319,21 @@ page turns or with « Ranger » / Esc.
 goes, the new ledger row shows in pale fresh ink) and confirmed when the registre answers; if it
 refuses, the change is taken back and a slip of paper says why at the top of the table. Writing a
 missive and closing one wait for the registre (a number and the split come back): a scribe's quill runs
-along a line of ink (« Le scribe consigne… »), then a wax seal is stamped (« Consigné. »). Every write
-is one call to the script, whose answer carries every tab read afresh (no second read); the server
-logs the time of each part and sends it as a `Server-Timing` header (`lire`, `ecrire`, `relire`).
+along a line of ink (« Le scribe consigne… »), then a wax seal is stamped (« Consigné. »).
+
+Each call to the Apps Script costs seconds of Google's own overhead, so calls are rare:
+- every write is **one** call; its answer carries every tab, nothing is read again afterwards;
+- reads are kept in Next's Data Cache, **shared by every server instance** (45 s, then refreshed in the
+  background while the old copy is served), and are never wiped by a write;
+- the script numbers the registre's states (`version`, +1 per write or hand edit); the page sends the
+  newest version it has seen, and only a reader who has seen newer than the shared copy gets a fresh
+  read — one's own writes never vanish, other readers may see them up to about 45 s later;
+- inside the script, `lire` is served from CacheService (all tabs as JSON, 10 minutes), and a write
+  updates that copy in memory instead of reading the sheet again.
+
+The server logs each write's timings and sends them as `Server-Timing` (`lire`, `ecrire`, `script` =
+the script's own execution time, `relire` = always 0, `onglets` = whether the answer carried the tabs);
+`/api/identite` sends `lire`.
 
 ### Who holds the pen: the ex-libris (members' whitelist)
 
@@ -377,8 +390,13 @@ missive is delivered), `partage` (Objet `Septims`, Quantité = the member's amou
 
 ### The script's JSON contract
 
-Every call is `POST { jeton, action, ... }` → `{ ok: true, ... }` or `{ ok: false, erreur }`. Every write
-answers with `onglets` too (all tabs read again, as for `lire`); sealed orders keep their v2 answer.
+Every call is `POST { jeton, action, ... }` → `{ ok: true, ..., ms }` or `{ ok: false, erreur, ms }` (`ms`:
+the script's own execution time). Every write answers with `onglets` and `version` too (as `lire`);
+sealed orders keep their v2 answer. `lire` answers `{ onglets, version, cache }` (`cache: true` when
+served from the script's cache). The version is the script property `VERSION`; a hand edit of the
+sheet (`onEdit`) moves it on and drops the cache; after importing a CSV (which may not count as an
+edit) run `viderCache` from the editor, or wait 10 minutes. Closing an already closed missive is
+refused by the script itself (`already closed`), under the lock.
 
 | `action` | Body | Effect |
 |---|---|---|
@@ -406,6 +424,8 @@ that server's copy.
 3. *Deploy → Manage deployments →* the existing web app → ✏️ edit → *Version: **New version*** → Deploy.
    The `/exec` URL stays the same, so nothing changes on Vercel. (A *New deployment* would make a new URL.)
 4. Optional: run `essai` once from the editor (creates the missing tabs' headers and logs the row counts).
+5. The first time, Apps Script asks again for permissions (the script now uses its cache, CacheService):
+   accept them.
 
 ### Testing locally
 

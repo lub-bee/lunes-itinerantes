@@ -15,8 +15,9 @@
  *                   total, totalMini, totalIdeal, statut, sousPlancher }] }
  *    One row per article in the "Commandes" tab.
  *
- *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements } },
- *    each an array of objects keyed by the field names of ONGLETS below (missing tabs → []).
+ *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements }, version, cache },
+ *    each tab an array of objects keyed by the field names of ONGLETS below (missing tabs → []);
+ *    served from the script's cache when it holds them (`cache: true`).
  *
  *  - Writes (one writer at a time, LockService):
  *      'missive'     { missive: { numero, horodatage, titre, commanditaire, echeance, membre,
@@ -35,8 +36,10 @@
  *                                                                              (no ingredient = recipe removed)
  *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }
  *                                                                            → the Ressources row updated, or added
- *    Answer: { ok: true, ..., onglets } (every tab read again after the write, as for 'lire', so the
- *    grimoire needs no second call) or { ok: false, erreur }.
+ *    Answer: { ok: true, ..., onglets, version } (every tab read again after the write, as for 'lire',
+ *    so the grimoire needs no second call) or { ok: false, erreur }.
+ *
+ *  Every answer carries `ms`, the script's own execution time (Google's fixed overhead not included).
  */
 
 /** Name of the tab receiving the orders (created when missing). */
@@ -106,7 +109,11 @@ var ONGLETS = {
 /** Movement type written for each movement action. */
 var TYPES_MOUVEMENT = { releve: 'relevé', depot: 'dépôt', fabrication: 'fabrication', livraison: 'livraison' };
 
+/** Start of the current call (each answer carries its own execution time, `ms`). */
+var DEBUT = 0;
+
 function doPost(e) {
+  DEBUT = Date.now();
   var corps;
   try {
     corps = JSON.parse(e.postData.contents);
@@ -120,7 +127,13 @@ function doPost(e) {
   var action = corps.action || (corps.commande ? 'commande' : '');
   if (action === 'lire') {
     try {
-      return repondre({ ok: true, onglets: toutLire() });
+      // Served from the script's cache when it holds the tabs (kept up to date by every write).
+      var enCache = lireCache();
+      if (enCache) return repondre({ ok: true, onglets: enCache.onglets, version: enCache.version, cache: true });
+      var onglets = toutLire();
+      var version = versionCourante();
+      mettreEnCache(onglets, version);
+      return repondre({ ok: true, onglets: onglets, version: version, cache: false });
     } catch (err) {
       return repondre({ ok: false, erreur: String(err) });
     }
@@ -231,19 +244,98 @@ function avecVerrou(f, avecOnglets) {
   var res;
   try {
     res = f();
+    // Inside the lock: a new version, the tabs read afresh and cached, so the answer and the cache
+    // always hold the latest state (two writes cannot cache each other's older tabs).
+    if (avecOnglets && res.ok) {
+      res.version = nouvelleVersion();
+      var enCache = res.maj ? lireCache() : null;
+      if (enCache) {
+        // The cache went through JSON: dates are strings there; so do the new rows.
+        res.maj(enCache.onglets);
+        res.onglets = JSON.parse(JSON.stringify(enCache.onglets));
+        res.cache = true;
+      } else {
+        res.onglets = toutLire();
+        res.cache = false;
+      }
+      delete res.maj;
+      mettreEnCache(res.onglets, res.version);
+    }
   } catch (err) {
+    viderCache();
     return repondre({ ok: false, erreur: String(err) });
   } finally {
     verrou.releaseLock();
   }
-  if (avecOnglets && res.ok) {
-    try {
-      res.onglets = toutLire();
-    } catch (err) {
-      // The write is done; the grimoire will read the tabs itself.
-    }
-  }
   return repondre(res);
+}
+
+/* ───────────────────────── Version and cache ───────────────────────── */
+
+/**
+ * The registre's version (script property VERSION): +1 on every write and every hand edit of the
+ * sheet. The grimoire compares it with what a reader has already seen to know when its own cache is
+ * too old.
+ */
+function versionCourante() {
+  return Number(PropertiesService.getScriptProperties().getProperty('VERSION') || 0);
+}
+function nouvelleVersion() {
+  var v = versionCourante() + 1;
+  PropertiesService.getScriptProperties().setProperty('VERSION', String(v));
+  return v;
+}
+
+/**
+ * Every tab, as JSON, kept in the script's cache (CacheService) so a read does not open the sheet.
+ * Values are limited to 100 KB, so the JSON is cut in pieces. Kept 10 minutes at most; any write
+ * replaces it, a hand edit (onEdit) drops it. After importing a CSV (which may not count as an edit),
+ * run `viderCache` from the editor, or wait 10 minutes.
+ */
+var CACHE = 'registre';
+var CACHE_DUREE = 600;
+var CACHE_PART = 90000;
+
+function mettreEnCache(onglets, version) {
+  try {
+    var json = JSON.stringify({ onglets: onglets, version: version });
+    var parts = {};
+    var n = Math.ceil(json.length / CACHE_PART);
+    for (var i = 0; i < n; i++) parts[CACHE + '_' + i] = json.slice(i * CACHE_PART, (i + 1) * CACHE_PART);
+    parts[CACHE + '_n'] = String(n);
+    CacheService.getScriptCache().putAll(parts, CACHE_DUREE);
+  } catch (err) {
+    viderCache();
+  }
+}
+
+function lireCache() {
+  var cache = CacheService.getScriptCache();
+  var n = Number(cache.get(CACHE + '_n') || 0);
+  if (!n) return null;
+  var cles = [];
+  for (var i = 0; i < n; i++) cles.push(CACHE + '_' + i);
+  var parts = cache.getAll(cles);
+  var json = '';
+  for (var k = 0; k < n; k++) {
+    if (parts[cles[k]] === undefined || parts[cles[k]] === null) return null;
+    json += parts[cles[k]];
+  }
+  try {
+    return JSON.parse(json);
+  } catch (err) {
+    return null;
+  }
+}
+
+function viderCache() {
+  CacheService.getScriptCache().remove(CACHE + '_n');
+}
+
+/** Simple trigger: a hand edit of the sheet drops the cached tabs and moves the version on. */
+function onEdit() {
+  viderCache();
+  nouvelleVersion();
 }
 
 /**
@@ -313,30 +405,50 @@ function correspond(p, ligne, champ, valeurs) {
   return valeurs.some(function (x) { return x && cleEntete(x) === v; });
 }
 
+/** An object holding every field of a tab ('' for the missing ones), as `lireOnglet` returns rows. */
+function complet(def, o) {
+  var res = {};
+  def.colonnes.forEach(function (col) { res[col[1]] = o[col[1]] === undefined || o[col[1]] === null ? '' : o[col[1]]; });
+  return res;
+}
+
+/*
+ * Each write returns `maj(onglets)`: the same change applied to the cached tabs, so the answer is
+ * built without reading the sheet again (when the cache is empty, the tabs are read instead).
+ */
+
 function mouvements(corps, action) {
   var ms = corps.mouvements || [];
   if (!ms.length) return { ok: false, erreur: 'no movement' };
   var type = TYPES_MOUVEMENT[action];
-  var n = ajouter(ONGLETS.mouvements, ms.map(function (m) {
+  var rangs = ms.map(function (m) {
     return {
       horodatage: new Date(m.horodatage), action: m.action || '', missive: m.missive || '', membre: m.membre,
       type: type, objet: m.objet, quantite: m.quantite, note: m.note || '',
     };
-  }));
-  return { ok: true, lignes: n };
+  });
+  var n = ajouter(ONGLETS.mouvements, rangs);
+  return {
+    ok: true, lignes: n,
+    maj: function (o) { rangs.forEach(function (x) { o.mouvements.push(complet(ONGLETS.mouvements, x)); }); },
+  };
 }
 
 var ECRITURES = {
   missive: function (corps) {
     var m = corps.missive;
     if (!m || !m.numero || !m.lignes || !m.lignes.length) return { ok: false, erreur: 'empty missive' };
-    var n = ajouter(ONGLETS.missives, m.lignes.map(function (l) {
+    var rangs = m.lignes.map(function (l) {
       return {
         numero: m.numero, horodatage: new Date(m.horodatage), titre: m.titre, commanditaire: m.commanditaire || '',
         echeance: m.echeance || '', statut: 'en cours', produit: l.produit, quantite: l.quantite, ecritePar: m.membre,
       };
-    }));
-    return { ok: true, numero: m.numero, lignes: n };
+    });
+    var n = ajouter(ONGLETS.missives, rangs);
+    return {
+      ok: true, numero: m.numero, lignes: n,
+      maj: function (o) { rangs.forEach(function (x) { o.missives.push(complet(ONGLETS.missives, x)); }); },
+    };
   },
 
   releve: mouvements,
@@ -352,12 +464,17 @@ var ECRITURES = {
     var lignes = donnees(p);
     var quand = new Date(c.horodatage);
     var touchees = 0;
+    var deja = lignes.some(function (l) {
+      return correspond(p, l, 'numero', [c.numero]) && cleEntete(l[p.cols.statut - 1]) !== cleEntete('en cours') && String(l[p.cols.statut - 1]).trim() !== '';
+    });
+    if (deja) return { ok: false, erreur: 'already closed ' + c.numero };
+    var fermeture = {
+      statut: c.statut || 'livrée', recompense: c.recompense, partCommune: c.partCommune,
+      closeLe: quand, closePar: c.membre, noteCloture: c.note || '',
+    };
     lignes.forEach(function (l, i) {
       if (!correspond(p, l, 'numero', [c.numero])) return;
-      lignes[i] = enLigne(p, {
-        statut: c.statut || 'livrée', recompense: c.recompense, partCommune: c.partCommune,
-        closeLe: quand, closePar: c.membre, noteCloture: c.note || '',
-      }, l);
+      lignes[i] = enLigne(p, fermeture, l);
       touchees++;
     });
     if (!touchees) return { ok: false, erreur: 'unknown missive ' + c.numero };
@@ -368,8 +485,18 @@ var ECRITURES = {
     var partage = (c.partage || []).map(function (x) {
       return { horodatage: quand, action: c.action || '', missive: c.numero, membre: x.membre, type: 'partage', objet: 'Septims', quantite: x.montant, note: x.note || '' };
     });
-    ajouter(ONGLETS.mouvements, livraisons.concat(partage));
-    return { ok: true, numero: c.numero };
+    var rangs = livraisons.concat(partage);
+    ajouter(ONGLETS.mouvements, rangs);
+    return {
+      ok: true, numero: c.numero,
+      maj: function (o) {
+        o.missives.forEach(function (x) {
+          if (cleEntete(x.numero) !== cleEntete(c.numero)) return;
+          Object.keys(fermeture).forEach(function (k) { x[k] = fermeture[k]; });
+        });
+        rangs.forEach(function (x) { o.mouvements.push(complet(ONGLETS.mouvements, x)); });
+      },
+    };
   },
 
   /** Replaces a product's recipe rows (the tab rewritten in one call; no ingredient = recipe removed). */
@@ -379,13 +506,21 @@ var ECRITURES = {
     var p = preparer(ONGLETS.recettes);
     var lignes = donnees(p);
     var gardees = lignes.filter(function (l) { return !correspond(p, l, 'produit', [r.produit, r.ancienProduit]); });
-    var nouvelles = (r.ingredients || []).map(function (ing) {
-      return enLigne(p, { produit: r.produit, ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' });
+    var objets = (r.ingredients || []).map(function (ing) {
+      return { produit: r.produit, ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' };
     });
+    var nouvelles = objets.map(function (x) { return enLigne(p, x); });
     var toutes = gardees.concat(nouvelles);
     if (lignes.length) p.feuille.getRange(2, 1, lignes.length, p.largeur).clearContent();
     if (toutes.length) p.feuille.getRange(2, 1, toutes.length, p.largeur).setValues(toutes);
-    return { ok: true, produit: r.produit, lignes: nouvelles.length };
+    var anciens = [r.produit, r.ancienProduit].filter(function (x) { return x; }).map(cleEntete);
+    return {
+      ok: true, produit: r.produit, lignes: nouvelles.length,
+      maj: function (o) {
+        o.recettes = o.recettes.filter(function (x) { return anciens.indexOf(cleEntete(x.produit)) < 0; });
+        objets.forEach(function (x) { o.recettes.push(complet(ONGLETS.recettes, x)); });
+      },
+    };
   },
 
   /** Updates a resource's row, or adds it (one call either way). */
@@ -395,18 +530,31 @@ var ECRITURES = {
     var p = preparer(ONGLETS.ressources);
     var nombre = function (v) { return v === null || v === undefined ? '' : v; };
     var valeurs = { nom: r.nom, en: r.en || '', origine: r.origine || '', prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: r.note || '' };
+    var cible = cleEntete(r.ancienNom || r.nom);
+    var maj = function (o) {
+      var trouvee = false;
+      o.ressources.forEach(function (x, i) {
+        if (trouvee || cleEntete(x.nom) !== cible) return;
+        var y = complet(ONGLETS.ressources, x);
+        Object.keys(valeurs).forEach(function (k) { y[k] = valeurs[k]; });
+        o.ressources[i] = y;
+        trouvee = true;
+      });
+      if (!trouvee) o.ressources.push(complet(ONGLETS.ressources, valeurs));
+    };
     var lignes = donnees(p);
     for (var i = 0; i < lignes.length; i++) {
       if (!correspond(p, lignes[i], 'nom', [r.ancienNom || r.nom])) continue;
       p.feuille.getRange(i + 2, 1, 1, p.largeur).setValues([enLigne(p, valeurs, lignes[i])]);
-      return { ok: true, nom: r.nom, ajoutee: false };
+      return { ok: true, nom: r.nom, ajoutee: false, maj: maj };
     }
     ajouter(ONGLETS.ressources, [valeurs], p);
-    return { ok: true, nom: r.nom, ajoutee: true };
+    return { ok: true, nom: r.nom, ajoutee: true, maj: maj };
   },
 };
 
 function repondre(objet) {
+  if (DEBUT) objet.ms = Date.now() - DEBUT;
   return ContentService.createTextOutput(JSON.stringify(objet)).setMimeType(ContentService.MimeType.JSON);
 }
 

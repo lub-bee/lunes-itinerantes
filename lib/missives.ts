@@ -74,6 +74,8 @@ export type DonneesRegistre = {
   missives: Missive[]
   mouvements: Mouvement[]
   nbMembres: number
+  /** The registre's state number (see lib/registre.ts); 0 with an older script. */
+  version: number
 }
 
 /** Actions a member can take; each one goes through the permission hook (lib/droits.ts). */

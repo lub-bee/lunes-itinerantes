@@ -31,7 +31,7 @@ type Lu = Awaited<ReturnType<typeof lireRegistre>>
 
 const refus = (message: string, status = 400) => NextResponse.json({ ok: false, message }, { status })
 
-const VIDE: DonneesRegistre = { relie: false, recettes: [], ressources: [], missives: [], mouvements: [], nbMembres: 0 }
+const VIDE: DonneesRegistre = { relie: false, recettes: [], ressources: [], missives: [], mouvements: [], nbMembres: 0, version: 0 }
 
 /** The page's view: shares paid to members who brought nothing are summed up, not named. */
 function vue(lu: Lu): DonneesRegistre {
@@ -49,13 +49,15 @@ function vue(lu: Lu): DonneesRegistre {
     missives: lu.missives,
     mouvements: lu.mouvements.filter((m) => m.type !== 'partage' || contributeurs.get(m.missive)?.has(cle(m.membre))),
     nbMembres: lu.membres.length,
+    version: lu.version,
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: true, donnees: VIDE })
   try {
-    return NextResponse.json({ ok: true, donnees: vue(await lireRegistre()) })
+    // `v`: the newest version this reader has seen (its own writes must not vanish).
+    return NextResponse.json({ ok: true, donnees: vue(await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)) })
   } catch (e) {
     console.error('[registre] read failed', e)
     return refus("Le registre des missives reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
@@ -304,7 +306,7 @@ export async function POST(req: NextRequest) {
   const t0 = performance.now()
   let lu: Lu
   try {
-    lu = await lireRegistre()
+    lu = await lireRegistre(Number(b.vu) || 0)
   } catch (e) {
     console.error('[registre] read failed', e)
     return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
@@ -322,23 +324,26 @@ export async function POST(req: NextRequest) {
     throw err
   }
   const t1 = performance.now()
+  let ecrit: Awaited<ReturnType<typeof ecrireRegistre>>
   try {
-    await ecrireRegistre(e.action, e.charge)
+    ecrit = await ecrireRegistre(e.action, e.charge)
   } catch (err) {
     console.error(`[registre] ${action} refused by the script`, err)
-    return refus("Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard.", 502)
+    return refus(
+      String(err).includes('already closed') ? 'Cette missive est déjà close : son registre ne bouge plus.' : "Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard.",
+      502,
+    )
   }
   const tEcrire = performance.now() - t1
-  const t2 = performance.now()
-  let donnees: DonneesRegistre | null = null
-  try {
-    donnees = vue(await lireRegistre())
-  } catch {
-    donnees = null
-  }
-  const tRelire = performance.now() - t2
-  console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms, re-read ${tRelire.toFixed(0)} ms`)
+  // Never read again after a write: the script's answer carries every tab (an older script does not;
+  // the page then keeps what it shows and reads later).
+  const donnees = ecrit.lu ? vue(ecrit.lu) : null
+  const script = ecrit.ms ?? null
+  console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms (script ${script ?? '?'} ms), tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
   const rep = NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })
-  rep.headers.set('Server-Timing', `lire;dur=${tLire.toFixed(0)}, ecrire;dur=${tEcrire.toFixed(0)}, relire;dur=${tRelire.toFixed(0)}`)
+  rep.headers.set(
+    'Server-Timing',
+    `lire;dur=${tLire.toFixed(0)}, ecrire;dur=${tEcrire.toFixed(0)}, script;dur=${script ?? 0}, relire;dur=0, onglets;desc=${ecrit.lu ? 'oui' : 'non'}`,
+  )
   return rep
 }

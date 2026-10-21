@@ -1,8 +1,14 @@
-// The caravan's sheet, seen from the server: reads go through the Apps Script (action 'lire'),
-// cached briefly and shared by every request; every write clears the cache. COMMANDES_SCRIPT_URL
-// and COMMANDES_JETON never leave the server, nor does the members' list.
+// The caravan's sheet, seen from the server: reads go through the Apps Script (action 'lire').
+//
+// Each call to the script costs Google's fixed overhead (seconds), so calls are rare:
+// - reads are kept in Next's Data Cache, shared by every server instance (stale after 45 s, then
+//   refreshed in the background while the old copy is served);
+// - the script numbers the registre's states (`version`, +1 per write); a reader who has already
+//   seen a newer version than the shared copy gets a fresh read, so one's own writes never vanish;
+// - a write answers with every tab: the writing instance keeps that copy, nothing is read again.
+// COMMANDES_SCRIPT_URL and COMMANDES_JETON never leave the server, nor does the members' list.
 
-import { revalidateTag, unstable_cache } from 'next/cache'
+import { unstable_cache } from 'next/cache'
 import { lireOnglets, type Onglets } from './missives'
 
 export const ETIQUETTE_REGISTRE = 'registre'
@@ -37,35 +43,50 @@ export async function appelerScript<T = Record<string, unknown>>(corps: Record<s
   return r as T & { ok: true }
 }
 
-const lireBrut = unstable_cache(
-  async () => (await appelerScript<{ onglets: Onglets }>({ action: 'lire' })).onglets,
-  ['registre-onglets-v1'],
-  { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] },
-)
+type Lecture = { onglets: Onglets; version: number }
+type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: boolean }
 
-/**
- * Tabs as the last write on this server instance returned them (a write answers with every tab read
- * afresh): used until they are as old as the cache, so a write needs no second call to the script.
- */
-let frais: { onglets: Onglets; le: number } | null = null
+/** The last script call's own execution time, for Server-Timing. */
+export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: null, cache: null }
 
-/** Every tab of the registre, typed (members included: server use only). */
-export async function lireRegistre() {
-  if (frais && Date.now() - frais.le < FRAICHEUR * 1000) return lireOnglets(frais.onglets)
-  return lireOnglets(await lireBrut())
+async function lireScript(): Promise<Lecture> {
+  const r = await appelerScript<ReponseLire>({ action: 'lire' })
+  dernierScript = { ms: r.ms ?? null, cache: r.cache ?? null }
+  return { onglets: r.onglets, version: r.version ?? 0 }
 }
 
-/** A write action of the script; its answer carries the tabs as they now are. */
-export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
-  try {
-    const r = await appelerScript<{ onglets?: Onglets }>({ action, ...charge })
-    frais = r.onglets ? { onglets: r.onglets, le: Date.now() } : null
-    return r
-  } catch (e) {
-    frais = null
-    throw e
-  } finally {
-    // Other server instances read the sheet again.
-    revalidateTag(ETIQUETTE_REGISTRE)
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+
+/** This instance's newest copy (from its own writes or fresh reads). */
+let frais: (Lecture & { le: number }) | null = null
+
+function garder(l: Lecture) {
+  if (!frais || l.version >= frais.version) frais = { ...l, le: Date.now() }
+}
+
+/**
+ * Every tab of the registre, typed (members included: server use only), at least as new as
+ * `versionVue` (the newest version the reader has seen).
+ */
+export async function lireRegistre(versionVue = 0) {
+  let l: Lecture | null = frais && Date.now() - frais.le < FRAICHEUR * 1000 && frais.version >= versionVue ? frais : null
+  if (!l) {
+    const partage = await lirePartage()
+    l = frais && frais.version > partage.version && frais.version >= versionVue ? frais : partage
+    if (l.version < versionVue) {
+      l = await lireScript()
+      garder(l)
+    }
   }
+  return { ...lireOnglets(l.onglets), version: l.version }
+}
+
+/** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
+export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
+  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number }>({ action, ...charge })
+  dernierScript = { ms: r.ms ?? null, cache: null }
+  if (!r.onglets) return { ...r, lu: null }
+  const l = { onglets: r.onglets, version: r.version ?? 0 }
+  garder(l)
+  return { ...r, lu: { ...lireOnglets(l.onglets), version: l.version } }
 }

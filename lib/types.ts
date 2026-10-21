@@ -27,7 +27,8 @@ export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string
 
 /** Missives book: the list (static), one page per missive (added by the page once the registre is read), the chest, the workshop. */
 export type PageMissives = Base & { type: 'missives'; intro: string; citation: string }
-export type PageMissive = Base & { type: 'missive'; numero: string }
+/** `close`: delivered or given up — still a page, but no side tab. */
+export type PageMissive = Base & { type: 'missive'; numero: string; close: boolean }
 export type PageCoffre = Base & { type: 'coffre'; intro: string }
 /** The workshop: `vue` « recettes » (every recipe) or « matieres » (the raw materials' buying ledger). */
 export type PageAtelier = Base & { type: 'atelier'; vue: 'recettes' | 'matieres'; intro: string }

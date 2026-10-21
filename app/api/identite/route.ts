@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
   const tape = String(nom ?? '').trim().slice(0, 80)
   if (!tape) return refus('Inscris ton nom, ami : la plume attend.', 400)
   let membres
+  const t0 = performance.now()
   try {
     membres = (await lireRegistre()).membres
   } catch (e) {
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   }
   const rep = NextResponse.json({ ok: true, nom: m.nom, droits: droitsDe(rolesDe(m, s.genre === 'discord' && s.membre.patriarche)) })
   await poserNom(rep, m.nom)
+  rep.headers.set('Server-Timing', `lire;dur=${(performance.now() - t0).toFixed(0)}`)
   return rep
 }
 

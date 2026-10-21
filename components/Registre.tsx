@@ -42,6 +42,12 @@ export function useRegistre(articles: Article[]) {
   const [erreur, setErreur] = useState<string | null>(null)
   const [avis, setAvis] = useState<{ texte: string; n: number } | null>(null)
   const compteur = useRef(0)
+  /** Newest registre version seen: the server never answers with an older one (own writes stay). */
+  const version = useRef(0)
+  const recevoir = useCallback((d: DonneesRegistre) => {
+    version.current = Math.max(version.current, d.version ?? 0)
+    setBase(d)
+  }, [])
 
   const lireMarchand = useCallback(
     () =>
@@ -53,14 +59,14 @@ export function useRegistre(articles: Article[]) {
   )
   const lireDonnees = useCallback(() => {
     setErreur(null)
-    return fetch('/api/registre')
+    return fetch(`/api/registre?v=${version.current}`)
       .then(async (r) => {
         const j = (await r.json().catch(() => null)) as { ok?: boolean; donnees?: DonneesRegistre; message?: string } | null
-        if (r.ok && j?.donnees) setBase(j.donnees)
+        if (r.ok && j?.donnees) recevoir(j.donnees)
         else setErreur(j?.message ?? FERME)
       })
       .catch(() => setErreur(FERME))
-  }, [])
+  }, [recevoir])
 
   useEffect(() => {
     lireMarchand()
@@ -101,9 +107,9 @@ export function useRegistre(articles: Article[]) {
       if (prevoir) setPrevisions((ps) => [...ps, { id, prevoir }])
       let res: Reponse
       try {
-        const rep = await fetch('/api/registre', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...corps }) })
+        const rep = await fetch('/api/registre', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, vu: version.current, ...corps }) })
         const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string; donnees?: DonneesRegistre | null } | null
-        if (r?.donnees) setBase(r.donnees)
+        if (r?.donnees) recevoir(r.donnees)
         if (rep.status === 401) setMarchand((m) => (m ? { ...m, identite: null } : m))
         res = { ok: Boolean(rep.ok && r?.ok), message: r?.message ?? ECHEC, numero: r?.numero }
       } catch {
@@ -115,7 +121,7 @@ export function useRegistre(articles: Article[]) {
       }
       return res
     },
-    [],
+    [recevoir],
   )
 
   const donnees = useMemo(() => {
