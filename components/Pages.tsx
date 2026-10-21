@@ -31,6 +31,13 @@ export type Ctx = {
 const avantSommaire = (ctx: Ctx) => Math.max(0, ctx.livre.pages.findIndex((p) => p.type === 'sommaire'))
 const folio = (ctx: Ctx) => ctx.index - avantSommaire(ctx)
 
+/** English name of an item: the catalogue's, else the raw material's. */
+function nomAnglais(ctx: Ctx, nom: string): string {
+  const k = cle(nom)
+  for (const p of ctx.livre.pages) if (p.type === 'chapitre') for (const a of p.articles) if (cle(a.fr) === k) return a.en
+  return ctx.registre?.r.donnees?.ressources.find((r) => cle(r.nom) === k)?.en ?? ''
+}
+
 const EFFACEMENT_MS = 320
 
 /** Highlights every token of the query in red ink. */
@@ -278,7 +285,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'coffre':
         return <DroiteCoffre reg={ctx.registre} />
       case 'atelier':
-        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} />
+        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} anglais={(nom) => nomAnglais(ctx, nom)} />
       case 'avenir':
         return (
           <div className="attente">

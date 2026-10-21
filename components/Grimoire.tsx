@@ -86,6 +86,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       id: idMissive(e.missive.numero),
       partie: 'missives',
       numero: e.missive.numero,
+      close: estClose(e.missive),
       titre: e.missive.titre,
       court: e.missive.titre.length > COURT_MAX ? `${e.missive.titre.slice(0, COURT_MAX - 1).trimEnd()}…` : e.missive.titre,
       icone: estClose(e.missive) ? 'wax-seal' : 'tied-scroll',
@@ -459,7 +460,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const destination = tourne?.vers ?? index
   const partieActive: PartieId = pages[destination].partie
   const partieOnglets: PartieId = partieActive === 'sommaire' ? 'marchandises' : partieActive
-  const onglets = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === partieOnglets)
+  // Closed missives keep their page (reached from the list) but get no side tab.
+  const onglets = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === partieOnglets && !(p.type === 'missive' && p.close))
   const avant = tourne ? tourne.vers > tourne.de : true
 
   const voletsDoubles = () => {

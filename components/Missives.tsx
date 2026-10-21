@@ -598,7 +598,7 @@ export function GaucheAtelier({ page, reg, icones, compact }: { page: PageAtelie
   )
 }
 
-export function DroiteAtelier({ page, reg, interactif }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean }) {
+export function DroiteAtelier({ page, reg, interactif, anglais }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean; anglais: (nom: string) => string }) {
   const r = reg?.r
   if (!r?.donnees?.relie || !reg) return null
   const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
@@ -615,7 +615,10 @@ export function DroiteAtelier({ page, reg, interactif }: { page: PageAtelier; re
           {recettes.map((x) => (
             <li key={x.produit}>
               <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
-                <span className="entree">{x.produit}</span>
+                <span className="noms">
+                  <span className="entree">{x.produit}</span>
+                  {anglais(x.produit) && <span className="nom-en">{anglais(x.produit)}</span>}
+                </span>
                 <span className="points" />
                 <span className="renvoi">
                   {x.ingredients.map((i) => i.nom).join(', ')}
@@ -652,7 +655,19 @@ export function DroiteAtelier({ page, reg, interactif }: { page: PageAtelier; re
         </div>
         <div className="registre-corps">
           {ressources.map((x) => (
-            <button key={x.nom} type="button" tabIndex={tab} className="ligne matiere" onClick={() => reg.ouvrir({ genre: 'ressource', nom: x.nom })}>
+            <div
+              key={x.nom}
+              role="button"
+              tabIndex={tab}
+              className="ligne matiere"
+              title={x.origine ? `Origine : ${x.origine}` : undefined}
+              onClick={() => reg.ouvrir({ genre: 'ressource', nom: x.nom })}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return
+                e.preventDefault()
+                reg.ouvrir({ genre: 'ressource', nom: x.nom })
+              }}
+            >
               <span className="noms">
                 <span className="nom-fr">{x.nom}</span>
                 {x.en && <span className="nom-en">{x.en}</span>}
@@ -661,7 +676,7 @@ export function DroiteAtelier({ page, reg, interactif }: { page: PageAtelier; re
               <span className="points-conduite" aria-hidden />
               <span className="prix">{prix(x.prix)}</span>
               <span className="prix prix-affaire">{prix(x.bonneAffaire)}</span>
-            </button>
+            </div>
           ))}
         </div>
       </div>

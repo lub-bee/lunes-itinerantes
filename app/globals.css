@@ -2689,9 +2689,13 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .registre.matieres { min-height: 0; }
 .matieres-entete, .ligne.matiere { grid-template-columns: minmax(0, max-content) minmax(18px, 1fr) 76px 76px; }
 .matieres-entete .col-article { grid-column: 1 / 3; }
-.ligne.matiere { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ligne.matiere { cursor: pointer; }
+/* As in the price ledger: the French name, the English one on a single line below. */
+.ligne.matiere .nom-fr, .ligne.matiere .nom-en, .liste-recettes .nom-en { white-space: nowrap; }
+.liste-recettes .noms { display: flex; flex-direction: column; flex: none; }
+.liste-recettes .nom-en { font-size: 14px; line-height: 1.15; }
 .ligne.matiere:focus-visible { outline: none; background: rgba(201, 162, 78, 0.18); }
-.matiere-origine { font-size: 13px; font-style: italic; color: var(--encre-pale); }
+.matiere-origine { font-size: 13px; font-family: var(--f-capitales); letter-spacing: 0.04em; color: var(--encre-pale); }
 .prix-affaire { color: #2f5b3a; }
 .fiche-cout { margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid rgba(47, 91, 58, 0.25); color: var(--encre-douce); }
 .fiche-cout p { margin: 2px 0; }
