@@ -129,6 +129,8 @@ recompressed. Swap the file to change the table; its tint is set in `app/globals
 
 ### Memo pages ("pense-bêtes") — `content/pense-betes/*.md`
 
+They appear in the **Caravane** book (ribbon « Caravane »), one page and one side tab each.
+
 Drop a Markdown file to add a page. Files are ordered by name (prefix with `03-`, `04-`…).
 
 ```markdown
@@ -270,107 +272,135 @@ top of `commandes.gs` (header + value per column); the payload also carries `art
 8. After any change to the script: *Deploy → Manage deployments → edit → Version: New version*
    (the URL stays the same).
 
+## The book's parts (v3)
+
+Ribbons, in order: a bare **Sommaire** ribbon (its shape only, no word), **Marchandises** (price
+chapters), **Atelier** (« Recettes », « Matières premières »), **Missives** (the list, one page per
+missive, « Le coffre ») and **Caravane** (the memo pages, then the roster still to be written). When the
+sheet is linked (see below), an **ex-libris** comes first, before the title page; folios still start at
+the title page.
+
 ## Missives, the chest and the workshop (v3)
 
-The « Missives » ribbon opens the caravan's book of missives. Everything lives in the same Google
-Sheet as the orders, read and written through the same Apps Script (`scripts/apps-script/commandes.gs`,
-same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the pages say the registre is not linked
-yet, and the price ledger behaves exactly as in v2.
+Everything lives in the same Google Sheet as the orders, read and written through the same Apps Script
+(`scripts/apps-script/commandes.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
+pages say the registre is not linked yet, there is no ex-libris, and the price ledger behaves exactly as
+in v2. When the sheet cannot be read, the pages say so in character, with « renvoyer le coursier ».
 
-- **Missives** (list page): missives in progress (progress in ink) and closed ones, « Écrire une missive ».
-- **One page per missive**: requested lines (delivered / in the chest), overall progress, the actions;
-  on the right, what must be gathered — finished goods, intermediates, raw resources — needed / in the
-  Missive chest / missing, the contributors with their share, and the missive's ledger.
-- **Le coffre**: the chest's stock according to the ledger, « Relever le coffre », and every inventory
-  check against what the ledger expected (who, when, gap) for investigations.
-- **L'atelier**: recipes (« Consigner une recette ») and raw resources with their value.
-- **Price ledger**: outside order mode, clicking a row opens the article's recipe on a slip laid on the
-  left page (foldable tree, quantity to make, whole crafts); a small cauldron after the name marks
-  articles with a recipe and opens it in order mode too (clicking the row still writes it on the order).
+- **Missives** (list page): missives in progress (overall progress in ink) and closed ones (livrée /
+  inachevée), « Écrire une missive ».
+- **One page per missive**. Left: title, client, deadline, author, the requested goods, the signature,
+  the actions. Right: « Ce qu'il faut réunir » — finished goods, intermediates, raw resources; needed /
+  in the Missive chest / missing, each row with its progress in ink and, for an item with a recipe,
+  « à façonner : N » (units to make for what is missing, whole crafts; the tooltip gives the crafts).
+  Touching a missing row opens the deposit slip filled with that item and the missing quantity; the
+  small anvil on a row with a recipe opens the craft slip for it. Then the contributors (« a apporté
+  X septims de valeur », « Y % du mérite », what each received once closed) and the ledger. A closed
+  missive stays readable as it stood when it was closed.
+- **Le coffre**: the stock according to the ledger, « Relever le coffre », and every count: *Compté*
+  (found in the chest), *Attendu* (what the ledger expected), *Écart* (compté − attendu), with who and when.
+- **Atelier → Recettes**: every recipe and the cost of one craft's raw materials; a recipe opens on a
+  slip (foldable tree down to raw materials, « Pour N », material cost). « Consigner une recette ».
+- **Atelier → Matières premières**: a small buying ledger (the caravan harvests, loots, crafts or buys
+  them, never sells): *Prix courant* (the usual buying price, also the value used for merit), *Bonne
+  affaire* (buy without hesitation at or below it), the origin as a small note. « Inscrire une matière ».
+- **Price ledger**: outside order mode, clicking a row opens the article's recipe; a small cauldron
+  after the name marks articles with a recipe and opens it in order mode too (the row still writes the
+  article on the order).
 
-Actions (« Relever le coffre », « Déposer au coffre », « Façonner », « Livrer », « Clore la missive »,
-recipe and resource forms) open a pinned slip; it goes when the page turns or with « Ranger » / Esc.
+Actions: « Relever le coffre », « Déposer au coffre », « Façonner », « Livrer la missive » (success: the
+requested goods still owed leave the chest, the reward is entered and split, the missive is closed
+*livrée*), « Abandonner la missive » (closed *inachevée*, reason and reward optional — a reward, if any,
+is split the same way), and the recipe and material forms. Each opens a pinned slip; it goes when the
+page turns or with « Ranger » / Esc.
 
-### Who holds the pen (members' whitelist)
+**Speed.** A deposit, a craft, a count, a recipe or a material is written on the page at once (the slip
+goes, the new ledger row shows in pale fresh ink) and confirmed when the registre answers; if it
+refuses, the change is taken back and a slip of paper says why at the top of the table. Writing a
+missive and closing one wait for the registre (a number and the split come back): a scribe's quill runs
+along a line of ink (« Le scribe consigne… »), then a wax seal is stamped (« Consigné. »). Every write
+is one call to the script, whose answer carries every tab read afresh (no second read); the server
+logs the time of each part and sends it as a `Server-Timing` header (`lire`, `ecrire`, `relire`).
 
-A member types their name once (on the missives page, in any action slip, or in the order sheet's
-*Vendeur* field — Enter or leaving the field). The server matches it against the **Membres** tab
-(case, accents, apostrophes, spaces and œ/æ ignored: `jzahir` = `J'Zahir`), keeps the sheet's spelling
-in a signed cookie (`caravane_nom`, 400 days) and refuses an unknown name in character (nothing is
-recorded). The members' list never reaches the browser (the page only learns how many members there
-are). Every write is made in the cookie's name, re-checked against the list; a Discord seal maps the
-member's server nickname to the list the same way. A recognized name also signs orders
-(`/api/commande`); an unrecognized typed name still works for orders as in v2.
+### Who holds the pen: the ex-libris (members' whitelist)
 
-Permissions: `lib/droits.ts` has one rule per action (`ROLES_REQUIS`), all open for now. To restrict
-an action later, list the roles allowed (e.g. `recette: ['maitreartisan', 'patriarche']`); a member's
-roles come from an optional **Rôle** column of the Membres tab (comma-separated) and from the Discord
-Patriarch role.
+The first page of the book is an ex-libris: « Cet ouvrage du grimoire appartient à … ». A reader whose
+name is not yet recognized opens the book on it and signs: the server matches the name against the
+**Membres** tab (case, accents, apostrophes, spaces and œ/æ ignored: `jzahir` = `J'Zahir`), keeps the
+sheet's spelling in a signed cookie (`caravane_nom`, 400 days), the name is written in ink and the book
+turns to its title page. An unknown name blots and fades with an in-character refusal; nothing is
+recorded. The list never reaches the browser (the page only learns how many members there are). The
+same signature signs orders (*Vendeur*) and every missive action; « ce n'est pas mon nom » (ex-libris,
+missive pages, order sheet) forgets it. Every write re-checks the name against the list. A Discord seal
+whose server nickname is on the list arrives pre-signed. An unrecognized typed seller still works for
+orders as in v2.
+
+Permissions: `lib/droits.ts` has one rule per action (`ROLES_REQUIS`), all open for now. To restrict an
+action, list the roles allowed (e.g. `recette: ['maitreartisan', 'patriarche']`); roles come from an
+optional **Rôle** column of the Membres tab and from the Discord Patriarch role (the server always
+checks; for the page to hide a restricted action, `/api/marchand` must then look the roles up too).
 
 ### The rules
 
-- **Needs**: what is still to deliver, against the Missive chest. Each item takes what the chest holds;
-  the rest is made in whole crafts (rounded up to the recipe's yield) and exploded further down to raw
-  resources — the stock of an intermediate is used before exploding it. Missives running at the same
-  time share the chest, the oldest served first. A recipe loop (A needs B needs A) is shown in
-  character and refused when a recipe is written.
+- **Needs**: what is still owed, against the Missive chest. Each item takes what the chest holds; the
+  rest is made in whole crafts (rounded up to the recipe's yield) and exploded down to raw resources —
+  an intermediate's stock is used before exploding it. Missives running at the same time share the
+  chest, the oldest served first. A recipe loop is shown in character and refused when a recipe is written.
 - **Stock**: the ledger replayed in time order; a *relevé* sets the counted quantity, other movements
   add their signed quantity. Each relevé records the expected quantity and the gap in its note.
 - **Value of an item** (weighs contributions): catalogue *prix de prod*, else its recipe's ingredients ÷
-  yield, else the Ressources *Valeur*, else 0. Values are computed at read time (a corrected value
-  re-weighs past deposits).
+  yield, else the material's *Prix courant*, else 0. Computed at read time.
 - **Contribution**: a deposit earns quantity × value; a craft earns outputs − inputs (never below 0);
-  inventory checks and deliveries earn nothing. Share = member's value ÷ the missive's total.
-- **Closing**: the reward received is split in whole septims: the *part commune* (default 20 %, set
-  per missive at closing and recorded) goes equally to **every** member of the Membres list; the rest
-  goes to participants pro rata to their contribution (largest remainders, so the sum is exact). If
-  nobody contributed, everything goes in equal parts. One `partage` row per member is written.
+  counts and deliveries earn nothing. Share of the merit = member's value ÷ the missive's total.
+- **Closing**: the reward is split in whole septims: the *part commune* (default 20 %, set at closing
+  and recorded) goes equally to **every** member of the Membres list; the rest goes to contributors pro
+  rata (largest remainders, the sum is exact). If nobody contributed, everything goes in equal parts.
 
 ### Sheet tabs and columns
 
-Headers are found by name (case, accents and punctuation ignored), in any order; a missing column is
-added at the end of row 1 on the first write. The mapping of every tab is `ONGLETS` at the top of
-`commandes.gs`.
+Headers are found by name (case, accents and punctuation ignored), in any order; older names are still
+read (below); a missing column is added at the end of row 1 on the first write. The mapping of every tab
+is `ONGLETS` at the top of `commandes.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
 | **Membres** (read only, imported by hand) | one member | `Nom`, optional `Rôle` |
-| **Ressources** | one raw material | `Ressource`, `Nom EN`, `Catégorie`, `Valeur` (septims per unit), `Note` |
+| **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims per unit — older header `Valeur`), `Bonne affaire`, `Note` |
 | **Recettes** | one ingredient of one product | `Produit`, `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan`, `Note` |
-| **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `close`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par` |
+| **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture` |
 | **Mouvements** (created by the script, append-only) | one movement | `Horodatage`, `N° action`, `N° missive`, `Membre`, `Type`, `Objet`, `Quantité`, `Note` |
 
 Movement types: `relevé` (Quantité = the counted quantity; Note = `attendu X, écart ±Y`), `dépôt` (+),
-`fabrication` (− each input, + each output, all rows of one craft share one `N° action`), `livraison`
-(−, goods leave to the client), `partage` (Objet `Septims`, Quantité = the member's amount, Note =
+`fabrication` (− each input, + each output, one `N° action` per craft), `livraison` (−, written when a
+missive is delivered), `partage` (Objet `Septims`, Quantité = the member's amount, Note =
 `part commune X + mérite Y`). Numbers: missives `M-YYMMDD-XXXX`, actions `A-YYMMDD-XXXX` (JST day).
-
-An ingredient may itself be a product with a recipe (e.g. *Potion de régénération* = 2 *Bière* + …,
-*Bière* = 5 *Blé* + 2 *Lavande*).
 
 ### The script's JSON contract
 
-Every call is `POST { jeton, action, ... }` → `{ ok: true, ... }` or `{ ok: false, erreur }`.
+Every call is `POST { jeton, action, ... }` → `{ ok: true, ... }` or `{ ok: false, erreur }`. Every write
+answers with `onglets` too (all tabs read again, as for `lire`); sealed orders keep their v2 answer.
 
 | `action` | Body | Effect |
 |---|---|---|
 | *(none)* or `commande` | `{ commande }` | Sealed order, unchanged since v2 (Commandes tab) |
 | `lire` | — | `{ ok, onglets: { membres, ressources, recettes, missives, mouvements } }`, each an array of objects keyed by the field names of `ONGLETS` |
 | `missive` | `{ missive: { numero, horodatage, titre, commanditaire, echeance, membre, lignes: [{ produit, quantite }] } }` | One Missives row per line, Statut `en cours` |
-| `releve`, `depot`, `fabrication`, `livraison` | `{ mouvements: [{ horodatage, action, missive, membre, objet, quantite, note }] }` | Mouvements rows, Type set from the action |
-| `cloture` | `{ cloture: { numero, action, horodatage, membre, recompense, partCommune, partage: [{ membre, montant, note }] } }` | The missive's rows closed (Statut, Récompense, Part commune, Close le/par); one `partage` row per member |
+| `releve`, `depot`, `fabrication` (`livraison` kept) | `{ mouvements: [{ horodatage, action, missive, membre, objet, quantite, note }] }` | Mouvements rows, Type set from the action |
+| `cloture` | `{ cloture: { numero, action, horodatage, membre, statut, recompense, partCommune, note, livraisons: [{ objet, quantite, note }], partage: [{ membre, montant, note }] } }` | The missive's rows closed (Statut `livrée`/`inachevée`, Récompense, Part commune, Close le/par, Note de clôture); its `livraison` rows; one `partage` row per member |
 | `recette` | `{ recette: { produit, ancienProduit?, rendement, artisan, note, ingredients: [{ ingredient, quantite }] } }` | The product's rows replaced (no ingredient = recipe removed) |
-| `ressource` | `{ ressource: { nom, ancienNom?, en, categorie, valeur, note } }` | The row updated, or added |
+| `ressource` | `{ ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }` | The row updated, or added |
 
-Writes take `LockService`'s script lock. The grimoire's server (`/api/registre`) validates everything,
-signs with the member's name, recomputes the split, then calls the script; reads are cached 45 s and
-dropped after every write (`lib/registre.ts`).
+Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
+grimoire's server (`/api/registre`) validates everything, signs with the member's name, recomputes the
+split, then calls the script; reads are cached 45 s (`lib/registre.ts`), and a write's answer refreshes
+that server's copy.
 
 ### Setting it up (on top of *Setting up the orders sheet*)
 
 1. In the sheet, create the **Membres**, **Ressources** and **Recettes** tabs and import their CSVs
    (*File → Import → Upload → Insert new sheet(s)* or paste into the tab), header row first:
-   `Nom` · `Ressource,Nom EN,Catégorie,Valeur,Note` · `Produit,Ingrédient,Quantité,Rendement,Artisan,Note`.
+   `Nom` · `Ressource,Nom EN,Origine,Prix courant,Bonne affaire,Note` (a tab already imported with
+   `Catégorie`/`Valeur` keeps working) · `Produit,Ingrédient,Quantité,Rendement,Artisan,Note`.
    The **Missives** and **Mouvements** tabs may stay empty (or absent): the script writes their headers.
 2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/commandes.gs`, save.
 3. *Deploy → Manage deployments →* the existing web app → ✏️ edit → *Version: **New version*** → Deploy.
@@ -381,14 +411,14 @@ dropped after every write (`lib/registre.ts`).
 
 A mock of the web app that runs the real `commandes.gs` against an in-memory sheet (fake
 `SpreadsheetApp`, `LockService`, `ContentService`, `PropertiesService`) lives outside the repo
-(`/Volumes/PERSO/dev/_atelier/caravane/v3/mock-script.js`). Run it, then start the grimoire with
-`COMMANDES_SCRIPT_URL=http://localhost:3931/exec COMMANDES_JETON=jeton-essai`.
+(`/Volumes/PERSO/dev/_atelier/caravane/v3/mock-script.js`, `MOCK_DELAI` = ms per call). Run it, then start
+the grimoire with `COMMANDES_SCRIPT_URL=http://localhost:3931/exec COMMANDES_JETON=jeton-essai`.
 
-Code: `lib/missives.ts` (types, needs, stock, contributions, split), `lib/registre.ts` (script client
-and cache), `lib/identite.ts` (whitelist and cookie), `lib/droits.ts` (permission hook),
-`app/api/registre`, `app/api/identite`, `components/Registre.tsx` (page state), `components/Missives.tsx`
-(pages), `components/Fiche.tsx` (slip, recipe tree, forms); styles in the *Missives* section of
-`app/globals.css`.
+Code: `lib/missives.ts` (types, needs, stock, contributions, split, material cost), `lib/registre.ts`
+(script client and cache), `lib/identite.ts` (whitelist and cookie), `lib/droits.ts` (permission hook),
+`app/api/registre`, `app/api/identite`, `components/Registre.tsx` (page state, writes shown at once),
+`components/ExLibris.tsx`, `components/Missives.tsx` (pages), `components/Fiche.tsx` (slip, recipe tree,
+forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
 
 ## Deploy
 
