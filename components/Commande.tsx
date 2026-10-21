@@ -254,7 +254,6 @@ export function FeuilleCommande({
   ecartee?: boolean
 }) {
   const feuille = useRef<HTMLElement>(null)
-  const corps = useRef<HTMLDivElement>(null)
   const rouleau = useRef<HTMLDivElement>(null)
   const lien = useRef<HTMLSpanElement>(null)
   const [confirmer, setConfirmer] = useState(false)
@@ -267,18 +266,28 @@ export function FeuilleCommande({
     return () => clearTimeout(t)
   }, [confirmer])
 
+  /** Animations of the unroll in flight (cancelled when a new one starts). */
+  const enCours = useRef<Animation[]>([])
+
   /**
    * Keyframes carrying the scroll from the table (desktop) and unrolling it down the page: the sheet
    * flies at the scale of the scroll on the table, only its unrolled end showing above the roll; then
    * the roll travels down the page, thinner and thinner, and the paper appears behind it.
+   *
+   * One animation on the sheet drives everything: its transform, and two registered custom properties
+   * (`--deroule-vu`, the height of paper revealed, and `--deroule-epais`, the roll's thickness) from
+   * which the CSS derives both the paper's clip and the roll's position. Clip and roll are thus laid
+   * out in the same frame, always: the roll cannot drift off the paper's edge (two separate
+   * animations could, the roll's transform running on the compositor while the clip waits for the
+   * main thread).
    */
   const animations = useCallback((): Animation[] | null => {
     const el = feuille.current
-    const papier = corps.current
     const btn = bande?.current
     const src = btn?.getBoundingClientRect()
     const cyl = btn?.querySelector('[data-cylindre]')?.getBoundingClientRect()
-    if (!el || !papier || !src || !cyl || !src.width || mobile || sansAnimation) return null
+    if (!el || !src || !cyl || !src.width || mobile || sansAnimation) return null
+    enCours.current.forEach((a) => a.cancel())
     const r = el.getBoundingClientRect()
     const largeur = el.offsetWidth
     const hauteur = el.offsetHeight
@@ -289,41 +298,24 @@ export function FeuilleCommande({
     const bout = Math.max(12, (cyl.top - src.top) / s)
     const epais0 = Math.max(16, cyl.height / s)
     const epais1 = 15
-    const bord = Math.max(0, hauteur - bout)
     const temps: KeyframeAnimationOptions = { duration: DUREE_DEROULE, fill: 'both' }
     const vol = 'cubic-bezier(.3,.1,.25,1)'
     const deroule = 'cubic-bezier(.45,.05,.3,1)'
+    const pose = 'translate(0, 0) scale(1) rotate(0deg)'
+    // A data attribute, not a class: React rewrites className on every render (e.g. « Rouler »).
+    el.dataset.deroule = ''
     const anims = [
       el.animate(
         [
-          { offset: 0, transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(-1deg)`, easing: vol },
-          { offset: 0.44, transform: 'translate(0, 0) scale(1) rotate(0deg)' },
-          { offset: 1, transform: 'translate(0, 0) scale(1) rotate(0deg)' },
-        ],
-        temps,
-      ),
-      papier.animate(
-        [
-          { offset: 0, clipPath: `inset(0 0 ${bord}px 0)` },
-          { offset: 0.44, clipPath: `inset(0 0 ${bord}px 0)`, easing: deroule },
-          { offset: 1, clipPath: 'inset(0 0 0px 0)' },
+          { offset: 0, transform: `translate(${dx}px, ${dy}px) scale(${s}) rotate(-1deg)`, '--deroule-vu': `${bout}px`, '--deroule-epais': `${epais0}px`, easing: vol },
+          { offset: 0.44, transform: pose, '--deroule-vu': `${bout}px`, '--deroule-epais': `${epais0}px`, easing: deroule },
+          { offset: 1, transform: pose, '--deroule-vu': `${hauteur}px`, '--deroule-epais': `${epais1}px` },
         ],
         temps,
       ),
     ]
     if (rouleau.current) {
-      // The paper enters the roll a little below its top edge.
-      const y = (bordure: number, e: number) => `translateY(${bordure - e * 0.18}px)`
-      // Same timing as the paper's clip, so the roll stays on the edge it is unrolling.
       anims.push(
-        rouleau.current.animate(
-          [
-            { offset: 0, transform: y(bout, epais0), height: `${epais0}px` },
-            { offset: 0.44, transform: y(bout, epais0), height: `${epais0}px`, easing: deroule },
-            { offset: 1, transform: y(hauteur, epais1), height: `${epais1}px` },
-          ],
-          temps,
-        ),
         rouleau.current.animate(
           [
             { offset: 0, opacity: 1 },
@@ -347,13 +339,27 @@ export function FeuilleCommande({
         ),
       )
     }
+    enCours.current = anims
     return anims
   }, [bande, mobile, sansAnimation])
+
+  /** Once unrolled, the sheet goes back to its plain CSS (no clip, no held keyframes). */
+  const deroule = (anims: Animation[]) =>
+    Promise.all(anims.map((a) => a.finished)).then(
+      () => {
+        if (enCours.current !== anims) return
+        anims.forEach((a) => a.cancel())
+        enCours.current = []
+        delete feuille.current?.dataset.deroule
+      },
+      () => {},
+    )
 
   useLayoutEffect(() => {
     if (!c.deroule.current) return
     c.deroule.current = false
-    animations()
+    const anims = animations()
+    if (anims) deroule(anims)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -363,7 +369,7 @@ export function FeuilleCommande({
     if (!anims) return c.ranger()
     setRepli(true)
     anims.forEach((a) => a.reverse())
-    Promise.all(anims.map((a) => a.finished)).then(() => c.ranger(), () => {})
+    Promise.all(anims.map((a) => a.finished)).then(() => enCours.current === anims && c.ranger(), () => {})
   }
 
   return (
@@ -380,7 +386,7 @@ export function FeuilleCommande({
           <feDisplacementMap in="SourceGraphic" in2="b" scale="7" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
-      <div className="commande-corps" ref={corps}>
+      <div className="commande-corps">
         <div className="commande-papier" aria-hidden />
         <span className="commande-clou" aria-hidden />
         <header className="commande-tete">
