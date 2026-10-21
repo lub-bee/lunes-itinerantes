@@ -111,9 +111,19 @@ var TYPES_MOUVEMENT = { releve: 'relevé', depot: 'dépôt', fabrication: 'fabri
 
 /** Start of the current call (each answer carries its own execution time, `ms`). */
 var DEBUT = 0;
+/** Time of each step of the current call (ms), returned as `etapes` to see where the time goes. */
+var ETAPES = {};
+var DERNIERE = 0;
+function etape(nom) {
+  var t = Date.now();
+  ETAPES[nom] = (ETAPES[nom] || 0) + (t - DERNIERE);
+  DERNIERE = t;
+}
 
 function doPost(e) {
   DEBUT = Date.now();
+  DERNIERE = DEBUT;
+  ETAPES = {};
   var corps;
   try {
     corps = JSON.parse(e.postData.contents);
@@ -123,16 +133,20 @@ function doPost(e) {
 
   var attendu = PropertiesService.getScriptProperties().getProperty('JETON');
   if (!attendu || corps.jeton !== attendu) return repondre({ ok: false, erreur: 'bad token' });
+  etape('jeton');
 
   var action = corps.action || (corps.commande ? 'commande' : '');
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
       var enCache = lireCache();
+      etape('cache_lu');
       if (enCache) return repondre({ ok: true, onglets: enCache.onglets, version: enCache.version, cache: true });
       var onglets = toutLire();
+      etape('feuille_lue');
       var version = versionCourante();
       mettreEnCache(onglets, version);
+      etape('cache_ecrit');
       return repondre({ ok: true, onglets: onglets, version: version, cache: false });
     } catch (err) {
       return repondre({ ok: false, erreur: String(err) });
@@ -241,14 +255,18 @@ function avecVerrou(f, avecOnglets) {
   } catch (err) {
     return repondre({ ok: false, erreur: 'sheet busy' });
   }
+  etape('verrou');
   var res;
   try {
     res = f();
+    etape('ecriture');
     // Inside the lock: a new version, the tabs read afresh and cached, so the answer and the cache
     // always hold the latest state (two writes cannot cache each other's older tabs).
     if (avecOnglets && res.ok) {
       res.version = nouvelleVersion();
+      etape('version');
       var enCache = res.maj ? lireCache() : null;
+      etape('cache_lu');
       if (enCache) {
         // The cache went through JSON: dates are strings there; so do the new rows.
         res.maj(enCache.onglets);
@@ -259,7 +277,9 @@ function avecVerrou(f, avecOnglets) {
         res.cache = false;
       }
       delete res.maj;
+      etape('onglets');
       mettreEnCache(res.onglets, res.version);
+      etape('cache_ecrit');
     }
   } catch (err) {
     viderCache();
@@ -309,17 +329,27 @@ function mettreEnCache(onglets, version) {
   }
 }
 
+/** Up to this many pieces are fetched in one call (more, in a second one). */
+var CACHE_PIECES = 8;
+
 function lireCache() {
   var cache = CacheService.getScriptCache();
-  var n = Number(cache.get(CACHE + '_n') || 0);
-  if (!n) return null;
-  var cles = [];
-  for (var i = 0; i < n; i++) cles.push(CACHE + '_' + i);
+  var cles = [CACHE + '_n'];
+  for (var i = 0; i < CACHE_PIECES; i++) cles.push(CACHE + '_' + i);
   var parts = cache.getAll(cles);
+  var n = Number(parts[CACHE + '_n'] || 0);
+  if (!n) return null;
+  if (n > CACHE_PIECES) {
+    var reste = [];
+    for (var r = CACHE_PIECES; r < n; r++) reste.push(CACHE + '_' + r);
+    var plus = cache.getAll(reste);
+    Object.keys(plus).forEach(function (k) { parts[k] = plus[k]; });
+  }
   var json = '';
   for (var k = 0; k < n; k++) {
-    if (parts[cles[k]] === undefined || parts[cles[k]] === null) return null;
-    json += parts[cles[k]];
+    var morceau = parts[CACHE + '_' + k];
+    if (morceau === undefined || morceau === null) return null;
+    json += morceau;
   }
   try {
     return JSON.parse(json);
@@ -348,12 +378,17 @@ function preparer(def) {
   var feuille = classeur.getSheetByName(def.nom) || classeur.insertSheet(def.nom);
   var entetes = def.colonnes.map(function (col) { return col[0]; });
   var largeur = Math.max(feuille.getLastColumn(), 1);
-  var premiere = feuille.getLastRow() === 0 ? [] : feuille.getRange(1, 1, 1, largeur).getValues()[0];
+  var dernier = feuille.getLastRow();
+  var premiere = dernier === 0 ? [] : feuille.getRange(1, 1, 1, largeur).getValues()[0];
   var index = indexColonnes(premiere, def);
   var connues = def.colonnes.filter(function (col) { return index[col[1]] >= 0; }).length;
   var vide = !premiere.some(function (v) { return String(v).trim() !== ''; });
   if (vide || connues === 0) {
-    if (!vide) feuille.insertRowBefore(1);
+    if (!vide) {
+      feuille.insertRowBefore(1);
+      dernier++;
+    }
+    if (dernier === 0) dernier = 1;
     feuille.getRange(1, 1, 1, entetes.length).setValues([entetes]).setFontWeight('bold');
     feuille.setFrozenRows(1);
     premiere = entetes.slice();
@@ -371,7 +406,7 @@ function preparer(def) {
     cols[k] = idx[k] + 1;
     large = Math.max(large, cols[k]);
   });
-  return { feuille: feuille, cols: cols, largeur: large };
+  return { feuille: feuille, cols: cols, largeur: large, derniere: dernier };
 }
 
 /** An object as a row of `largeur` cells (each field in its own column, other cells left blank). */
@@ -387,8 +422,35 @@ function ajouter(def, objets, p) {
   if (!objets.length) return 0;
   p = p || preparer(def);
   var lignes = objets.map(function (o) { return enLigne(p, o).slice(0, p.largeur); });
-  p.feuille.getRange(p.feuille.getLastRow() + 1, 1, lignes.length, p.largeur).setValues(lignes);
+  var derniere = p.derniere || p.feuille.getLastRow();
+  p.feuille.getRange(derniere + 1, 1, lignes.length, p.largeur).setValues(lignes);
   return lignes.length;
+}
+
+/**
+ * A writable tab read in ONE call (header and rows together), for the writes that rewrite rows in
+ * place. Falls back to `preparer` + `donnees` when the header is missing columns (first write).
+ */
+function ouvrir(def) {
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  if (feuille && feuille.getLastRow() > 0) {
+    var tout = feuille.getDataRange().getValues();
+    var idx = indexColonnes(tout[0], def);
+    var complet = def.colonnes.every(function (col) { return idx[col[1]] >= 0; });
+    if (complet) {
+      var cols = {};
+      var large = 0;
+      Object.keys(idx).forEach(function (k) {
+        cols[k] = idx[k] + 1;
+        large = Math.max(large, cols[k]);
+      });
+      var p = { feuille: feuille, cols: cols, largeur: large, derniere: tout.length };
+      var lignes = tout.slice(1).map(function (l) { return l.slice(0, large); });
+      return { p: p, lignes: lignes };
+    }
+  }
+  var p2 = preparer(def);
+  return { p: p2, lignes: donnees(p2) };
 }
 
 /** The data rows of a tab (row 2 onwards), `largeur` cells each, in one call. */
@@ -460,8 +522,9 @@ var ECRITURES = {
   cloture: function (corps) {
     var c = corps.cloture;
     if (!c || !c.numero) return { ok: false, erreur: 'no missive' };
-    var p = preparer(ONGLETS.missives);
-    var lignes = donnees(p);
+    var o = ouvrir(ONGLETS.missives);
+    var p = o.p;
+    var lignes = o.lignes;
     var quand = new Date(c.horodatage);
     var touchees = 0;
     var deja = lignes.some(function (l) {
@@ -503,8 +566,9 @@ var ECRITURES = {
   recette: function (corps) {
     var r = corps.recette;
     if (!r || !r.produit) return { ok: false, erreur: 'no product' };
-    var p = preparer(ONGLETS.recettes);
-    var lignes = donnees(p);
+    var o = ouvrir(ONGLETS.recettes);
+    var p = o.p;
+    var lignes = o.lignes;
     var gardees = lignes.filter(function (l) { return !correspond(p, l, 'produit', [r.produit, r.ancienProduit]); });
     var objets = (r.ingredients || []).map(function (ing) {
       return { produit: r.produit, produitEn: r.en || '', ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' };
@@ -527,7 +591,8 @@ var ECRITURES = {
   ressource: function (corps) {
     var r = corps.ressource;
     if (!r || !r.nom) return { ok: false, erreur: 'no resource' };
-    var p = preparer(ONGLETS.ressources);
+    var o = ouvrir(ONGLETS.ressources);
+    var p = o.p;
     var nombre = function (v) { return v === null || v === undefined ? '' : v; };
     var valeurs = { nom: r.nom, en: r.en || '', origine: r.origine || '', prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: r.note || '' };
     var cible = cleEntete(r.ancienNom || r.nom);
@@ -542,7 +607,7 @@ var ECRITURES = {
       });
       if (!trouvee) o.ressources.push(complet(ONGLETS.ressources, valeurs));
     };
-    var lignes = donnees(p);
+    var lignes = o.lignes;
     for (var i = 0; i < lignes.length; i++) {
       if (!correspond(p, lignes[i], 'nom', [r.ancienNom || r.nom])) continue;
       p.feuille.getRange(i + 2, 1, 1, p.largeur).setValues([enLigne(p, valeurs, lignes[i])]);
@@ -554,7 +619,10 @@ var ECRITURES = {
 };
 
 function repondre(objet) {
-  if (DEBUT) objet.ms = Date.now() - DEBUT;
+  if (DEBUT) {
+    objet.ms = Date.now() - DEBUT;
+    objet.etapes = ETAPES;
+  }
   return ContentService.createTextOutput(JSON.stringify(objet)).setMimeType(ContentService.MimeType.JSON);
 }
 

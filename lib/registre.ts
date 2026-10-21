@@ -83,7 +83,7 @@ export async function lireRegistre(versionVue = 0) {
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
-  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number }>({ action, ...charge })
+  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, ...charge })
   dernierScript = { ms: r.ms ?? null, cache: null }
   if (!r.onglets) return { ...r, lu: null }
   const l = { onglets: r.onglets, version: r.version ?? 0 }

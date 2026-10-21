@@ -341,11 +341,15 @@ export async function POST(req: NextRequest) {
   // the page then keeps what it shows and reads later).
   const donnees = ecrit.lu ? vue(ecrit.lu) : null
   const script = ecrit.ms ?? null
-  console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms (script ${script ?? '?'} ms), tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
+  console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms (script ${script ?? '?'} ms ${JSON.stringify(ecrit.etapes ?? {})}), tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
   const rep = NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })
   rep.headers.set(
     'Server-Timing',
-    `lire;dur=${tLire.toFixed(0)}, ecrire;dur=${tEcrire.toFixed(0)}, script;dur=${script ?? 0}, relire;dur=0, onglets;desc=${ecrit.lu ? 'oui' : 'non'}`,
+    [
+      `lire;dur=${tLire.toFixed(0)}, ecrire;dur=${tEcrire.toFixed(0)}, script;dur=${script ?? 0}, relire;dur=0, onglets;desc=${ecrit.lu ? 'oui' : 'non'}`,
+      // The script's own steps (from a script that reports them): lock, write, version, cache…
+      ...Object.entries(ecrit.etapes ?? {}).map(([k, v]) => `gs-${k};dur=${v}`),
+    ].join(', '),
   )
   return rep
 }
