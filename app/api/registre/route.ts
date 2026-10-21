@@ -266,12 +266,12 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
         return [{ ingredient: canon, quantite: q }]
       })
       const autres = lu.recettes.filter((r) => cle(r.produit) !== cle(produit) && (!ancien || cle(r.produit) !== cle(ancien)))
-      const nouvelle: Recette = { produit, rendement, artisan: mot(b.artisan, 40), note: mot(b.note, 200), ingredients: ingredients.map((i) => ({ nom: i.ingredient, quantite: i.quantite })) }
+      const nouvelle: Recette = { produit, en: mot(b.en, 120), rendement, artisan: mot(b.artisan, 40), note: mot(b.note, 200), ingredients: ingredients.map((i) => ({ nom: i.ingredient, quantite: i.quantite })) }
       const cycle = trouverCycle(produit, indexRecettes([...autres, nouvelle]))
       if (cycle) non(texteCycle(cycle))
       return {
         action,
-        charge: { recette: { produit, ancienProduit: ancien || undefined, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients } },
+        charge: { recette: { produit, ancienProduit: ancien || undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients } },
         message: ingredients.length ? `La recette de ${produit} est consignée.` : `La recette de ${produit} est effacée du registre.`,
       }
     }

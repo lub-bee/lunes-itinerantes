@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
-import { ARTISANS } from '@/lib/recherche'
+import { METIERS, metierDe, SANS_METIER } from '@/lib/metiers'
 import {
   arbre,
   cle,
@@ -33,7 +33,10 @@ import { Icone } from './Ornements'
  * same way; it goes when the page turns.
  */
 
-const DUREE_DEPART = 170
+/** Unrolling and rolling up, as the order sheet (transforms and opacity only, the roll glued to the paper's edge). */
+const DUREE_DEROULE = 560
+const DUREE_ENROULE = 480
+const EPAIS_ROULEAU = 16
 
 export function FicheVolante({
   fiche,
@@ -41,6 +44,7 @@ export function FicheVolante({
   articles,
   icones,
   mobile,
+  sansAnimation = false,
   fermer,
 }: {
   fiche: Fiche
@@ -48,17 +52,74 @@ export function FicheVolante({
   articles: Article[]
   icones: Record<string, string>
   mobile: boolean
+  sansAnimation?: boolean
   fermer: () => void
 }) {
   const ref = useRef<HTMLElement>(null)
+  const voile = useRef<HTMLDivElement>(null)
+  const papier = useRef<HTMLDivElement>(null)
+  const rouleau = useRef<HTMLDivElement>(null)
+  const enCours = useRef<Animation[]>([])
+  const partie = useRef(false)
   const [vue, setVue] = useState<Fiche>(fiche)
   useEffect(() => setVue(fiche), [fiche])
 
-  const partir = () => {
+  /**
+   * The slip unrolls down from its top edge (or rolls back up): the veil slides down clipping the
+   * paper, which slides up by as much and so stays still; the roll hangs at the veil's bottom edge.
+   * Veil, paper and roll share the same keyframes and easing, so the roll is on the paper's edge at
+   * every frame.
+   */
+  const animer = (enroule: boolean): Animation[] | null => {
     const el = ref.current
-    if (!el || el.dataset.part !== undefined) return
-    el.dataset.part = ''
-    setTimeout(fermer, DUREE_DEPART)
+    if (!el || !voile.current || !papier.current || !rouleau.current || sansAnimation) return null
+    enCours.current.forEach((a) => a.cancel())
+    const h = el.offsetHeight
+    const temps: KeyframeAnimationOptions = {
+      duration: enroule ? DUREE_ENROULE : DUREE_DEROULE,
+      easing: enroule ? 'cubic-bezier(.5,0,.6,1)' : 'cubic-bezier(.25,.1,.25,1)',
+      fill: 'both',
+      direction: enroule ? 'reverse' : 'normal',
+    }
+    el.dataset.deroule = ''
+    const anims = [
+      voile.current.animate([{ transform: `translateY(${-h}px)` }, { transform: 'translateY(0px)' }], temps),
+      papier.current.animate([{ transform: `translateY(${h}px)` }, { transform: 'translateY(0px)' }], temps),
+      rouleau.current.animate(
+        [
+          { offset: 0, opacity: 1, transform: 'scaleY(1.25)' },
+          { offset: 0.9, opacity: 1, transform: 'scaleY(0.9)' },
+          { offset: 1, opacity: 0, transform: 'scaleY(0.8)' },
+        ],
+        temps,
+      ),
+    ]
+    if (enroule) anims.push(el.animate([{ offset: 0, opacity: 0 }, { offset: 0.12, opacity: 1 }, { offset: 1, opacity: 1 }], temps))
+    enCours.current = anims
+    return anims
+  }
+
+  useLayoutEffect(() => {
+    const anims = animer(false)
+    if (!anims) return
+    Promise.all(anims.map((a) => a.finished)).then(
+      () => {
+        if (enCours.current !== anims) return
+        anims.forEach((a) => a.cancel())
+        enCours.current = []
+        delete ref.current?.dataset.deroule
+      },
+      () => {},
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const partir = () => {
+    if (partie.current) return
+    partie.current = true
+    const anims = animer(true)
+    if (!anims) return fermer()
+    Promise.all(anims.map((a) => a.finished)).then(fermer, () => {})
   }
   useEffect(() => {
     const f = (e: KeyboardEvent) => e.key === 'Escape' && partir()
@@ -77,16 +138,23 @@ export function FicheVolante({
           <feDisplacementMap in="SourceGraphic" in2="b" scale="6" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
-      <div className="fiche-papier" aria-hidden />
-      <span className="fiche-epingle" aria-hidden />
-      <header className="fiche-tete">
-        <div className="fiche-surtitre">{surtitre}</div>
-        <h2 className="fiche-titre">{titre}</h2>
-        <button type="button" className="fiche-ranger" onClick={partir}>
-          Ranger
-        </button>
-      </header>
-      <div className="fiche-corps">{corps}</div>
+      <div className="fiche-voile" ref={voile}>
+        <div className="fiche-masque">
+          <div className="fiche-contenu" ref={papier}>
+            <div className="fiche-papier" aria-hidden />
+            <span className="fiche-epingle" aria-hidden />
+            <header className="fiche-tete">
+              <div className="fiche-surtitre">{surtitre}</div>
+              <h2 className="fiche-titre">{titre}</h2>
+              <button type="button" className="fiche-ranger" onClick={partir}>
+                Ranger
+              </button>
+            </header>
+            <div className="fiche-corps">{corps}</div>
+          </div>
+        </div>
+        <div className="fiche-rouleau" ref={rouleau} style={{ height: EPAIS_ROULEAU }} aria-hidden />
+      </div>
     </aside>
   )
 }
@@ -99,7 +167,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
     case 'recette':
       return { surtitre: 'Recette', titre: f.nom, corps: <VueRecette nom={f.nom} env={env} /> }
     case 'edition-recette':
-      return { surtitre: f.nom ? 'Corriger la recette' : 'Consigner une recette', titre: f.nom || 'Nouvelle recette', corps: <Signe env={env} action="recette"><FormRecette nom={f.nom} env={env} /></Signe> }
+      return { surtitre: f.nom ? 'Corriger la recette' : 'Consigner une recette', titre: f.nom || 'Nouvelle recette', corps: <Signe env={env} action="recette"><FormRecette nom={f.nom} artisanPropose={f.artisan} env={env} /></Signe> }
     case 'ressource':
       return { surtitre: f.nom ? 'Corriger la matière' : 'Inscrire une matière', titre: f.nom || 'Nouvelle matière', corps: <Signe env={env} action="ressource"><FormRessource nom={f.nom} env={env} /></Signe> }
     case 'missive':
@@ -325,12 +393,12 @@ function VueRecette({ nom, env }: { nom: string; env: Env }) {
   const cycle = recette ? trouverCycle(nom, c.recettes) : null
   return (
     <div className="vue-recette">
-      {(article?.en || ressource?.en) && <p className="fiche-en">{article?.en || ressource?.en}</p>}
+      {(article?.en || recette?.en || ressource?.en) && <p className="fiche-en">{article?.en || recette?.en || ressource?.en}</p>}
       {recette ? (
         <>
           <p className="fiche-note">
             Une fournée donne <strong>{quantite(recette.rendement)}</strong> {recette.produit}
-            {recette.artisan && <> · {ARTISANS[recette.artisan as keyof typeof ARTISANS] ?? recette.artisan}</>}
+            {recette.artisan && <> · {metierDe(recette.artisan).nom}</>}
             {valeur > 0 && <> · valeur {prix(Math.round(valeur * 100) / 100)} septims l&apos;unité</>}
           </p>
           {recette.note && <p className="fiche-note"><em>{recette.note}</em></p>}
@@ -405,13 +473,16 @@ function CoutMatieres({ nom, n, rendement, env }: { nom: string; n: number; rend
 
 /* ───────────────────────── Recipe and resource forms ───────────────────────── */
 
-function FormRecette({ nom, env }: { nom: string; env: Env }) {
+function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose?: string; env: Env }) {
   const c = env.reg.r.calcul
   const ancienne = nom ? c?.recettes.get(cle(nom)) : undefined
   const noms = useNoms(env)
   const [produit, setProduit] = useState(ancienne?.produit ?? nom)
   const [rendement, setRendement] = useState(String(ancienne?.rendement ?? 1))
-  const [artisan, setArtisan] = useState(ancienne?.artisan ?? '')
+  const [artisan, setArtisan] = useState(ancienne?.artisan ?? artisanPropose ?? '')
+  const [en, setEn] = useState(ancienne?.en ?? '')
+  const enCatalogue = env.articles.find((a) => cle(a.fr) === cle(produit))?.en ?? ''
+  const metiers = [...new Set([...Object.values(METIERS).map((m) => m.nom), ...(env.reg.r.donnees?.recettes ?? []).map((r) => metierDe(r.artisan).nom)])].filter((m) => m !== SANS_METIER.nom).sort((a, b) => a.localeCompare(b, 'fr'))
   const [note, setNote] = useState(ancienne?.note ?? '')
   const [lignes, setLignes] = useState<Ligne[]>(ancienne?.ingredients.length ? ancienne.ingredients.map((i) => ({ objet: i.nom, qte: String(i.quantite) })) : [{ objet: '', qte: '' }])
   const [effacer, setEffacer] = useState(false)
@@ -422,7 +493,7 @@ function FormRecette({ nom, env }: { nom: string; env: Env }) {
     if (!p) return setMessage({ ok: false, texte: 'Le nom de l’ouvrage manque.' })
     const ings = remplies(ingredients).map((l) => ({ nom: l.objet.trim(), quantite: entier(l.qte) }))
     if (ings.some((i) => !(i.quantite > 0))) return setMessage({ ok: false, texte: 'Chaque matière attend une quantité plus grande que zéro.' })
-    const nouvelle: Recette = { produit: p, rendement: Math.max(1, Math.round(entier(rendement)) || 1), artisan, note, ingredients: ings }
+    const nouvelle: Recette = { produit: p, en: en.trim(), rendement: Math.max(1, Math.round(entier(rendement)) || 1), artisan, note, ingredients: ings }
     const autres = env.reg.r.donnees?.recettes.filter((r) => cle(r.produit) !== cle(p) && (!ancienne || cle(r.produit) !== cle(ancienne.produit))) ?? []
     const cycle = ings.length ? trouverCycle(p, indexRecettes([...autres, nouvelle])) : null
     if (cycle) return setMessage({ ok: false, texte: texteCycle(cycle) })
@@ -431,6 +502,7 @@ function FormRecette({ nom, env }: { nom: string; env: Env }) {
       {
         produit: p,
         ancienProduit: ancienne && cle(ancienne.produit) !== cle(p) ? ancienne.produit : undefined,
+        en: en.trim(),
         rendement: nouvelle.rendement,
         artisan,
         note,
@@ -450,9 +522,14 @@ function FormRecette({ nom, env }: { nom: string; env: Env }) {
     >
       <Suggestions id="fiche-tous" noms={noms.tous} />
       <Suggestions id="fiche-produits" noms={noms.produits} />
+      <Suggestions id="fiche-metiers" noms={metiers} />
       <label className="fiche-champ">
         <span>Ouvrage</span>
         <input type="text" list="fiche-produits" value={produit} onChange={(e) => setProduit(e.target.value)} maxLength={120} required placeholder="Bière, Potion de soin…" />
+      </label>
+      <label className="fiche-champ">
+        <span>Nom anglais</span>
+        <input type="text" value={en} onChange={(e) => setEn(e.target.value)} maxLength={120} placeholder={enCatalogue ? `${enCatalogue} (au catalogue)` : 'facultatif'} />
       </label>
       <div className="fiche-deux">
         <label className="fiche-champ">
@@ -460,13 +537,8 @@ function FormRecette({ nom, env }: { nom: string; env: Env }) {
           <input type="text" inputMode="numeric" value={rendement} onChange={(e) => setRendement(e.target.value.replace(/\D/g, '').slice(0, 4))} title="Unités obtenues par fournée" />
         </label>
         <label className="fiche-champ">
-          <span>Artisan</span>
-          <select value={artisan} onChange={(e) => setArtisan(e.target.value)}>
-            <option value="">—</option>
-            {Object.entries(ARTISANS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
+          <span>Métier</span>
+          <input type="text" list="fiche-metiers" value={artisan} onChange={(e) => setArtisan(e.target.value)} maxLength={40} placeholder="Alchimiste, Forgeron…" />
         </label>
       </div>
       <p className="fiche-sous-titre">Pour une fournée</p>

@@ -7,7 +7,7 @@ import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
 import { ContreGarde, ExLibris } from './ExLibris'
-import { DroiteAtelier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
+import { DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
   livre: Livre
@@ -35,7 +35,8 @@ const folio = (ctx: Ctx) => ctx.index - avantSommaire(ctx)
 function nomAnglais(ctx: Ctx, nom: string): string {
   const k = cle(nom)
   for (const p of ctx.livre.pages) if (p.type === 'chapitre') for (const a of p.articles) if (cle(a.fr) === k) return a.en
-  return ctx.registre?.r.donnees?.ressources.find((r) => cle(r.nom) === k)?.en ?? ''
+  const d = ctx.registre?.r.donnees
+  return d?.recettes.find((r) => cle(r.produit) === k)?.en || d?.ressources.find((r) => cle(r.nom) === k)?.en || ''
 }
 
 const EFFACEMENT_MS = 320
@@ -137,6 +138,12 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return (
           <EnTete surtitre="L'Atelier" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'metier':
+        return (
+          <EnTete surtitre="L'Atelier · Recettes" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheMetier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'avenir':
@@ -285,7 +292,9 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'coffre':
         return <DroiteCoffre reg={ctx.registre} />
       case 'atelier':
-        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} anglais={(nom) => nomAnglais(ctx, nom)} />
+        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} />
+      case 'metier':
+        return <DroiteMetier page={page} reg={ctx.registre} interactif={ctx.interactif} anglais={(nom) => nomAnglais(ctx, nom)} />
       case 'avenir':
         return (
           <div className="attente">

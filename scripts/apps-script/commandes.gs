@@ -31,7 +31,7 @@
  *                                                                            → the missive's Missives rows closed,
  *                                                                              its 'livraison' rows (goods leaving the
  *                                                                              chest) and one 'partage' row per member
- *      'recette'     { recette: { produit, ancienProduit?, rendement, artisan, note,
+ *      'recette'     { recette: { produit, ancienProduit?, en, rendement, artisan, note,
  *                                 ingredients: [{ ingredient, quantite }] } } → the product's Recettes rows replaced
  *                                                                              (no ingredient = recipe removed)
  *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }
@@ -86,7 +86,7 @@ var ONGLETS = {
   },
   recettes: {
     nom: 'Recettes',
-    colonnes: [['Produit', 'produit'], ['Ingrédient', 'ingredient'], ['Quantité', 'quantite'], ['Rendement', 'rendement'], ['Artisan', 'artisan'], ['Note', 'note']],
+    colonnes: [['Produit', 'produit'], ['Produit EN', 'produitEn'], ['Ingrédient', 'ingredient'], ['Quantité', 'quantite'], ['Rendement', 'rendement'], ['Artisan', 'artisan'], ['Note', 'note']],
   },
   missives: {
     nom: 'Missives',
@@ -507,7 +507,7 @@ var ECRITURES = {
     var lignes = donnees(p);
     var gardees = lignes.filter(function (l) { return !correspond(p, l, 'produit', [r.produit, r.ancienProduit]); });
     var objets = (r.ingredients || []).map(function (ing) {
-      return { produit: r.produit, ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' };
+      return { produit: r.produit, produitEn: r.en || '', ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' };
     });
     var nouvelles = objets.map(function (x) { return enLigne(p, x); });
     var toutes = gardees.concat(nouvelles);

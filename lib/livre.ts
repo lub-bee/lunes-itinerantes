@@ -5,6 +5,7 @@ import { parserCsv } from './csv'
 import { ICONE_COPIE } from './copie'
 import { ICONES_COMMANDE } from './commande'
 import { ICONES_MISSIVES } from './missives'
+import { ICONES_METIERS } from './metiers'
 import { icones } from './icones'
 import { ICONES_ARTISANS, normaliser } from './recherche'
 import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
@@ -190,8 +191,8 @@ export async function chargerLivre(): Promise<Livre> {
       citation: "Un marchand sans registre est un marchand qui oublie ; un marchand qui oublie est un marchand ruiné." },
     ...chapitres,
     {
-      type: 'atelier', vue: 'recettes', id: 'recettes', partie: 'atelier', titre: 'Recettes', court: 'Recettes', icone: 'cauldron',
-      intro: 'Les recettes des artisans : ce qu’il faut pour une fournée, et ce que coûtent ses matières. Chacun peut en consigner une nouvelle ou corriger une quantité.',
+      type: 'atelier', vue: 'recettes', id: 'recettes', partie: 'atelier', titre: 'Sommaire des recettes', court: 'Sommaire', icone: 'cauldron',
+      intro: 'Les recettes des artisans, rangées par métier : ce qu’il faut pour une fournée, et ce que coûtent ses matières. Chacun peut en consigner une nouvelle ou corriger une quantité.',
     },
     {
       type: 'atelier', vue: 'matieres', id: 'matieres', partie: 'atelier', titre: 'Matières premières', court: 'Matières', icone: 'wheat',
@@ -216,6 +217,6 @@ export async function chargerLivre(): Promise<Livre> {
     ...(await lireNotes()),
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

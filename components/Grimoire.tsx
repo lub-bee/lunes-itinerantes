@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMissive, PartieId } from '@/lib/types'
+import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
+import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
 import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
@@ -11,7 +12,7 @@ import { CleRefermer, Verrou } from './Fer'
 import { ICONE_COPIE } from '@/lib/copie'
 import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Commande'
 import { useRegistre } from './Registre'
-import { idMissive, type CtxRegistre, type Fiche } from './Missives'
+import { idMissive, metiersDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
@@ -92,10 +93,19 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       icone: estClose(e.missive) ? 'wax-seal' : 'tied-scroll',
     }))
     const exLibris: PageExLibris[] = relie ? [{ type: 'exlibris', id: 'ex-libris', partie: 'sommaire', titre: 'Ex-libris', court: 'Ex-libris', icone: 'quill' }] : []
-    if (!vues.length && !exLibris.length) return livreServeur
-    const apres = livreServeur.pages.findIndex((p) => p.type === 'missives') + 1
-    return { ...livreServeur, pages: [...exLibris, ...livreServeur.pages.slice(0, apres), ...vues, ...livreServeur.pages.slice(apres)] }
-  }, [livreServeur, registre.calcul, relie])
+    // One page per craft of the workshop, after the recipes' contents.
+    const metiers: PageMetier[] = metiersDe(registre.donnees?.recettes ?? []).map((m) => ({
+      type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, court: m.nom, icone: m.icone,
+    }))
+    if (!vues.length && !exLibris.length && !metiers.length) return livreServeur
+    const p = livreServeur.pages
+    const apresRecettes = p.findIndex((x) => x.id === 'recettes') + 1
+    const apresMissives = p.findIndex((x) => x.type === 'missives') + 1
+    return {
+      ...livreServeur,
+      pages: [...exLibris, ...p.slice(0, apresRecettes), ...metiers, ...p.slice(apresRecettes, apresMissives), ...vues, ...p.slice(apresMissives)],
+    }
+  }, [livreServeur, registre.calcul, registre.donnees, relie])
   const { pages } = livre
 
   const [index, setIndex] = useState(0)
@@ -736,7 +746,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
               <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
             )}
             {etroit === false && fiche && !tourne && (
-              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile={false} fermer={() => setFiche(null)} />
+              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile={false} sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />
             )}
           </div>
         </div>
@@ -752,7 +762,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       {etroit && (
         <>
           {commande.ouverte && commande.deployee && <FeuilleCommande c={commande} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} />}
-          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile fermer={() => setFiche(null)} />}
+          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />}
           <BarreCommande c={commande} icones={icones} />
         </>
       )}

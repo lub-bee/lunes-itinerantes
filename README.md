@@ -300,14 +300,20 @@ in v2. When the sheet cannot be read, the pages say so in character, with « ren
   missive stays readable as it stood when it was closed.
 - **Le coffre**: the stock according to the ledger, « Relever le coffre », and every count: *Compté*
   (found in the chest), *Attendu* (what the ledger expected), *Écart* (compté − attendu), with who and when.
-- **Atelier → Recettes**: every recipe and the cost of one craft's raw materials; a recipe opens on a
-  slip (foldable tree down to raw materials, « Pour N », material cost). « Consigner une recette ».
+- **Atelier → Sommaire des recettes**: the crafts present in the « Artisan » column (Alchimiste,
+  Brasseur, Forgeron…, each with its count), then **one side tab per craft** (engraved icon, a line of
+  introduction for the known ones, « Consigner une recette » with the craft filled in), recipes
+  without a craft under « Sans métier ». A recipe opens on a slip (foldable tree down to raw materials,
+  « Pour N », material cost). Crafts: `lib/metiers.ts` (name, icon, introduction; any other value gets
+  its own tab with a generic icon).
 - **Atelier → Matières premières**: a small buying ledger (the caravan harvests, loots, crafts or buys
   them, never sells): *Prix courant* (the usual buying price, also the value used for merit), *Bonne
   affaire* (buy without hesitation at or below it), the origin as a small note. « Inscrire une matière ».
 - **Price ledger**: outside order mode, clicking a row opens the article's recipe; a small cauldron
   after the name marks articles with a recipe and opens it in order mode too (the row still writes the
   article on the order).
+
+Slips unroll from their top edge and roll back up on « Ranger », like the order sheet.
 
 Actions: « Relever le coffre », « Déposer au coffre », « Façonner », « Livrer la missive » (success: the
 requested goods still owed leave the chest, the reward is entered and split, the missive is closed
@@ -379,7 +385,7 @@ is `ONGLETS` at the top of `commandes.gs`.
 |---|---|---|
 | **Membres** (read only, imported by hand) | one member | `Nom`, optional `Rôle` |
 | **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims per unit — older header `Valeur`), `Bonne affaire`, `Note` |
-| **Recettes** | one ingredient of one product | `Produit`, `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan`, `Note` |
+| **Recettes** | one ingredient of one product | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note` |
 | **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture` |
 | **Mouvements** (created by the script, append-only) | one movement | `Horodatage`, `N° action`, `N° missive`, `Membre`, `Type`, `Objet`, `Quantité`, `Note` |
 

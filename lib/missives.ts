@@ -25,7 +25,8 @@ export const PART_COMMUNE_DEFAUT = 20
 export type Ressource = { nom: string; en: string; origine: string; prix: number | null; bonneAffaire: number | null; note: string }
 export type Ingredient = { nom: string; quantite: number }
 /** `rendement`: units of the product made by one craft. */
-export type Recette = { produit: string; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
+/** `en`: the product's English name (Recettes « Produit EN », for products not in the catalogue). */
+export type Recette = { produit: string; en: string; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
 export type LigneMissive = { produit: string; quantite: number }
 export type Missive = {
   numero: string
@@ -469,9 +470,10 @@ export function lireOnglets(o: Onglets) {
     if (!produit) continue
     let rec = recettes.find((x) => cle(x.produit) === cle(produit))
     if (!rec) {
-      rec = { produit, rendement: Math.max(1, Math.round(nombre(r.rendement) ?? 1)), artisan: texte(r.artisan), note: texte(r.note), ingredients: [] }
+      rec = { produit, en: '', rendement: Math.max(1, Math.round(nombre(r.rendement) ?? 1)), artisan: texte(r.artisan), note: texte(r.note), ingredients: [] }
       recettes.push(rec)
     }
+    if (!rec.en) rec.en = texte(r.produitEn)
     const q = nombre(r.quantite)
     if (nom && q !== null && q > 0) rec.ingredients.push({ nom, quantite: q })
   }

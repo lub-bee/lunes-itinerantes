@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, type FormEvent, type ReactNode } from 'react'
-import type { PageAtelier, PageCoffre, PageMissive, PageMissives } from '@/lib/types'
+import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives } from '@/lib/types'
+import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix } from '@/lib/format'
-import { arbre, cle, coutMatieres, enStock, estClose, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
+import { arbre, cle, coutMatieres, enStock, estClose, type Recette, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { Icone } from './Ornements'
 
@@ -15,7 +16,7 @@ import { Icone } from './Ornements'
 
 export type Fiche =
   | { genre: 'recette'; nom: string }
-  | { genre: 'edition-recette'; nom: string }
+  | { genre: 'edition-recette'; nom: string; artisan?: string }
   | { genre: 'ressource'; nom: string }
   | { genre: 'missive' }
   | { genre: 'releve'; numero?: string }
@@ -598,43 +599,40 @@ export function GaucheAtelier({ page, reg, icones, compact }: { page: PageAtelie
   )
 }
 
-export function DroiteAtelier({ page, reg, interactif, anglais }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean; anglais: (nom: string) => string }) {
+export function DroiteAtelier({ page, reg, interactif, icones }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean; icones: Record<string, string> }) {
   const r = reg?.r
   if (!r?.donnees?.relie || !reg) return null
   const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const ressources = [...r.donnees.ressources].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
   const tab = interactif ? 0 : -1
-  const c = r.calcul
   if (page.vue === 'recettes') {
+    // The recipes' contents: one entry per craft, with its count of recipes.
+    const metiers = metiersDe(recettes)
     return (
-    <div className="atelier-droite">
-      <h3 className="titre-section">Recettes consignées</h3>
-      <p className="note-encre">Touche une recette pour voir tout ce qu’elle demande, jusqu’aux matières premières, et ce qu’elles coûtent.</p>
-      {recettes.length ? (
-        <ul className="liste-recettes">
-          {recettes.map((x) => (
-            <li key={x.produit}>
-              <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
-                <span className="noms">
-                  <span className="entree">{x.produit}</span>
-                  {anglais(x.produit) && <span className="nom-en">{anglais(x.produit)}</span>}
-                </span>
-                <span className="points" />
-                <span className="renvoi">
-                  {x.ingredients.map((i) => i.nom).join(', ')}
-                  {c && (() => {
-                    const k = coutMatieres(arbre(x.produit, x.rendement, c.recettes), r.donnees!.ressources).cout
-                    return k ? <b> · {prix(k)} septims</b> : null
-                  })()}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="vide-encre">Aucune recette encore : que les artisans prennent la plume.</p>
-      )}
-    </div>
+      <div className="atelier-droite">
+        <h3 className="titre-section">Les métiers de l’atelier</h3>
+        <p className="note-encre">Chaque métier a son onglet et ses recettes. Touche un métier pour l’ouvrir.</p>
+        {metiers.length ? (
+          <ul className="liste-recettes liste-metiers">
+            {metiers.map((m) => (
+              <li key={m.cle}>
+                <button type="button" tabIndex={tab} onClick={() => reg.allerA(idMetier(m.cle))}>
+                  <span className="metier-icone" aria-hidden>
+                    <Icone corps={icones[m.icone]} />
+                  </span>
+                  <span className="entree">{m.nom}</span>
+                  <span className="points" />
+                  <span className="renvoi">
+                    {m.recettes.length} recette{m.recettes.length > 1 ? 's' : ''}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="vide-encre">Aucune recette encore : que les artisans prennent la plume.</p>
+        )}
+      </div>
     )
   }
   return (
@@ -686,3 +684,74 @@ export function DroiteAtelier({ page, reg, interactif, anglais }: { page: PageAt
 
 /** Stock in the chest of one item (for the slips). */
 export const auCoffre = (reg: CtxRegistre, nom: string) => (reg.r.donnees ? enStock(rejouer(reg.r.donnees.mouvements).stock, nom) : 0)
+
+/* ───────────────────────── One craft of the workshop ───────────────────────── */
+
+/** Recipes grouped by craft (« Artisan »), known crafts by name, « Sans métier » last. */
+export function metiersDe(recettes: Recette[]) {
+  const par = new Map<string, ReturnType<typeof metierDe> & { recettes: Recette[] }>()
+  for (const r of recettes) {
+    const m = metierDe(r.artisan)
+    const g = par.get(m.cle) ?? { ...m, recettes: [] }
+    g.recettes.push(r)
+    par.set(m.cle, g)
+  }
+  return [...par.values()].sort((a, b) => (a.cle === SANS_METIER.cle ? 1 : b.cle === SANS_METIER.cle ? -1 : a.nom.localeCompare(b.nom, 'fr')))
+}
+
+export function GaucheMetier({ page, reg, icones, compact }: { page: PageMetier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
+  const r = reg?.r
+  const m = metierDe(page.metier)
+  return (
+    <>
+      {!compact && m.intro && <p className="intro lettrine">{m.intro}</p>}
+      {r && <Ferme r={r} />}
+      {r && reg && ouvert(r) && r.marchand?.droits?.recette !== false && (
+        <div className="gestes">
+          <Geste icone={icones['cauldron']} onClick={() => reg.ouvrir({ genre: 'edition-recette', nom: '', artisan: m.cle === SANS_METIER.cle ? '' : m.nom })}>
+            Consigner une recette
+          </Geste>
+        </div>
+      )}
+    </>
+  )
+}
+
+export function DroiteMetier({ page, reg, interactif, anglais }: { page: PageMetier; reg?: CtxRegistre; interactif: boolean; anglais: (nom: string) => string }) {
+  const r = reg?.r
+  if (!r?.donnees?.relie || !reg) return null
+  const c = r.calcul
+  const k = metierDe(page.metier).cle
+  const recettes = r.donnees.recettes.filter((x) => metierDe(x.artisan).cle === k).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+  const tab = interactif ? 0 : -1
+  return (
+    <div className="atelier-droite">
+      <h3 className="titre-section">Recettes consignées</h3>
+      <p className="note-encre">Touche une recette pour voir tout ce qu’elle demande, jusqu’aux matières premières, et ce qu’elles coûtent.</p>
+      {recettes.length ? (
+        <ul className="liste-recettes">
+          {recettes.map((x) => (
+            <li key={x.produit}>
+              <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
+                <span className="noms">
+                  <span className="entree">{x.produit}</span>
+                  {anglais(x.produit) && <span className="nom-en">{anglais(x.produit)}</span>}
+                </span>
+                <span className="points" />
+                <span className="renvoi">
+                  {x.ingredients.map((i) => i.nom).join(', ')}
+                  {c && (() => {
+                    const cout = coutMatieres(arbre(x.produit, x.rendement, c.recettes), r.donnees!.ressources).cout
+                    return cout ? <b> · {prix(cout)} septims</b> : null
+                  })()}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="vide-encre">Plus aucune recette pour ce métier.</p>
+      )}
+    </div>
+  )
+}
