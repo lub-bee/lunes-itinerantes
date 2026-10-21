@@ -81,6 +81,12 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
           <EnTete surtitre="Pense-bête" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
             {page.resume && <p className="intro lettrine">{page.resume}</p>}
             {page.auteur && <p className="signature">Consigné par {page.auteur}</p>}
+            {page.citation && (
+              <blockquote className="citation-fin citation-note">
+                <p>{page.citation}</p>
+                {page.citationAuteur && <p className="citation-auteur">— {page.citationAuteur}</p>}
+              </blockquote>
+            )}
           </EnTete>
         )
       case 'avenir':

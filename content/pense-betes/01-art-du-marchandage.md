@@ -4,6 +4,8 @@ court: Marchandage
 resume: Comment lire les prix de ce grimoire, et comment ne jamais repartir la bourse plus légère qu'à l'arrivée.
 icone: scales
 auteur: Les anciens de la caravane
+citation: Mon savoir ? Il est dans la bourse des gens.
+citation_auteur: J'Zahir
 ---
 
 Chaque article du grimoire porte **trois prix**. Khajiit les explique une fois, une seule.
@@ -22,12 +24,11 @@ Le seul vrai plafond est celui du talent oratoire de Khajiit. Mieux vaut commenc
 
 ## Lire la bourse
 
+*Bribe de savoir partagée par frère J'Zahir.*
+
 Avant d'annoncer un prix, Khajiit regarde l'habit. Belle étoffe et bottes cirées : rien en dessous de **50 septims**. Hardes rapiécées et bottes crottées : on parle plutôt de **10 à 15 septims**.
 
 Mieux encore, apprenez ce que pèse la bourse. Le client bavard qui avoue porter 90 septims repartira avec un objet à 85 : Khajiit n'est pas cruel, il lui laisse de quoi boire à la santé de la caravane.
-
-> Mon savoir ? Il est dans la bourse des gens.\
-> — *J'Zahir*
 
 > Règle d'or du marchandage khajiit : qui annonce sa bourse est déjà cuit.\
 > — *Ri'Yazz*

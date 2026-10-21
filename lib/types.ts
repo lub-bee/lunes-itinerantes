@@ -21,7 +21,8 @@ type Base = { id: string; partie: PartieId; titre: string; court: string; icone:
 /** `citation`: closing quote at the foot of the right page. */
 export type PageSommaire = Base & { type: 'sommaire'; citation: string }
 export type PageChapitre = Base & { type: 'chapitre'; titreEn: string; intro: string; articles: Article[] }
-export type PageNote = Base & { type: 'note'; resume: string; auteur: string; html: string; texte: string }
+/** `citation` / `citationAuteur`: optional saying under the memo's summary, on the left page. */
+export type PageNote = Base & { type: 'note'; resume: string; auteur: string; citation: string; citationAuteur: string; html: string; texte: string }
 export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string; citation: string }
 
 export type Page = PageSommaire | PageChapitre | PageNote | PageAvenir
