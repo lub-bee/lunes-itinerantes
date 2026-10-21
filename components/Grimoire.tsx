@@ -7,6 +7,8 @@ import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
+import { ICONE_COPIE } from '@/lib/copie'
+import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Commande'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
@@ -79,6 +81,8 @@ export default function Grimoire({ livre }: { livre: Livre }) {
   const champ = useRef<HTMLInputElement>(null)
   const etroit = useMedia('(max-width: 860px)')
   const sansAnimation = useMedia('(prefers-reduced-motion: reduce)')
+  const commande = useCommande()
+  const bande = useRef<HTMLButtonElement>(null)
 
   // Latest values for the window-level pointer handlers.
   const indexRef = useRef(index)
@@ -352,8 +356,20 @@ export default function Grimoire({ livre }: { livre: Livre }) {
       cible: interactif ? cible : null,
       scrollInitial: scrolls.current[id],
       onScroll: interactif ? (v) => (scrolls.current[id] = v) : undefined,
+      commande: interactif && commande.ouverte ? { ajouter: commande.ajouter } : undefined,
     }
   }
+
+  // The order sheet is lifted aside for the turn and laid back as soon as the leaf has cleared the
+  // left page: a forward leaf lands on it (back just before it settles flat), a backward leaf leaves
+  // it (back once past the vertical). Hand-dragged turns: back when the leaf has snapped.
+  const ecartee = useMemo(() => {
+    if (!tourne) return null
+    if (tourne.manuel) return { retour: null }
+    const n = Math.min(Math.abs(tourne.vers - tourne.de), MAX_FEUILLETS)
+    const dernier = (n - 1) * DECALAGE_FEUILLETS
+    return { retour: tourne.vers > tourne.de ? dernier + DUREE_TOURNE - 60 : dernier + DUREE_TOURNE * 0.56 }
+  }, [tourne])
 
   const destination = tourne?.vers ?? index
   const partieActive: PartieId = pages[destination].partie
@@ -456,6 +472,29 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               ✕
             </button>
           )}
+          {/* Out of the layout flow (absolute): opens the printable copy of the whole register in a new tab. */}
+          <a
+            className="copie-registre"
+            href="/copie"
+            target="_blank"
+            rel="noopener"
+            title="Faire une copie du registre"
+            aria-label="Faire une copie du registre"
+          >
+            <svg width="0" height="0" aria-hidden className="copie-registre-defs">
+              <defs>
+                <linearGradient id="copie-or" x1="0" y1="0" x2="0.35" y2="1">
+                  <stop offset="0%" stopColor="#fff2c4" />
+                  <stop offset="30%" stopColor="#e3b964" />
+                  <stop offset="62%" stopColor="#a87a2c" />
+                  <stop offset="100%" stopColor="#e9c878" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <Icone corps={icones[ICONE_COPIE]} />
+          </a>
+          {/* Order mode: a rolled scroll on the table under the field (absolute, desktop only). */}
+          {etroit === false && <BandeCommande c={commande} bande={bande} icones={icones} />}
           {indexOuvert && requete && (
             <div className="index-recherche" role="listbox">
               {resultats.length === 0 ? (
@@ -593,9 +632,19 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               disabled={destination === pages.length - 1}
               onClick={() => !clicIgnore.current && aller(destination + 1)}
             />
+            {etroit === false && commande.ouverte && (
+              <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
+            )}
           </div>
         </div>
       </main>
+
+      {etroit && (
+        <>
+          {commande.ouverte && commande.deployee && <FeuilleCommande c={commande} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} />}
+          <BarreCommande c={commande} icones={icones} />
+        </>
+      )}
     </div>
   )
 }

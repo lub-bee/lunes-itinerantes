@@ -1,57 +1,61 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { CoinLaiton, Embleme, Fleuron } from './Ornements'
-import { Cle, FiltreFer } from './Fer'
+import { useEffect, useRef, useState } from 'react'
+import { Fleuron } from './Ornements'
+import { Cle } from './Fer'
+import { FaceCouverture } from './Couverture'
 
 type Etat = 'repos' | 'essai' | 'refus' | 'ouvert'
 
-/**
- * Iron lock plate on the cover. Its keyhole is the key's cross-section at the key's scale
- * (the plate is drawn for a 340px key): the round is the shaft, the slot below is the bit.
- */
-function Serrure() {
-  return (
-    <svg className="serrure" viewBox="0 0 84 140" aria-hidden>
-      <defs>
-        <FiltreFer id="fer-serrure" l={84} h={140} />
-        <linearGradient id="trou-g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#000" />
-          <stop offset="100%" stopColor="#15100c" />
-        </linearGradient>
-      </defs>
-      <g filter="url(#fer-serrure)">
-        <path
-          transform="scale(1.1667 1.2069)"
-          d="M36 3C46 10 59 11 67 7C69 24 66 34 59 40C66 46 69 52 69 58C69 65 65 70 59 76C66 83 69 92 67 109C59 105 46 106 36 113C26 106 13 105 5 109C3 92 6 83 13 76C7 70 3 65 3 58C3 52 6 46 13 40C6 34 3 24 5 7C13 11 26 10 36 3Z"
-          fill="#fff"
-        />
-        {[
-          [15, 23],
-          [69, 23],
-          [15, 117],
-          [69, 117],
-        ].map(([x, y]) => (
-          <circle key={`${x}-${y}`} cx={x} cy={y} r="4" fill="#fff" />
-        ))}
-      </g>
-      {/* Keyhole: shaft round (r 16) and bit slot (down to the bit's depth) */}
-      <path d="M37.5 70L36 98H48L46.5 70A16.1 16.1 0 1 0 37.5 70Z" fill="url(#trou-g)" />
-      <path d="M26 58A16 16 0 0 1 58 58" fill="none" stroke="#000" strokeOpacity=".7" strokeWidth="2" />
-      <path d="M28 64A15 15 0 0 0 56 64" fill="none" stroke="#d8d2c6" strokeOpacity=".22" strokeWidth="1" />
-    </svg>
-  )
+/** Refusals sent back by /api/discord/retour (?refus=…). */
+const REFUS: Record<string, string> = {
+  membre: "Ce sceau n'est pas celui de la caravane : Khajiit ne te connaît pas, voyageur.",
+  rang: "La caravane te connaît, mais ton rang n'ouvre pas ce grimoire. Parle aux Patriarches.",
+  discord: "Le sceau n'a pas été présenté. La serrure reste close.",
+  ruse: 'La serrure a senti une ruse. Recommence, ami.',
 }
 
-export default function Sceau() {
+/**
+ * The locked book and its key. With Discord configured the key's shaft reads « Présenter son
+ * sceau »: turning it goes through Discord, and coming back with the right role plays the opening.
+ * With the shared password (alone, or as a second way when allowed) the shaft is the password field.
+ */
+export default function Sceau({ discord = false, motDePasse: avecMotDePasse = true }: { discord?: boolean; motDePasse?: boolean }) {
   const [motDePasse, setMotDePasse] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [etat, setEtat] = useState<Etat>('repos')
+  const [variante, setVariante] = useState<'sceau' | 'mot'>(discord ? 'sceau' : 'mot')
   const champ = useRef<HTMLInputElement>(null)
+
+  // Back from Discord: open the book, or say why the lock stays closed.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const refus = p.get('refus')
+    if (p.has('ouvert') || refus) window.history.replaceState(null, '', '/sceau')
+    if (p.has('ouvert')) {
+      const t1 = setTimeout(() => setEtat('essai'), 350)
+      const t2 = setTimeout(() => setEtat('ouvert'), 900)
+      const t3 = setTimeout(() => window.location.replace('/'), 3000)
+      return () => [t1, t2, t3].forEach(clearTimeout)
+    }
+    if (refus) setMessage(REFUS[refus] ?? REFUS.discord)
+  }, [])
+  // Coming back with the browser's Back button from Discord: the key returns to rest.
+  useEffect(() => {
+    const f = (e: PageTransitionEvent) => e.persisted && setEtat('repos')
+    window.addEventListener('pageshow', f)
+    return () => window.removeEventListener('pageshow', f)
+  }, [])
 
   const tourner = async (e: React.FormEvent) => {
     e.preventDefault()
     if (etat !== 'repos') return
+    if (variante === 'sceau') {
+      setEtat('essai')
+      setMessage(null)
+      setTimeout(() => window.location.assign('/api/discord/depart'), 520) // let the key reach the lock
+      return
+    }
     if (!motDePasse.trim()) {
       champ.current?.focus()
       return
@@ -91,27 +95,23 @@ export default function Sceau() {
           </div>
           <div className="tome-battant">
           <div className="tome-doublure" aria-hidden />
-          <div className="tome-couverture">
-            <div className="tome-charniere" aria-hidden />
-            <CoinLaiton className="hg" />
-            <CoinLaiton className="bg" />
-            <CoinLaiton className="hd" />
-            <CoinLaiton className="bd" />
-            <div className="tome-cadre">
-              <Embleme taille={150} className="tome-embleme" />
-              <h1 className="tome-titre">Lunes Itinérantes</h1>
-              <Fleuron className="tome-fleuron" />
-            </div>
-            <div className="fermoir" aria-hidden>
-              <Serrure />
-            </div>
-          </div>
+          <FaceCouverture />
           </div>
         </div>
 
         <div className="cle-fourreau">
         <form className="cle" onSubmit={tourner}>
           <Cle />
+          {variante === 'sceau' ? (
+            <button
+              type="submit"
+              className="cle-tige cle-tige-sceau"
+              disabled={etat !== 'repos'}
+              title="Le sceau de la caravane se présente par son repaire, sur Discord"
+            >
+              Présenter son sceau
+            </button>
+          ) : (
           <input
             ref={champ}
             className="cle-tige"
@@ -124,6 +124,7 @@ export default function Sceau() {
             disabled={etat !== 'repos'}
             aria-label="Clef des lunes (mot de passe)"
           />
+          )}
           <button type="submit" className="cle-anneau" title="Tourner la clé" aria-label="Tourner la clé" disabled={etat !== 'repos'} />
         </form>
         </div>
@@ -131,6 +132,19 @@ export default function Sceau() {
       <p className="tome-message" role="status">
         {message}
       </p>
+      {/* Both ways open (transition): the other one, out of the layout flow so nothing moves. */}
+      {discord && avecMotDePasse && etat === 'repos' && (
+        <button
+          type="button"
+          className="seuil-variante"
+          onClick={() => {
+            setMessage(null)
+            setVariante((v) => (v === 'sceau' ? 'mot' : 'sceau'))
+          }}
+        >
+          {variante === 'sceau' ? 'ou murmurer la clef des lunes' : 'ou présenter son sceau'}
+        </button>
+      )}
     </main>
   )
 }
