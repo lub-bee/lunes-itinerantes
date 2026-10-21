@@ -557,9 +557,10 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   padding: 36px 52px 22px 48px;
 }
 .droite-contenu { padding: 32px 44px 22px 54px; }
-.gauche-contenu { overflow-y: auto; scrollbar-width: none; }
-.gauche-contenu::-webkit-scrollbar { display: none; }
-.gauche-contenu .folio { margin-top: auto; padding-top: 8px; }
+.gauche-contenu { overflow: hidden; }
+.defile-gauche { display: flex; flex-direction: column; scrollbar-width: none; }
+.defile-gauche::-webkit-scrollbar { display: none; }
+.gauche-contenu .folio { padding-top: 8px; }
 .unique-contenu { padding: 22px 22px 10px 24px; }
 
 .defile { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(90, 60, 30, 0.32) transparent; }

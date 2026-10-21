@@ -166,7 +166,8 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   if (compact) return corps
   return (
     <div className="contenu gauche-contenu" style={teinte(ctx, page)}>
-      {corps}
+      {/* Scrolls inside the page's margins, as the right page does: the folio and the frame stay clear. */}
+      <div className="defile defile-gauche">{corps}</div>
       {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 1} />}
     </div>
   )
