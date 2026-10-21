@@ -6,6 +6,7 @@ import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
+import { ContreGarde, ExLibris } from './ExLibris'
 import { DroiteAtelier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -25,6 +26,10 @@ export type Ctx = {
   /** Missives, recipes and the chest (absent on the faces of a turning leaf: static rendering). */
   registre?: CtxRegistre
 }
+
+/** Pages before the title page (the ex-libris) carry no folio: the numbering starts at the title page. */
+const avantSommaire = (ctx: Ctx) => Math.max(0, ctx.livre.pages.findIndex((p) => p.type === 'sommaire'))
+const folio = (ctx: Ctx) => ctx.index - avantSommaire(ctx)
 
 const EFFACEMENT_MS = 320
 
@@ -76,6 +81,8 @@ const teinte = (ctx: Ctx, page: Page) => ({ '--teinte': ctx.livre.parties.find((
 export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ctx; compact?: boolean }) {
   const corps = (() => {
     switch (page.type) {
+      case 'exlibris':
+        return compact ? null : <ContreGarde />
       case 'sommaire':
         return <Frontispice ctx={ctx} compact={compact} />
       case 'chapitre':
@@ -121,8 +128,8 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         )
       case 'atelier':
         return (
-          <EnTete surtitre="Livre des Missives" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} interactif={ctx.interactif} />
+          <EnTete surtitre="L'Atelier" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'avenir':
@@ -142,7 +149,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   return (
     <div className="contenu gauche-contenu" style={teinte(ctx, page)}>
       {corps}
-      <Folio n={ctx.index * 2 + 1} />
+      {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 1} />}
     </div>
   )
 }
@@ -246,6 +253,8 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
 export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ctx; integre?: boolean }) {
   const corps = (() => {
     switch (page.type) {
+      case 'exlibris':
+        return <ExLibris ctx={ctx} />
       case 'sommaire':
         return (
           <>
@@ -265,11 +274,11 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
           </>
         )
       case 'missive':
-        return <DroiteMissive page={page} reg={ctx.registre} />
+        return <DroiteMissive page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} />
       case 'coffre':
         return <DroiteCoffre reg={ctx.registre} />
       case 'atelier':
-        return <DroiteAtelier reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} />
+        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} />
       case 'avenir':
         return (
           <div className="attente">
@@ -286,7 +295,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
   return (
     <div className="contenu droite-contenu" style={teinte(ctx, page)}>
       <Defile ctx={ctx}>{corps}</Defile>
-      <Folio n={ctx.index * 2 + 2} />
+      {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 2} />}
     </div>
   )
 }
@@ -298,7 +307,7 @@ export function PageUnique({ page, ctx }: { page: Page; ctx: Ctx }) {
       <Defile ctx={ctx}>
         <PageGauche page={page} ctx={ctx} compact />
         <PageDroite page={page} ctx={ctx} integre />
-        <Folio n={ctx.index + 1} />
+        {page.type !== 'exlibris' && <Folio n={folio(ctx) + 1} />}
       </Defile>
     </div>
   )
@@ -321,7 +330,7 @@ function TableDesMatieres({ ctx }: { ctx: Ctx }) {
                     <button type="button" tabIndex={ctx.interactif ? 0 : -1} onClick={() => ctx.aller?.(i)}>
                       <span className="entree">{p.titre}</span>
                       <span className="points" />
-                      <span className="renvoi">{romain(i * 2 + 1)}</span>
+                      <span className="renvoi">{romain((i - avantSommaire(ctx)) * 2 + 1)}</span>
                     </button>
                   </li>
                 ),

@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import type { Article, Livre, Page, PageChapitre, PageMissive, PartieId } from '@/lib/types'
+import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMissive, PartieId } from '@/lib/types'
+import { estClose } from '@/lib/missives'
 import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
@@ -75,22 +76,25 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const articles = useMemo(() => livreServeur.pages.flatMap((p) => (p.type === 'chapitre' ? (p as PageChapitre).articles : [])), [livreServeur])
   const registre = useRegistre(articles)
 
-  // One page per missive, after the list of missives: open ones (oldest first), then closed ones.
+  // The ex-libris first (when the registre is linked), and one page per missive after the list of
+  // missives: open ones (oldest first), then closed ones.
+  const relie = Boolean(registre.marchand?.relie)
   const livre = useMemo((): Livre => {
     const etats = registre.calcul?.etats ?? []
-    const vues: PageMissive[] = [...etats.filter((e) => e.missive.statut !== 'close'), ...etats.filter((e) => e.missive.statut === 'close')].map((e) => ({
+    const vues: PageMissive[] = [...etats.filter((e) => !estClose(e.missive)), ...etats.filter((e) => estClose(e.missive))].map((e) => ({
       type: 'missive',
       id: idMissive(e.missive.numero),
       partie: 'missives',
       numero: e.missive.numero,
       titre: e.missive.titre,
       court: e.missive.titre.length > COURT_MAX ? `${e.missive.titre.slice(0, COURT_MAX - 1).trimEnd()}…` : e.missive.titre,
-      icone: e.missive.statut === 'close' ? 'wax-seal' : 'tied-scroll',
+      icone: estClose(e.missive) ? 'wax-seal' : 'tied-scroll',
     }))
-    if (!vues.length) return livreServeur
+    const exLibris: PageExLibris[] = relie ? [{ type: 'exlibris', id: 'ex-libris', partie: 'sommaire', titre: 'Ex-libris', court: 'Ex-libris', icone: 'quill' }] : []
+    if (!vues.length && !exLibris.length) return livreServeur
     const apres = livreServeur.pages.findIndex((p) => p.type === 'missives') + 1
-    return { ...livreServeur, pages: [...livreServeur.pages.slice(0, apres), ...vues, ...livreServeur.pages.slice(apres)] }
-  }, [livreServeur, registre.calcul])
+    return { ...livreServeur, pages: [...exLibris, ...livreServeur.pages.slice(0, apres), ...vues, ...livreServeur.pages.slice(apres)] }
+  }, [livreServeur, registre.calcul, relie])
   const { pages } = livre
 
   const [index, setIndex] = useState(0)
@@ -324,6 +328,23 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     aller(i)
   }, [versId, pages, aller])
 
+  /* ── First opening: the ex-libris ───────────────────────── */
+
+  // The pages wait for the reader's signature to be known (a quick call, no sheet), so a reader not yet
+  // recognized opens the book on its ex-libris, and a known one on the title page.
+  const [pretSignature, setPretSignature] = useState(false)
+  useEffect(() => {
+    if (registre.marchand) return setPretSignature(true)
+    const t = setTimeout(() => setPretSignature(true), 1500)
+    return () => clearTimeout(t)
+  }, [registre.marchand])
+  const premiereOuverture = useRef(true)
+  useEffect(() => {
+    if (!registre.marchand || !premiereOuverture.current) return
+    premiereOuverture.current = false
+    if (registre.marchand.relie && !registre.marchand.identite && !window.location.hash) setIndex(0)
+  }, [registre.marchand])
+
   /* ── Deep links ─────────────────────────────────────────── */
 
   // The page named in the address opens once it exists (a missive's page appears only after the
@@ -335,7 +356,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     const i = pages.findIndex((p) => p.id === lienInitial.current)
     if (i < 0) return
     lienInitial.current = ''
-    if (i > 0) setIndex(i)
+    setIndex(i)
   }, [pages])
   useEffect(() => {
     if (lienInitial.current) return
@@ -606,18 +627,31 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
       <main className={`livre-zone ${etroit === null ? 'en-attente' : ''}`}>
         <nav className="rubans" aria-label="Livres du grimoire">
-          {parties.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className={`ruban ${partieActive === p.id ? 'actif' : ''}`}
-              style={{ '--c': p.couleur } as CSSProperties}
-              onClick={() => aller(pages.findIndex((pg) => pg.partie === p.id))}
-            >
-              <Icone corps={icones[p.icone]} className="ruban-icone" />
-              <span className="ruban-nom">{p.court}</span>
-            </button>
-          ))}
+          {parties.map((p) =>
+            // The Sommaire ribbon is bare: only its shape and its forked end.
+            p.id === 'sommaire' ? (
+              <button
+                key={p.id}
+                type="button"
+                className={`ruban minimal ${partieActive === p.id ? 'actif' : ''}`}
+                style={{ '--c': p.couleur } as CSSProperties}
+                aria-label={p.titre}
+                title={p.titre}
+                onClick={() => aller(pages.findIndex((pg) => pg.type === 'sommaire'))}
+              />
+            ) : (
+              <button
+                key={p.id}
+                type="button"
+                className={`ruban ${partieActive === p.id ? 'actif' : ''}`}
+                style={{ '--c': p.couleur } as CSSProperties}
+                onClick={() => aller(pages.findIndex((pg) => pg.partie === p.id))}
+              >
+                <Icone corps={icones[p.icone]} className="ruban-icone" />
+                <span className="ruban-nom">{p.court}</span>
+              </button>
+            ),
+          )}
         </nav>
 
         <nav className="onglets" aria-label="Chapitres">
@@ -643,7 +677,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           <CoinLaiton className="bd" />
           <div className="bloc-papier" aria-hidden />
           <div className="feuillets" ref={feuillets} onPointerDown={debutGeste}>
-            {etroit === null ? null : etroit ? (
+            {etroit === null || !pretSignature ? null : etroit ? (
               <>
                 <div className="page unique">
                   <PageUnique key={pages[uniqueBase].id} page={pages[uniqueBase]} ctx={ctx(uniqueBase, !tourne)} />
@@ -705,6 +739,13 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           </div>
         </div>
       </main>
+
+      {/* A write shown at once and then refused by the registre: an in-character notice, taken away on click. */}
+      {registre.avis && (
+        <button type="button" key={registre.avis.n} className="avis-registre" role="alert" onClick={registre.fermerAvis}>
+          {registre.avis.texte}
+        </button>
+      )}
 
       {etroit && (
         <>

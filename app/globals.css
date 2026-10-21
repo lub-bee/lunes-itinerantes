@@ -1986,8 +1986,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .fiche-sceller.confirmer { background-color: #5c0d06; }
 
 /* Order sheet: a recognized seller, and the answer when the typed name is not on the list. */
-.commande-vendeur-changer { flex: none; padding: 0 2px; border: 0; border-bottom: 1px dotted rgba(90, 64, 41, 0.5); background: none; font-family: var(--f-capitales); font-size: 12px; color: var(--encre-pale); cursor: pointer; }
-.commande-vendeur-changer:hover, .commande-vendeur-changer:focus-visible { outline: none; color: var(--encre-rouge); }
+.commande-vendeur-changer { flex: none; font-size: 11.5px; padding: 0 2px; }
 .commande-avis-nom { margin: -2px 0 6px; }
 
 @media (min-width: 861px) and (max-width: 1139px) {
@@ -2035,6 +2034,235 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   .geste { font-size: 15px; }
   .geste-cachet { width: 30px; height: 30px; }
   .fiche-releve-entete, .fiche-releve-ligne { grid-template-columns: minmax(0, 1fr) 82px 60px; }
+}
+
+
+/* ─── v3 second pass: missive page, slips, the scribe, the notice, the ex-libris ─── */
+
+.registre-ferme button { margin-top: 6px; }
+.registre-ferme p { margin: 0; }
+.lignes-missive.simples li { padding: 4px 2px; font-size: 18px; }
+.lignes-missive.simples strong { font-weight: 400; font-family: var(--f-capitales); color: var(--encre-rouge); margin-right: 4px; }
+.missive-close.inachevee { color: #5a4a2a; }
+.entree-missive.inachevee .entree-missive-titre { text-decoration-style: wavy; text-decoration-color: rgba(90, 74, 42, 0.5); }
+
+/* Needs: progress of each row in ink under its name; a missing row opens the deposit slip. */
+.besoins-nom { gap: 1px; }
+.besoins-nom .jauge { height: 6px; margin: 3px 0 1px; max-width: 220px; }
+.besoins-mot { display: inline-flex; align-items: baseline; gap: 6px; }
+.a-faconner { font-size: 13.5px; color: var(--encre-pale); cursor: help; }
+.besoins-ligne.actionnable { cursor: pointer; transition: background 160ms ease; }
+.besoins-ligne.actionnable:hover, .besoins-ligne.actionnable:focus-visible { outline: none; background: linear-gradient(90deg, rgba(142, 31, 20, 0.08), rgba(201, 162, 78, 0.12) 50%, transparent); }
+.besoins-faconner {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: rgba(94, 42, 18, 0.7);
+  cursor: pointer;
+  vertical-align: -3px;
+}
+.besoins-faconner .icone { width: 16px; height: 16px; }
+.besoins-faconner:hover, .besoins-faconner:focus-visible { outline: none; color: var(--encre-rouge); background: rgba(201, 162, 78, 0.28); }
+
+/* Contributors: what each brought, in septims of value, and their share of the merit. */
+.part { grid-template-columns: minmax(0, 1fr) 110px 98px; grid-template-areas: 'nom jauge pc' 'detail detail detail'; row-gap: 1px; }
+.part-detail { font-size: 14.5px; color: var(--encre-douce); }
+.part-detail strong { font-weight: 400; font-style: normal; font-family: var(--f-capitales); color: var(--encre); }
+.part-pc { font-size: 15px; white-space: nowrap; }
+.part-pc em { font-family: var(--f-texte); font-size: 13px; color: var(--encre-pale); }
+
+/* Rows written on the page before the registre's answer: fresh ink, still pale. */
+.journal li.encre-fraiche { opacity: 0.55; }
+.journal li.encre-fraiche .journal-quoi { font-style: italic; }
+
+/* Slips: plain lines « Bière + 200 », « Blé − 1000 ». */
+.fiche-releve-ligne.fiche-plain { grid-template-columns: minmax(0, 1fr) 18px 84px; }
+.fiche-signe { text-align: right; font-family: var(--f-capitales); font-size: 18px; color: var(--encre-rouge); }
+.fiche-livre { text-align: right; font-weight: 400; font-size: 17px; font-variant-numeric: tabular-nums lining-nums; }
+.fiche-livre::before { content: '− '; color: var(--encre-rouge); }
+
+/* The scribe at work: a quill runs along a line of ink that spreads, then a wax seal is stamped. */
+.scribe { position: relative; display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 4px; }
+.scribe-ligne { position: relative; width: 120px; height: 26px; }
+.scribe-encre {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(42, 24, 11, 0.85), rgba(42, 24, 11, 0.55));
+  transform-origin: 0 50%;
+  animation: scribe-encre 1300ms cubic-bezier(.4, .1, .4, 1) infinite;
+}
+.scribe-plume { position: absolute; left: 0; bottom: 3px; width: 26px; height: 26px; color: var(--encre); transform-origin: 2px 24px; animation: scribe-plume 1300ms cubic-bezier(.4, .1, .4, 1) infinite; }
+.scribe-plume .icone { width: 100%; height: 100%; transform: scaleX(-1); }
+@keyframes scribe-encre { 0% { transform: scaleX(0); opacity: 1; } 80% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes scribe-plume {
+  0% { transform: translateX(0) rotate(-8deg); }
+  20% { transform: translateX(22px) translateY(-2px) rotate(4deg); }
+  40% { transform: translateX(46px) rotate(-6deg); }
+  60% { transform: translateX(70px) translateY(-2px) rotate(5deg); }
+  80% { transform: translateX(94px) rotate(-4deg); opacity: 1; }
+  100% { transform: translateX(96px) translateY(-6px) rotate(-12deg); opacity: 0; }
+}
+.scribe-mot { font-style: italic; font-size: 17px; color: var(--encre-douce); }
+.scribe-cachet {
+  position: absolute;
+  left: 46px;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 48% 52% 46% 54% / 53% 47% 53% 47%;
+  background: radial-gradient(circle at 34% 30%, #e0604c, #a52618 50%, #5c0d06 100%);
+  box-shadow: inset 0 0 0 3px rgba(80, 8, 2, 0.35), 0 2px 3px rgba(20, 4, 0, 0.55);
+  color: rgba(70, 6, 0, 0.75);
+  opacity: 0;
+  transform: scale(1.8) rotate(-20deg);
+}
+.scribe-cachet .icone { width: 26px; height: 26px; }
+.scribe.scelle .scribe-ligne { opacity: 0; transition: opacity 200ms ease; }
+.scribe.scelle .scribe-cachet { animation: cachet 420ms cubic-bezier(.3, 1.5, .5, 1) both; }
+.scribe.scelle .scribe-mot { color: #2f5b3a; font-family: var(--f-capitales); font-style: normal; }
+@keyframes cachet { to { opacity: 1; transform: scale(1) rotate(-8deg); } }
+
+/* A write refused after it was shown: a slip of paper at the top of the table, taken away on click. */
+.avis-registre {
+  position: fixed;
+  z-index: 60;
+  top: 14px;
+  left: 50%;
+  max-width: min(560px, calc(100vw - 32px));
+  translate: -50% 0;
+  padding: 12px 20px 11px;
+  border: 0;
+  border-radius: 2px;
+  background-color: #ece0c4;
+  background-image: radial-gradient(ellipse at 20% 0%, rgba(255, 252, 240, 0.45), transparent 60%), var(--chiffon);
+  background-size: auto, 512px 512px;
+  box-shadow: inset 0 0 18px rgba(130, 96, 50, 0.3), 0 6px 18px rgba(0, 0, 0, 0.6);
+  color: var(--encre-rouge);
+  font-family: var(--f-texte);
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+  rotate: -0.6deg;
+  cursor: pointer;
+  animation: avis 320ms cubic-bezier(.2, .8, .3, 1) both;
+}
+@keyframes avis { from { opacity: 0; transform: translateY(-14px); } }
+
+/* ─── The ex-libris ─── */
+.contregarde { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.filigrane { width: auto; height: 46%; opacity: 0.07; filter: grayscale(1) sepia(0.6); }
+.ex-libris-zone { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 0; }
+.ex-libris {
+  position: relative;
+  isolation: isolate;
+  width: min(380px, 100%);
+  padding: 30px 34px 24px;
+  text-align: center;
+  color: var(--encre);
+  rotate: -0.5deg;
+}
+/* Paper pasted on the page: warmer, foxed, a deckled edge and the thin shadow of a glued sheet. */
+.ex-libris-papier {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-color: #eadbb8;
+  background-image:
+    radial-gradient(ellipse at 80% 12%, rgba(150, 100, 40, 0.16), transparent 40%),
+    radial-gradient(ellipse at 12% 90%, rgba(150, 100, 40, 0.2), transparent 45%),
+    radial-gradient(circle at 70% 78%, rgba(130, 80, 30, 0.12) 0 2%, transparent 3%),
+    var(--taches),
+    var(--chiffon);
+  background-size: auto, auto, auto, 640px 640px, 512px 512px;
+  box-shadow:
+    inset 0 0 0 7px #eadbb8,
+    inset 0 0 0 8.5px rgba(110, 60, 25, 0.55),
+    inset 0 0 0 11px #eadbb8,
+    inset 0 0 0 12px rgba(110, 60, 25, 0.35),
+    inset 0 0 24px rgba(120, 80, 30, 0.3),
+    1px 2px 3px rgba(50, 28, 8, 0.32),
+    0 0 1px rgba(50, 28, 8, 0.4);
+}
+.ex-libris-coin { position: absolute; font-size: 15px; color: rgba(142, 31, 20, 0.7); line-height: 1; }
+.ex-libris-coin.hg { top: 15px; left: 16px; transform: rotate(-45deg); }
+.ex-libris-coin.hd { top: 15px; right: 16px; transform: rotate(45deg) scaleX(-1); }
+.ex-libris-coin.bg { bottom: 15px; left: 16px; transform: rotate(-135deg) scaleX(-1); }
+.ex-libris-coin.bd { bottom: 15px; right: 16px; transform: rotate(135deg); }
+.ex-libris-titre { font-family: var(--f-gothique); font-size: 38px; line-height: 1; color: var(--encre-rouge); text-shadow: 0 1px 0 rgba(255, 250, 230, 0.5); }
+.ex-libris-lunes { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 10px 0 6px; }
+.ex-libris-lunes .lune { font-size: 26px; color: #b48a3a; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6), 0 0 6px rgba(201, 162, 78, 0.35); }
+.ex-libris-embleme { flex: none; filter: drop-shadow(0 1px 0 rgba(60, 30, 10, 0.55)) drop-shadow(0 2px 3px rgba(60, 30, 10, 0.35)); }
+.ex-libris-texte { margin: 8px 0 2px; font-style: italic; font-size: 18px; color: var(--encre-douce); }
+.ex-libris-ligne { position: relative; display: flex; align-items: flex-end; gap: 8px; min-height: 64px; margin: 0 4px; border-bottom: 1.5px dotted rgba(90, 64, 41, 0.6); }
+.ex-libris-ligne.signee { justify-content: center; }
+.ex-libris-saisie { position: relative; flex: 1; min-width: 0; }
+.ex-libris-saisie input {
+  width: 100%;
+  padding: 0 4px 2px;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-plume), var(--f-texte);
+  font-size: 34px;
+  line-height: 1.5;
+  color: #1e1208;
+  text-align: center;
+  transition: opacity 600ms ease;
+}
+.ex-libris-saisie input::placeholder { font-family: var(--f-texte); font-style: italic; font-size: 17px; color: var(--encre-pale); }
+.ex-libris-saisie input.bave { opacity: 0.25; }
+/* An unknown name: an ink blot spreads on it, then dries pale. */
+.ex-libris-tache {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 46px;
+  margin: -23px 0 0 -60px;
+  border-radius: 46% 54% 42% 58% / 58% 40% 60% 42%;
+  background: radial-gradient(ellipse at 45% 50%, rgba(30, 16, 6, 0.75), rgba(30, 16, 6, 0.45) 45%, rgba(30, 16, 6, 0.12) 68%, transparent 72%);
+  pointer-events: none;
+  animation: tache 1600ms cubic-bezier(.2, .7, .3, 1) both;
+}
+@keyframes tache { 0% { opacity: 0; transform: scale(0.2) rotate(-8deg); } 25% { opacity: 1; transform: scale(1) rotate(0deg); } 100% { opacity: 0.18; transform: scale(1.08) rotate(2deg); } }
+.ex-libris-signer { flex: none; padding: 0 0 8px; border: 0; background: none; cursor: pointer; }
+.ex-libris-signer .commande-cire { width: 34px; height: 34px; transition: transform 180ms ease; }
+.ex-libris-signer .commande-cire .icone { width: 20px; height: 20px; color: rgba(255, 214, 170, 0.85); }
+.ex-libris-signer:hover:not(:disabled) .commande-cire, .ex-libris-signer:focus-visible .commande-cire { transform: rotate(-12deg) scale(1.06); }
+.ex-libris-signer:disabled { cursor: default; opacity: 0.55; }
+.ex-libris-signer:focus-visible { outline: none; }
+.ex-libris-nom { font-family: var(--font-plume), var(--f-texte); font-size: 40px; line-height: 1.5; color: #1e1208; white-space: nowrap; }
+.ex-libris-nom span { display: inline-block; }
+.ex-libris-nom.frais span { animation: trace 420ms ease-out both; }
+@keyframes trace { from { opacity: 0; transform: translate(-3px, 1px) scale(0.92); } }
+.ex-libris-refus { margin: 8px 0 0; font-style: italic; font-size: 15px; line-height: 1.35; color: var(--encre-rouge); }
+.ex-libris-attente { margin: 8px 0 0; font-style: italic; font-size: 15px; color: var(--encre-douce); }
+.ex-libris-voeu { margin: 14px 4px 10px; font-style: italic; font-size: 14.5px; line-height: 1.45; color: var(--encre-douce); hyphens: auto; }
+.ex-libris-pied { font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.18em; color: var(--encre-pale); }
+.ex-libris-autre { margin-top: 14px; }
+
+@media (min-width: 861px) and (max-width: 1139px) {
+  .part { grid-template-columns: minmax(0, 1fr) 70px 92px; }
+}
+@media (max-width: 860px) {
+  .ex-libris { padding: 26px 22px 20px; }
+  .ex-libris-titre { font-size: 32px; }
+  .ex-libris-nom { font-size: 34px; }
+  .part { grid-template-columns: minmax(0, 1fr) 60px 90px; }
+  .fiche-releve-ligne.fiche-plain { grid-template-columns: minmax(0, 1fr) 16px 70px; }
 }
 
 /* ═══════════════════════════ Seal (login): a locked book and its key ═══════════════════════════ */
@@ -2455,4 +2683,32 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   .copie-fin { color: var(--encre-douce); text-shadow: none; break-inside: avoid; }
   .copie-fin .fleuron { color: var(--encre-rouge); }
   .copie a { color: inherit; text-decoration: none; }
+}
+
+/* ─── Raw materials: a small buying ledger (current price, good deal) ─── */
+.registre.matieres { min-height: 0; }
+.matieres-entete, .ligne.matiere { grid-template-columns: minmax(0, max-content) minmax(18px, 1fr) 76px 76px; }
+.matieres-entete .col-article { grid-column: 1 / 3; }
+.ligne.matiere { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ligne.matiere:focus-visible { outline: none; background: rgba(201, 162, 78, 0.18); }
+.matiere-origine { font-size: 13px; font-style: italic; color: var(--encre-pale); }
+.prix-affaire { color: #2f5b3a; }
+.fiche-cout { margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid rgba(47, 91, 58, 0.25); color: var(--encre-douce); }
+.fiche-cout p { margin: 2px 0; }
+.fiche-cout strong { font-weight: 400; font-family: var(--f-capitales); color: var(--encre-rouge); }
+.fiche-cout-note { font-size: 13px; font-style: italic; color: var(--encre-pale); }
+@media (max-width: 860px) {
+  .matieres-entete, .ligne.matiere { grid-template-columns: minmax(0, max-content) minmax(6px, 1fr) 46px 52px; }
+}
+
+/* ─── The bare Sommaire ribbon: its shape and forked end only ─── */
+.ruban.minimal { width: 40px; padding: 0; }
+.liste-recettes .renvoi b { font-weight: 400; font-style: normal; color: var(--encre-rouge); }
+@media (max-width: 860px) {
+  .ruban.minimal, .ruban.minimal.actif {
+    flex: 0 0 30px;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+    border-radius: 3px 3px 0 0;
+    border-bottom: 0;
+  }
 }

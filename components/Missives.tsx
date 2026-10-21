@@ -3,7 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import type { PageAtelier, PageCoffre, PageMissive, PageMissives } from '@/lib/types'
 import { dateTamrielique, prix } from '@/lib/format'
-import { cle, enStock, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
+import { arbre, cle, coutMatieres, enStock, estClose, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { Icone } from './Ornements'
 
@@ -19,7 +19,9 @@ export type Fiche =
   | { genre: 'ressource'; nom: string }
   | { genre: 'missive' }
   | { genre: 'releve'; numero?: string }
-  | { genre: 'depot' | 'fabrication' | 'livraison' | 'cloture'; numero: string }
+  | { genre: 'depot'; numero: string; objet?: string; quantite?: number }
+  | { genre: 'fabrication'; numero: string; produit?: string }
+  | { genre: 'livrer' | 'abandonner'; numero: string }
 
 export type CtxRegistre = {
   r: EtatRegistre
@@ -135,7 +137,15 @@ export function Signature({ r, invite, icones }: { r: EtatRegistre; invite?: str
 }
 
 function Ferme({ r }: { r: EtatRegistre }) {
-  if (r.erreur) return <p className="registre-ferme">{r.erreur}</p>
+  if (r.erreur && !r.donnees)
+    return (
+      <div className="registre-ferme">
+        <p>{r.erreur}</p>
+        <button type="button" className="lien-encre" onClick={r.relire}>
+          renvoyer le coursier
+        </button>
+      </div>
+    )
   if (!r.donnees) return <p className="registre-ferme attente-encre">Le scribe déroule le registre…</p>
   if (!r.donnees.relie) return <p className="registre-ferme">Le registre des missives n&apos;est pas encore relié au grimoire. Qu&apos;un patriarche y pourvoie.</p>
   return null
@@ -147,7 +157,7 @@ const ouvert = (r: EtatRegistre) => Boolean(r.donnees?.relie && r.calcul)
 
 export function GaucheMissives({ page, reg, icones, compact }: { page: PageMissives; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
   const r = reg?.r
-  const enCours = r?.calcul?.etats.filter((e) => e.missive.statut !== 'close').length ?? 0
+  const enCours = r?.calcul?.etats.filter((e) => !estClose(e.missive)).length ?? 0
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
@@ -173,15 +183,18 @@ export function GaucheMissives({ page, reg, icones, compact }: { page: PageMissi
 
 function EntreeMissive({ e, reg, tab }: { e: EtatMissive; reg: CtxRegistre; tab: number }) {
   const m = e.missive
-  const close = m.statut === 'close'
+  const close = estClose(m)
   return (
     <li>
-      <button type="button" className={`entree-missive ${close ? 'close' : ''}`} tabIndex={tab} onClick={() => reg.allerA(idMissive(m.numero))}>
+      <button type="button" className={`entree-missive ${close ? 'close' : ''} ${m.statut === 'inachevée' ? 'inachevee' : ''}`} tabIndex={tab} onClick={() => reg.allerA(idMissive(m.numero))}>
         <span className="entree-missive-titre">{m.titre}</span>
         <span className="entree-missive-meta">
           {m.commanditaire && <>pour {m.commanditaire} · </>}
           {close ? (
-            <>close{m.recompense !== null ? `, ${prix(m.recompense)} septims partagés` : ''}</>
+            <>
+              {m.statut}
+              {m.recompense ? `, ${prix(m.recompense)} septims partagés` : ''}
+            </>
           ) : (
             <>
               {m.lignes.map((l) => `${quantite(l.quantite)} ${l.produit}`).join(', ')}
@@ -202,21 +215,22 @@ function EntreeMissive({ e, reg, tab }: { e: EtatMissive; reg: CtxRegistre; tab:
 
 export function DroiteMissives({ reg, interactif }: { reg?: CtxRegistre; interactif: boolean }) {
   const etats = reg?.r.calcul?.etats ?? []
-  const enCours = etats.filter((e) => e.missive.statut !== 'close').reverse()
-  const closes = etats.filter((e) => e.missive.statut === 'close').reverse()
+  const enCours = etats.filter((e) => !estClose(e.missive)).reverse()
+  const closes = etats.filter((e) => estClose(e.missive)).reverse()
   const tab = interactif ? 0 : -1
+  if (!reg?.r.donnees?.relie) return null
   return (
     <div className="missives-liste">
       <h3 className="titre-section">Missives en cours</h3>
       {enCours.length ? (
-        <ul className="liste-missives">{enCours.map((e) => <EntreeMissive key={e.missive.numero} e={e} reg={reg!} tab={tab} />)}</ul>
+        <ul className="liste-missives">{enCours.map((e) => <EntreeMissive key={e.missive.numero} e={e} reg={reg} tab={tab} />)}</ul>
       ) : (
         <p className="vide-encre">Nulle missive n&apos;attend la caravane.</p>
       )}
       {closes.length > 0 && (
         <>
           <h3 className="titre-section">Missives closes</h3>
-          <ul className="liste-missives">{closes.map((e) => <EntreeMissive key={e.missive.numero} e={e} reg={reg!} tab={tab} />)}</ul>
+          <ul className="liste-missives">{closes.map((e) => <EntreeMissive key={e.missive.numero} e={e} reg={reg} tab={tab} />)}</ul>
         </>
       )}
     </div>
@@ -231,7 +245,7 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
   const e = etatDe(reg, page.numero)
   if (!reg || !e) return reg ? <Ferme r={reg.r} /> : null
   const m = e.missive
-  const close = m.statut === 'close'
+  const close = estClose(m)
   const droits = reg.r.marchand?.droits
   const permis = (a: keyof NonNullable<typeof droits>) => droits?.[a] !== false
   return (
@@ -243,37 +257,23 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
           {m.horodatage && <> le {dateTamrielique(m.horodatage)}</>}
         </p>
         {close && (
-          <p className="missive-close">
-            Close le {dateTamrielique(m.closeLe)} par {m.closePar}
-            {m.recompense !== null && <> — récompense de {prix(m.recompense)} septims</>}
+          <p className={`missive-close ${m.statut === 'inachevée' ? 'inachevee' : ''}`}>
+            {m.statut === 'livrée' ? 'Livrée' : 'Close inachevée'}
+            {m.closeLe && <> le {dateTamrielique(m.closeLe)}</>}
+            {m.closePar && <> par {m.closePar}</>}
+            {m.recompense ? <> — récompense de {prix(m.recompense)} septims</> : null}
+            {m.noteCloture && <em> ({m.noteCloture})</em>}
           </p>
         )}
       </div>
       <h3 className="titre-section">Ouvrages demandés</h3>
-      <ul className="lignes-missive">
+      <ul className="lignes-missive simples">
         {e.lignes.map((l) => (
           <li key={l.produit}>
-            <div className="ligne-missive-nom">
-              <span>
-                <strong>{quantite(l.quantite)}</strong> {l.produit}
-              </span>
-              <span className="ligne-missive-etat">
-                {l.livre > 0 && <>{quantite(l.livre)} livré{l.livre > 1 ? 's' : ''}</>}
-                {l.livre > 0 && l.auCoffre > 0 && ' · '}
-                {l.auCoffre > 0 && <>{quantite(l.auCoffre)} au coffre</>}
-              </span>
-            </div>
-            <Jauge avance={close ? 1 : l.avance} />
+            <strong>{quantite(l.quantite)}</strong> {l.produit}
           </li>
         ))}
       </ul>
-      {!close && (
-        <p className="avance-totale">
-          <span>Avancement</span>
-          <Jauge avance={e.avance} />
-          <strong>{Math.round(e.avance * 100)} %</strong>
-        </p>
-      )}
       {!close && (
         <>
           <Signature r={reg.r} icones={icones} invite="Pour écrire au registre de cette missive, signe de ton nom." />
@@ -281,8 +281,8 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
             {permis('releve') && <Geste icone={icones['magnifying-glass']} onClick={() => reg.ouvrir({ genre: 'releve', numero: m.numero })}>Relever le coffre</Geste>}
             {permis('depot') && <Geste icone={icones['open-chest']} onClick={() => reg.ouvrir({ genre: 'depot', numero: m.numero })}>Déposer au coffre</Geste>}
             {permis('fabrication') && <Geste icone={icones['anvil-impact']} onClick={() => reg.ouvrir({ genre: 'fabrication', numero: m.numero })}>Façonner</Geste>}
-            {permis('livraison') && <Geste icone={icones['hand-truck']} onClick={() => reg.ouvrir({ genre: 'livraison', numero: m.numero })}>Livrer au commanditaire</Geste>}
-            {permis('cloture') && <Geste icone={icones['wax-seal']} onClick={() => reg.ouvrir({ genre: 'cloture', numero: m.numero })}>Clore la missive</Geste>}
+            {permis('cloture') && <Geste icone={icones['hand-truck']} onClick={() => reg.ouvrir({ genre: 'livrer', numero: m.numero })}>Livrer la missive</Geste>}
+            {permis('cloture') && <Geste icone={icones['wax-seal']} onClick={() => reg.ouvrir({ genre: 'abandonner', numero: m.numero })}>Abandonner la missive</Geste>}
           </div>
         </>
       )}
@@ -296,7 +296,24 @@ const NIVEAUX: { n: Niveau; titre: string }[] = [
   { n: 'brut', titre: 'Matières premières' },
 ]
 
-function TableBesoins({ besoins }: { besoins: LigneBesoin[] }) {
+/** « à façonner : N » for an item with a recipe: units to make for what is missing (whole crafts). */
+function AFaconner({ b }: { b: LigneBesoin }) {
+  if (b.rendement === null) return null
+  const n = b.fournees * b.rendement
+  const titre = b.fournees
+    ? `${b.fournees} fournée${b.fournees > 1 ? 's' : ''} à faire pour ce qui manque (une fournée donne ${quantite(b.rendement)})`
+    : 'Le coffre en tient assez : rien à façonner.'
+  return (
+    <em className="a-faconner" title={titre}>
+      {n ? `à façonner : ${quantite(n)}` : 'rien à façonner'}
+    </em>
+  )
+}
+
+function TableBesoins({ e, reg, interactif, icones }: { e: EtatMissive; reg: CtxRegistre; interactif: boolean; icones: Record<string, string> }) {
+  const ouverte = !estClose(e.missive) && interactif && Boolean(reg.r.marchand)
+  const droits = reg.r.marchand?.droits
+  const lignesFinies = new Map(e.lignes.map((l) => [cle(l.produit), l]))
   return (
     <div className="besoins" role="table" aria-label="Besoins de la missive">
       <div className="besoins-entete" role="row">
@@ -306,22 +323,63 @@ function TableBesoins({ besoins }: { besoins: LigneBesoin[] }) {
         <span>Manque</span>
       </div>
       {NIVEAUX.map(({ n, titre }) => {
-        const ls = besoins.filter((b) => b.niveau === n)
+        const ls = e.besoins.filter((b) => b.niveau === n)
         if (!ls.length) return null
         return (
           <div key={n} className={`besoins-niveau niveau-${n}`} role="rowgroup">
             <div className="besoins-titre" role="row">{titre}</div>
-            {ls.map((b) => (
-              <div key={b.nom} className={`besoins-ligne ${b.manque > 0 ? 'manquant' : 'reuni'}`} role="row">
-                <span className="besoins-nom">
-                  {b.nom}
-                  {b.fournees > 0 && <em>{b.fournees} fournée{b.fournees > 1 ? 's' : ''} à façonner</em>}
-                </span>
-                <span>{quantite(b.besoin)}</span>
-                <span>{quantite(b.auCoffre)}</span>
-                <span className="besoins-manque">{b.manque > 0 ? quantite(b.manque) : 'réuni'}</span>
-              </div>
-            ))}
+            {ls.map((b) => {
+              // Progress of the row: what the chest holds (and, for a requested good, what was delivered).
+              const fini = lignesFinies.get(cle(b.nom))
+              const avance = fini ? fini.avance : b.besoin > 0 ? b.auCoffre / b.besoin : 1
+              const deposer = ouverte && b.manque > 0 && droits?.depot !== false
+              const faconner = ouverte && b.rendement !== null && b.fournees > 0 && droits?.fabrication !== false
+              return (
+                <div
+                  key={b.nom}
+                  className={`besoins-ligne ${b.manque > 0 ? 'manquant' : 'reuni'} ${deposer ? 'actionnable' : ''}`}
+                  role="row"
+                  {...(deposer
+                    ? {
+                        tabIndex: 0,
+                        title: `Déposer ${quantite(b.manque)} ${b.nom} au coffre`,
+                        onClick: () => reg.ouvrir({ genre: 'depot', numero: e.missive.numero, objet: b.nom, quantite: b.manque }),
+                        onKeyDown: (ev: React.KeyboardEvent) => {
+                          if (ev.target !== ev.currentTarget || (ev.key !== 'Enter' && ev.key !== ' ')) return
+                          ev.preventDefault()
+                          reg.ouvrir({ genre: 'depot', numero: e.missive.numero, objet: b.nom, quantite: b.manque })
+                        },
+                      }
+                    : {})}
+                >
+                  <span className="besoins-nom">
+                    <span className="besoins-mot">
+                      {b.nom}
+                      {faconner && (
+                        <button
+                          type="button"
+                          className="besoins-faconner"
+                          title={`Façonner ${b.nom}`}
+                          aria-label={`Façonner ${b.nom}`}
+                          onClick={(ev) => {
+                            ev.stopPropagation()
+                            reg.ouvrir({ genre: 'fabrication', numero: e.missive.numero, produit: b.nom })
+                          }}
+                          onKeyDown={(ev) => ev.stopPropagation()}
+                        >
+                          <Icone corps={icones['anvil-impact']} />
+                        </button>
+                      )}
+                    </span>
+                    <AFaconner b={b} />
+                    <Jauge avance={avance} />
+                  </span>
+                  <span>{quantite(b.besoin)}</span>
+                  <span>{quantite(b.auCoffre)}</span>
+                  <span className="besoins-manque">{b.manque > 0 ? quantite(b.manque) : 'réuni'}</span>
+                </div>
+              )
+            })}
           </div>
         )
       })}
@@ -331,7 +389,7 @@ function TableBesoins({ besoins }: { besoins: LigneBesoin[] }) {
 
 const VERBES: Record<Mouvement['type'], string> = { relevé: 'compte', dépôt: 'dépose', fabrication: 'façonne', livraison: 'livre', partage: 'reçoit' }
 
-/** Ledger rows, a craft's inputs and outputs grouped on one line. */
+/** Ledger rows, a craft's inputs and outputs grouped on one line; rows still on their way are faded. */
 export function Journal({ mouvements, limite = 40 }: { mouvements: Mouvement[]; limite?: number }) {
   const groupes: Mouvement[][] = []
   for (const m of mouvements) {
@@ -350,15 +408,17 @@ export function Journal({ mouvements, limite = 40 }: { mouvements: Mouvement[]; 
             ? `${g.filter((x) => x.quantite > 0).map((x) => `${quantite(x.quantite)} ${x.objet}`).join(', ')}${g.some((x) => x.quantite < 0) ? ` de ${g.filter((x) => x.quantite < 0).map((x) => `${quantite(-x.quantite)} ${x.objet}`).join(', ')}` : ''}`
             : m.type === 'partage'
               ? `${quantite(m.quantite)} septims`
-              : m.type === 'relevé'
-                ? `${quantite(m.quantite)} ${m.objet}`
+              : m.type === 'livraison'
+                ? g.map((x) => `${quantite(Math.abs(x.quantite))} ${x.objet}`).join(', ')
                 : `${quantite(Math.abs(m.quantite))} ${m.objet}`
         return (
-          <li key={i} className={`journal-${cle(m.type)}`}>
-            <span className="journal-quand"><Quand iso={m.horodatage} /></span>
+          <li key={i} className={`journal-${cle(m.type)} ${m.enAttente ? 'encre-fraiche' : ''}`}>
+            <span className="journal-quand">
+              <Quand iso={m.horodatage} />
+            </span>
             <span className="journal-quoi">
               <strong>{m.membre}</strong> {VERBES[m.type]} {objets}
-              {m.note && m.type !== 'partage' && <em> — {m.note}</em>}
+              {m.note && m.type !== 'partage' && m.type !== 'livraison' && <em> — {m.note}</em>}
             </span>
           </li>
         )
@@ -369,49 +429,59 @@ export function Journal({ mouvements, limite = 40 }: { mouvements: Mouvement[]; 
 
 function Contributions({ e, nbMembres }: { e: EtatMissive; nbMembres: number }) {
   const m = e.missive
-  const close = m.statut === 'close'
-  if (!e.contributions.length) return <p className="vide-encre">Nulle patte n&apos;a encore porté cette missive.</p>
-  const p = close && m.recompense !== null ? partager(m.recompense, m.partCommune ?? 0, nbMembres, e.contributions) : null
+  const close = estClose(m)
+  const p = close && m.recompense ? partager(m.recompense, m.partCommune ?? 0, nbMembres, e.contributions) : null
   const recus = new Map(e.journal.filter((x) => x.type === 'partage').map((x) => [cle(x.membre), x.quantite]))
   return (
     <>
-      <div className="parts">
-        {e.contributions.map((c) => (
-          <div key={c.membre} className="part">
-            <span className="part-nom">{c.membre}</span>
-            <span className="part-detail">
-              {c.depots > 0 && <>dépôts {prix(Math.round(c.depots * 100) / 100)}</>}
-              {c.depots > 0 && c.facons > 0 && ' · '}
-              {c.facons > 0 && <>façonnage {prix(Math.round(c.facons * 100) / 100)}</>}
-            </span>
-            <Jauge avance={c.part} />
-            <strong className="part-pc">{Math.round(c.part * 100)} %</strong>
-            {p && <span className="part-recu">{prix(recus.get(cle(c.membre)) ?? p.parts.find((x) => cle(x.membre) === cle(c.membre))?.total ?? 0)} septims</span>}
-          </div>
-        ))}
-      </div>
+      <p className="note-encre">
+        Chaque apport est pesé en septims : le coût de production consigné au registre, sinon celui de sa recette, sinon la
+        valeur de la matière. Façonner rapporte ce que l&apos;ouvrage vaut de plus que ses matières.
+      </p>
+      {!e.contributions.length ? (
+        <p className="vide-encre">Nulle patte n&apos;a encore porté cette missive.</p>
+      ) : (
+        <div className="parts">
+          {e.contributions.map((c) => {
+            const recu = recus.get(cle(c.membre)) ?? p?.parts.find((x) => cle(x.membre) === cle(c.membre))?.total
+            return (
+              <div key={c.membre} className="part">
+                <span className="part-nom">{c.membre}</span>
+                <span className="part-detail">
+                  a apporté <strong>{prix(Math.round(c.total * 100) / 100)}</strong> septims de valeur
+                  {c.depots > 0 && c.facons > 0 && <> (dépôts {prix(Math.round(c.depots * 100) / 100)}, façonnage {prix(Math.round(c.facons * 100) / 100)})</>}
+                  {c.depots === 0 && c.facons > 0 && <> en façonnant</>}
+                  {recu !== undefined && <> · a reçu <strong>{prix(recu)}</strong> septims</>}
+                </span>
+                <Jauge avance={c.part} />
+                <span className="part-pc">
+                  {Math.round(c.part * 100)} % <em>du mérite</em>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
       {p && (
         <p className="partage-commun">
-          Part commune de {prix(p.partCommune)} % : {prix(p.base)} septims à chacun des {p.nbMembres} membres de la caravane ; le reste, {prix(p.merite)} septims, au mérite.
+          Part commune de {prix(p.partCommune)} % : {prix(p.base)} septims à chacun des {p.nbMembres} membres de la caravane ; le reste, {prix(p.merite)} septims, au
+          mérite.
         </p>
       )}
     </>
   )
 }
 
-export function DroiteMissive({ page, reg }: { page: PageMissive; reg?: CtxRegistre }) {
+export function DroiteMissive({ page, reg, interactif, icones }: { page: PageMissive; reg?: CtxRegistre; interactif: boolean; icones: Record<string, string> }) {
   const e = etatDe(reg, page.numero)
   if (!reg || !e) return null
-  const close = e.missive.statut === 'close'
+  const close = estClose(e.missive)
   return (
     <div className="missive-droite">
-      {!close && (
-        <>
-          <h3 className="titre-section">Ce qu&apos;il faut réunir</h3>
-          {e.cycle ? <p className="message-encre erreur">{texteCycle(e.cycle)}</p> : <TableBesoins besoins={e.besoins} />}
-        </>
-      )}
-      <h3 className="titre-section">{close ? 'Partage de la récompense' : 'Les pattes de la missive'}</h3>
+      <h3 className="titre-section">{close ? 'Ce qu’il fallait réunir, à la clôture' : 'Ce qu’il faut réunir'}</h3>
+      {!close && interactif && <p className="note-encre">Touche une ligne qui manque pour la déposer au coffre.</p>}
+      {e.cycle ? <p className="message-encre erreur">{texteCycle(e.cycle)}</p> : <TableBesoins e={e} reg={reg} interactif={interactif} icones={icones} />}
+      <h3 className="titre-section">Les pattes de la missive</h3>
       <Contributions e={e} nbMembres={reg.r.donnees?.nbMembres ?? 0} />
       <h3 className="titre-section">Journal du coffre</h3>
       <Journal mouvements={e.journal} />
@@ -423,33 +493,19 @@ export function DroiteMissive({ page, reg }: { page: PageMissive; reg?: CtxRegis
 
 export function GaucheCoffre({ page, reg, icones, compact }: { page: PageCoffre; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
   const r = reg?.r
-  const stock = r?.donnees ? [...rejouer(r.donnees.mouvements).stock.values()].filter((s) => s.qte !== 0).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')) : []
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && (
         <>
+          <Signature r={r} icones={icones} invite="Pour compter le coffre, signe de ton nom." />
           {r.marchand?.droits?.releve !== false && (
             <div className="gestes">
               <Geste icone={icones['magnifying-glass']} onClick={() => reg.ouvrir({ genre: 'releve' })}>
                 Relever le coffre
               </Geste>
             </div>
-          )}
-          <h3 className="titre-section">Dans le coffre, selon le registre</h3>
-          {stock.length ? (
-            <ul className="inventaire">
-              {stock.map((s) => (
-                <li key={s.nom}>
-                  <span>{s.nom}</span>
-                  <span className="points" />
-                  <strong className={s.qte < 0 ? 'negatif' : ''}>{quantite(s.qte)}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="vide-encre">Le coffre sonne creux.</p>
           )}
         </>
       )}
@@ -460,13 +516,29 @@ export function GaucheCoffre({ page, reg, icones, compact }: { page: PageCoffre;
 export function DroiteCoffre({ reg }: { reg?: CtxRegistre }) {
   const d = reg?.r.donnees
   if (!d?.relie) return null
-  const { releves } = rejouer(d.mouvements)
+  const { stock, releves } = rejouer(d.mouvements)
+  const contenu = [...stock.values()].filter((s) => s.qte !== 0).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
   const ecarts = releves.filter((x) => x.ecart !== 0)
   return (
     <div className="coffre-droite">
-      <h3 className="titre-section">Relevés et écarts</h3>
+      <h3 className="titre-section">Dans le coffre, selon le registre</h3>
+      {contenu.length ? (
+        <ul className="inventaire">
+          {contenu.map((s) => (
+            <li key={s.nom}>
+              <span>{s.nom}</span>
+              <span className="points" />
+              <strong className={s.qte < 0 ? 'negatif' : ''}>{quantite(s.qte)}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="vide-encre">Le coffre sonne creux.</p>
+      )}
+      <h3 className="titre-section">Relevés du coffre</h3>
       <p className="note-encre">
-        Chaque compte du coffre face à ce que le registre attendait.{' '}
+        <strong>Compté</strong> : ce qu&apos;on a trouvé en ouvrant le coffre. <strong>Attendu</strong> : ce que le registre annonçait.{' '}
+        <strong>Écart</strong> : compté moins attendu.{' '}
         {ecarts.length ? `${ecarts.length} écart${ecarts.length > 1 ? 's' : ''} à éclaircir.` : 'Aucun écart : la caravane est honnête.'}
       </p>
       {releves.length ? (
@@ -502,80 +574,100 @@ export function DroiteCoffre({ reg }: { reg?: CtxRegistre }) {
 
 /* ───────────────────────── The workshop ───────────────────────── */
 
-export function GaucheAtelier({ page, reg, icones, compact, interactif }: { page: PageAtelier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; interactif: boolean }) {
+export function GaucheAtelier({ page, reg, icones, compact }: { page: PageAtelier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
   const r = reg?.r
-  const recettes = [...(r?.donnees?.recettes ?? [])].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && (
-        <>
-          {r.marchand?.droits?.recette !== false && (
-            <div className="gestes">
-              <Geste icone={icones['cauldron']} onClick={() => reg.ouvrir({ genre: 'edition-recette', nom: '' })}>
-                Consigner une recette
-              </Geste>
-            </div>
+        <div className="gestes">
+          {page.vue === 'recettes' && r.marchand?.droits?.recette !== false && (
+            <Geste icone={icones['cauldron']} onClick={() => reg.ouvrir({ genre: 'edition-recette', nom: '' })}>
+              Consigner une recette
+            </Geste>
           )}
-          <h3 className="titre-section">Recettes consignées</h3>
-          {recettes.length ? (
-            <ul className="liste-recettes">
-              {recettes.map((x) => (
-                <li key={x.produit}>
-                  <button type="button" tabIndex={interactif ? 0 : -1} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
-                    <span className="entree">{x.produit}</span>
-                    <span className="points" />
-                    <span className="renvoi">{x.ingredients.map((i) => i.nom).join(', ')}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="vide-encre">Aucune recette encore : que les artisans prennent la plume.</p>
+          {page.vue === 'matieres' && r.marchand?.droits?.ressource !== false && (
+            <Geste icone={icones['wheat']} onClick={() => reg.ouvrir({ genre: 'ressource', nom: '' })}>
+              Inscrire une matière
+            </Geste>
           )}
-        </>
+        </div>
       )}
     </>
   )
 }
 
-export function DroiteAtelier({ reg, icones, interactif }: { reg?: CtxRegistre; icones: Record<string, string>; interactif: boolean }) {
+export function DroiteAtelier({ page, reg, interactif }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean }) {
   const r = reg?.r
   if (!r?.donnees?.relie || !reg) return null
-  const ressources = [...r.donnees.ressources].sort((a, b) => a.categorie.localeCompare(b.categorie, 'fr') || a.nom.localeCompare(b.nom, 'fr'))
+  const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+  const ressources = [...r.donnees.ressources].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+  const tab = interactif ? 0 : -1
+  const c = r.calcul
+  if (page.vue === 'recettes') {
+    return (
+    <div className="atelier-droite">
+      <h3 className="titre-section">Recettes consignées</h3>
+      <p className="note-encre">Touche une recette pour voir tout ce qu’elle demande, jusqu’aux matières premières, et ce qu’elles coûtent.</p>
+      {recettes.length ? (
+        <ul className="liste-recettes">
+          {recettes.map((x) => (
+            <li key={x.produit}>
+              <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
+                <span className="entree">{x.produit}</span>
+                <span className="points" />
+                <span className="renvoi">
+                  {x.ingredients.map((i) => i.nom).join(', ')}
+                  {c && (() => {
+                    const k = coutMatieres(arbre(x.produit, x.rendement, c.recettes), r.donnees!.ressources).cout
+                    return k ? <b> · {prix(k)} septims</b> : null
+                  })()}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="vide-encre">Aucune recette encore : que les artisans prennent la plume.</p>
+      )}
+    </div>
+    )
+  }
   return (
     <div className="atelier-droite">
-      <h3 className="titre-section">Matières et leur valeur</h3>
-      <p className="note-encre">La valeur d&apos;une matière pèse les dépôts : une gerbe de blé ne vaut pas une potion.</p>
-      <div className="ressources" role="table">
-        <div className="ressources-entete" role="row">
-          <span>Matière</span>
-          <span>Sorte</span>
-          <span>Valeur</span>
+      <h3 className="titre-section">Le registre des matières</h3>
+      <p className="note-encre">Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre. Le prix courant pèse aussi les dépôts des missives.</p>
+      <div className="registre matieres">
+        <div className="registre-entete matieres-entete" role="row">
+          <span className="col-article">Matière</span>
+          <span>
+            <span className="long">Prix courant</span>
+            <span className="court">Prix</span>
+          </span>
+          <span>
+            <span className="long">Bonne affaire</span>
+            <span className="court">Affaire</span>
+          </span>
         </div>
-        {ressources.map((x) => (
-          <button key={x.nom} type="button" tabIndex={interactif ? 0 : -1} className="ressources-ligne" role="row" onClick={() => reg.ouvrir({ genre: 'ressource', nom: x.nom })}>
-            <span className="noms">
-              <span className="nom-fr">{x.nom}</span>
-              {x.en && <span className="nom-en">{x.en}</span>}
-            </span>
-            <span className="ressources-sorte">{x.categorie}</span>
-            <span className="prix">{prix(x.valeur)}</span>
-          </button>
-        ))}
+        <div className="registre-corps">
+          {ressources.map((x) => (
+            <button key={x.nom} type="button" tabIndex={tab} className="ligne matiere" onClick={() => reg.ouvrir({ genre: 'ressource', nom: x.nom })}>
+              <span className="noms">
+                <span className="nom-fr">{x.nom}</span>
+                {x.en && <span className="nom-en">{x.en}</span>}
+                {x.origine && <span className="matiere-origine">{x.origine}</span>}
+              </span>
+              <span className="points-conduite" aria-hidden />
+              <span className="prix">{prix(x.prix)}</span>
+              <span className="prix prix-affaire">{prix(x.bonneAffaire)}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      {r.marchand?.droits?.ressource !== false && (
-        <div className="gestes">
-          <Geste icone={icones['wheat']} onClick={() => reg.ouvrir({ genre: 'ressource', nom: '' })}>
-            Inscrire une matière
-          </Geste>
-        </div>
-      )}
     </div>
   )
 }
 
 /** Stock in the chest of one item (for the slips). */
 export const auCoffre = (reg: CtxRegistre, nom: string) => (reg.r.donnees ? enStock(rejouer(reg.r.donnees.mouvements).stock, nom) : 0)
-

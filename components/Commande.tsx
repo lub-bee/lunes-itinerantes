@@ -467,8 +467,8 @@ export function FeuilleCommande({
               {c.membre}
             </strong>
             {!c.discord && (
-              <button type="button" className="commande-vendeur-changer" onClick={c.oublierNom} title="Ce n'est pas mon nom">
-                changer
+              <button type="button" className="lien-encre commande-vendeur-changer" onClick={c.oublierNom}>
+                ce n&apos;est pas mon nom
               </button>
             )}
           </div>
