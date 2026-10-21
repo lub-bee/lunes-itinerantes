@@ -1,10 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession, nomDe } from '@/lib/sceau'
+import { identite } from '@/lib/identite'
+import { droitsDe } from '@/lib/droits'
+import { lireRegistre, registreRelie } from '@/lib/registre'
 
-// Who holds the pen: the order sheet shows this name. `discord: true` → the name is fixed by the
-// session (and /api/commande ignores any other); false → shared-password session, name typed by hand.
-// The typed name is also kept in a cookie (`vendeur`), so it survives cleared browser storage and
-// closing/reopening the grimoire; POST { vendeur } sets it, an empty name forgets it.
+// Who holds the pen: the order sheet and the missives show this name.
+// - `identite`: the member's name validated against the Membres tab (signed cookie, or the Discord
+//   nickname found on the list); it signs orders and missives. `droits`: what that member may do.
+// - `discord: true` → the order's seller is fixed by the Discord session (/api/commande ignores any other).
+// - `vendeur`: the seller's name typed by hand (password sessions not yet recognized), kept in a
+//   cookie so it survives cleared browser storage; POST { vendeur } sets it, an empty name forgets it.
 
 export const dynamic = 'force-dynamic'
 
@@ -20,12 +25,24 @@ export async function GET(req: NextRequest) {
   } catch {
     // Malformed cookie: no remembered name.
   }
+  const relie = registreRelie()
+  let qui = null
+  if (relie) {
+    try {
+      qui = await identite(req.cookies, (await lireRegistre()).membres)
+    } catch (e) {
+      console.error('[marchand] registre unreachable', e)
+    }
+  }
   return NextResponse.json({
     ok: true,
     nom: nomDe(s),
     discord: s.genre === 'discord',
     patriarche: s.genre === 'discord' && s.membre.patriarche,
     vendeur,
+    relie,
+    identite: qui?.nom ?? null,
+    droits: qui ? droitsDe(qui.roles) : null,
   })
 }
 

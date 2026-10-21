@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
+import { nomSigne } from '@/lib/identite'
 import { chargerArticles } from '@/lib/livre'
 import { calculerLigne, totaux, type CommandeEnvoyee } from '@/lib/commande'
 
@@ -32,9 +33,11 @@ export async function POST(req: NextRequest) {
   if (!url || !secret) return refus("Aucun coursier n'attend à la porte : le registre des commandes n'est pas encore relié.", 503)
 
   const corps = (await req.json().catch(() => null)) as Partial<CommandeEnvoyee> | null
-  // A Discord member signs with their own name; only shared-password sessions type one.
+  // A Discord member signs with their own name; a member who signed with their name (validated
+  // against the Membres tab, signed cookie) with that one; otherwise the name typed on the sheet.
+  const signe = session.genre === 'discord' ? null : await nomSigne(req.cookies)
   const vendeur =
-    session.genre === 'discord' ? session.membre.nom : typeof corps?.vendeur === 'string' ? corps.vendeur.trim().slice(0, 80) : ''
+    session.genre === 'discord' ? session.membre.nom : signe ?? (typeof corps?.vendeur === 'string' ? corps.vendeur.trim().slice(0, 80) : '')
   if (!vendeur) return refus('Qui tient la plume ? Le nom du vendeur manque.', 400)
   const brutes = Array.isArray(corps?.lignes) ? corps.lignes : []
   if (!brutes.length) return refus('Une commande sans article ne se scelle pas.', 400)
