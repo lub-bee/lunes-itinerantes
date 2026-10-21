@@ -1,8 +1,8 @@
 # Grimoire de la Caravane des Lunes Itinérantes
 
 Private price book of the *Caravane des Lunes Itinérantes* (Skyrim role-play Khajiit caravan).
-A leather-bound grimoire whose pages turn: price chapters, memo pages, and (soon) the caravan's
-missives and member roster. Everything visible to members is written in-character (French).
+A leather-bound grimoire whose pages turn: price chapters, memo pages, the caravan's
+missives with their recipes and chest, and (soon) the member roster. Everything visible to members is written in-character (French).
 
 Stack: Next.js 15 (App Router) · React 19 · plain CSS · no database. Hosted on Vercel.
 
@@ -28,7 +28,7 @@ The whole site sits behind "the seal", checked by `middleware.ts` (`lib/sceau.ts
 | `DISCORD_ROLE_PATRIARCHE` | Optional — role ID marking a Patriarch (carried in the session, unused for now). |
 | `SCEAU_MOT_DE_PASSE_COMMUN` | Optional — `1` keeps the shared password alongside Discord. |
 | `CATALOGUE_CSV_URL` | Optional — published CSV of the price sheet (see below). |
-| `COMMANDES_SCRIPT_URL` | Optional — URL of the Apps Script web app receiving sealed orders (see *Order mode*). |
+| `COMMANDES_SCRIPT_URL` | Optional — URL of the Apps Script web app: sealed orders, missives, recipes, members (see *Order mode* and *Missives*). |
 | `COMMANDES_JETON` | Optional — shared secret checked by that Apps Script (script property `JETON`). |
 
 A password session lasts 30 days. Local dev: copy `.env.example` to `.env.local`, fill it, `npm run dev`.
@@ -45,7 +45,8 @@ if they still hold the role (seamless) and refuses them in character if the role
 Closing the grimoire (iron latch, or the key on mobile) forgets the session.
 
 On the order sheet the seller is the session's name (fixed; `/api/commande` reads it from the cookie,
-never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name.
+never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name; once that name is
+recognized on the Membres tab (see *Missives — Who holds the pen*), it signs the order instead.
 
 Refusals shown on the lock page: not a member of the server, member without the role, Discord
 refused or failed, tampered request.
@@ -268,6 +269,126 @@ top of `commandes.gs` (header + value per column); the payload also carries `art
    then redeploy.
 8. After any change to the script: *Deploy → Manage deployments → edit → Version: New version*
    (the URL stays the same).
+
+## Missives, the chest and the workshop (v3)
+
+The « Missives » ribbon opens the caravan's book of missives. Everything lives in the same Google
+Sheet as the orders, read and written through the same Apps Script (`scripts/apps-script/commandes.gs`,
+same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the pages say the registre is not linked
+yet, and the price ledger behaves exactly as in v2.
+
+- **Missives** (list page): missives in progress (progress in ink) and closed ones, « Écrire une missive ».
+- **One page per missive**: requested lines (delivered / in the chest), overall progress, the actions;
+  on the right, what must be gathered — finished goods, intermediates, raw resources — needed / in the
+  Missive chest / missing, the contributors with their share, and the missive's ledger.
+- **Le coffre**: the chest's stock according to the ledger, « Relever le coffre », and every inventory
+  check against what the ledger expected (who, when, gap) for investigations.
+- **L'atelier**: recipes (« Consigner une recette ») and raw resources with their value.
+- **Price ledger**: outside order mode, clicking a row opens the article's recipe on a slip laid on the
+  left page (foldable tree, quantity to make, whole crafts); a small cauldron after the name marks
+  articles with a recipe and opens it in order mode too (clicking the row still writes it on the order).
+
+Actions (« Relever le coffre », « Déposer au coffre », « Façonner », « Livrer », « Clore la missive »,
+recipe and resource forms) open a pinned slip; it goes when the page turns or with « Ranger » / Esc.
+
+### Who holds the pen (members' whitelist)
+
+A member types their name once (on the missives page, in any action slip, or in the order sheet's
+*Vendeur* field — Enter or leaving the field). The server matches it against the **Membres** tab
+(case, accents, apostrophes, spaces and œ/æ ignored: `jzahir` = `J'Zahir`), keeps the sheet's spelling
+in a signed cookie (`caravane_nom`, 400 days) and refuses an unknown name in character (nothing is
+recorded). The members' list never reaches the browser (the page only learns how many members there
+are). Every write is made in the cookie's name, re-checked against the list; a Discord seal maps the
+member's server nickname to the list the same way. A recognized name also signs orders
+(`/api/commande`); an unrecognized typed name still works for orders as in v2.
+
+Permissions: `lib/droits.ts` has one rule per action (`ROLES_REQUIS`), all open for now. To restrict
+an action later, list the roles allowed (e.g. `recette: ['maitreartisan', 'patriarche']`); a member's
+roles come from an optional **Rôle** column of the Membres tab (comma-separated) and from the Discord
+Patriarch role.
+
+### The rules
+
+- **Needs**: what is still to deliver, against the Missive chest. Each item takes what the chest holds;
+  the rest is made in whole crafts (rounded up to the recipe's yield) and exploded further down to raw
+  resources — the stock of an intermediate is used before exploding it. Missives running at the same
+  time share the chest, the oldest served first. A recipe loop (A needs B needs A) is shown in
+  character and refused when a recipe is written.
+- **Stock**: the ledger replayed in time order; a *relevé* sets the counted quantity, other movements
+  add their signed quantity. Each relevé records the expected quantity and the gap in its note.
+- **Value of an item** (weighs contributions): catalogue *prix de prod*, else its recipe's ingredients ÷
+  yield, else the Ressources *Valeur*, else 0. Values are computed at read time (a corrected value
+  re-weighs past deposits).
+- **Contribution**: a deposit earns quantity × value; a craft earns outputs − inputs (never below 0);
+  inventory checks and deliveries earn nothing. Share = member's value ÷ the missive's total.
+- **Closing**: the reward received is split in whole septims: the *part commune* (default 20 %, set
+  per missive at closing and recorded) goes equally to **every** member of the Membres list; the rest
+  goes to participants pro rata to their contribution (largest remainders, so the sum is exact). If
+  nobody contributed, everything goes in equal parts. One `partage` row per member is written.
+
+### Sheet tabs and columns
+
+Headers are found by name (case, accents and punctuation ignored), in any order; a missing column is
+added at the end of row 1 on the first write. The mapping of every tab is `ONGLETS` at the top of
+`commandes.gs`.
+
+| Tab | One row = | Columns |
+|---|---|---|
+| **Membres** (read only, imported by hand) | one member | `Nom`, optional `Rôle` |
+| **Ressources** | one raw material | `Ressource`, `Nom EN`, `Catégorie`, `Valeur` (septims per unit), `Note` |
+| **Recettes** | one ingredient of one product | `Produit`, `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan`, `Note` |
+| **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `close`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par` |
+| **Mouvements** (created by the script, append-only) | one movement | `Horodatage`, `N° action`, `N° missive`, `Membre`, `Type`, `Objet`, `Quantité`, `Note` |
+
+Movement types: `relevé` (Quantité = the counted quantity; Note = `attendu X, écart ±Y`), `dépôt` (+),
+`fabrication` (− each input, + each output, all rows of one craft share one `N° action`), `livraison`
+(−, goods leave to the client), `partage` (Objet `Septims`, Quantité = the member's amount, Note =
+`part commune X + mérite Y`). Numbers: missives `M-YYMMDD-XXXX`, actions `A-YYMMDD-XXXX` (JST day).
+
+An ingredient may itself be a product with a recipe (e.g. *Potion de régénération* = 2 *Bière* + …,
+*Bière* = 5 *Blé* + 2 *Lavande*).
+
+### The script's JSON contract
+
+Every call is `POST { jeton, action, ... }` → `{ ok: true, ... }` or `{ ok: false, erreur }`.
+
+| `action` | Body | Effect |
+|---|---|---|
+| *(none)* or `commande` | `{ commande }` | Sealed order, unchanged since v2 (Commandes tab) |
+| `lire` | — | `{ ok, onglets: { membres, ressources, recettes, missives, mouvements } }`, each an array of objects keyed by the field names of `ONGLETS` |
+| `missive` | `{ missive: { numero, horodatage, titre, commanditaire, echeance, membre, lignes: [{ produit, quantite }] } }` | One Missives row per line, Statut `en cours` |
+| `releve`, `depot`, `fabrication`, `livraison` | `{ mouvements: [{ horodatage, action, missive, membre, objet, quantite, note }] }` | Mouvements rows, Type set from the action |
+| `cloture` | `{ cloture: { numero, action, horodatage, membre, recompense, partCommune, partage: [{ membre, montant, note }] } }` | The missive's rows closed (Statut, Récompense, Part commune, Close le/par); one `partage` row per member |
+| `recette` | `{ recette: { produit, ancienProduit?, rendement, artisan, note, ingredients: [{ ingredient, quantite }] } }` | The product's rows replaced (no ingredient = recipe removed) |
+| `ressource` | `{ ressource: { nom, ancienNom?, en, categorie, valeur, note } }` | The row updated, or added |
+
+Writes take `LockService`'s script lock. The grimoire's server (`/api/registre`) validates everything,
+signs with the member's name, recomputes the split, then calls the script; reads are cached 45 s and
+dropped after every write (`lib/registre.ts`).
+
+### Setting it up (on top of *Setting up the orders sheet*)
+
+1. In the sheet, create the **Membres**, **Ressources** and **Recettes** tabs and import their CSVs
+   (*File → Import → Upload → Insert new sheet(s)* or paste into the tab), header row first:
+   `Nom` · `Ressource,Nom EN,Catégorie,Valeur,Note` · `Produit,Ingrédient,Quantité,Rendement,Artisan,Note`.
+   The **Missives** and **Mouvements** tabs may stay empty (or absent): the script writes their headers.
+2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/commandes.gs`, save.
+3. *Deploy → Manage deployments →* the existing web app → ✏️ edit → *Version: **New version*** → Deploy.
+   The `/exec` URL stays the same, so nothing changes on Vercel. (A *New deployment* would make a new URL.)
+4. Optional: run `essai` once from the editor (creates the missing tabs' headers and logs the row counts).
+
+### Testing locally
+
+A mock of the web app that runs the real `commandes.gs` against an in-memory sheet (fake
+`SpreadsheetApp`, `LockService`, `ContentService`, `PropertiesService`) lives outside the repo
+(`/Volumes/PERSO/dev/_atelier/caravane/v3/mock-script.js`). Run it, then start the grimoire with
+`COMMANDES_SCRIPT_URL=http://localhost:3931/exec COMMANDES_JETON=jeton-essai`.
+
+Code: `lib/missives.ts` (types, needs, stock, contributions, split), `lib/registre.ts` (script client
+and cache), `lib/identite.ts` (whitelist and cookie), `lib/droits.ts` (permission hook),
+`app/api/registre`, `app/api/identite`, `components/Registre.tsx` (page state), `components/Missives.tsx`
+(pages), `components/Fiche.tsx` (slip, recipe tree, forms); styles in the *Missives* section of
+`app/globals.css`.
 
 ## Deploy
 
