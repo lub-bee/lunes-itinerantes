@@ -158,6 +158,8 @@ Without `CATALOGUE_CSV_URL`, `content/marchandises.csv` is used.
 
 Names are compared without case, accents or punctuation; a name may also *start with* an alias
 (`Prix idéal (septims)` → `max`). The list lives in `ALIAS_COLONNES` (`lib/livre.ts`).
+The test sheet's headers `Chapitre,Article,Article (EN),Prix de prod,Prix mini,Prix idéal,Artisan,Note`
+map one to one.
 
 | Field | Accepted headers | If the column is missing |
 |---|---|---|
@@ -166,7 +168,7 @@ Names are compared without case, accents or punctuation; a name may also *start 
 | `min` | min, mini, minimum, prix mini, prix min, plancher, prix plancher | *à négocier* if `max` is empty too |
 | `max` | max, maxi, idéal, prix idéal, prix max, plafond, prix plafond | *à négocier* if `min` is empty too |
 | `chapitre` | chapitre, catégorie, rubrique, section | every article lands in **Non classés** |
-| `en` | en, anglais, english, nom anglais | no English name |
+| `en` | en, anglais, english, nom anglais, article (EN) | no English name |
 | `artisan` | artisan, métier, atelier | *divers* |
 | `note` | note, notes, remarque, commentaire | none |
 
@@ -221,7 +223,8 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
 
 ### Rows written in the sheet
 
-One row per article, in the tab **Commandes** (created with its header row when missing):
+One row per article, in the tab **Commandes** (created when missing; if its first row is not this
+header row, the header row is inserted above it, so nothing already there is overwritten):
 
 | Horodatage | N° commande | Vendeur | Article | Quantité | Prix unitaire | Total ligne | Total mini | Total idéal | Prix réel vendu | Statut | Total commande |
 |---|---|---|---|---|---|---|---|---|---|---|---|

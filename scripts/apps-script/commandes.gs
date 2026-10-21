@@ -71,14 +71,20 @@ function doPost(e) {
   }
 }
 
-/** The orders tab, with its header row written when the tab is empty. */
+/**
+ * The orders tab. If its first row is not our header row (empty tab, or anything else in row 1),
+ * a header row is inserted above, so nothing already in the tab is overwritten.
+ */
 function onglet() {
   var classeur = SpreadsheetApp.getActiveSpreadsheet();
   var feuille = classeur.getSheetByName(ONGLET) || classeur.insertSheet(ONGLET);
-  if (feuille.getLastRow() === 0) {
-    feuille.appendRow(COLONNES.map(function (col) { return col[0]; }));
+  var entetes = COLONNES.map(function (col) { return col[0]; });
+  var premiere = feuille.getLastRow() === 0 ? [] : feuille.getRange(1, 1, 1, entetes.length).getValues()[0];
+  var dejaLa = entetes.every(function (e, i) { return String(premiere[i] || '').trim() === e; });
+  if (!dejaLa) {
+    if (feuille.getLastRow() > 0) feuille.insertRowBefore(1);
+    feuille.getRange(1, 1, 1, entetes.length).setValues([entetes]).setFontWeight('bold');
     feuille.setFrozenRows(1);
-    feuille.getRange(1, 1, 1, COLONNES.length).setFontWeight('bold');
   }
   return feuille;
 }

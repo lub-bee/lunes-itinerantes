@@ -63,7 +63,7 @@ async function lireCatalogue(): Promise<string> {
 export const ALIAS_COLONNES = {
   chapitre: ['chapitre', 'categorie', 'rubrique', 'section'],
   fr: ['fr', 'article', 'articles', 'detail', 'details', 'designation', 'nom', 'objet', 'produit'],
-  en: ['en', 'anglais', 'english', 'nom anglais', 'nom en'],
+  en: ['en', 'anglais', 'english', 'nom anglais', 'nom en', 'article en', 'article anglais', 'detail en', 'designation en'],
   prod: ['prod', 'prix de prod', 'prix prod', 'prix de production', 'cout', 'cout de prod', 'cout de production'],
   min: ['min', 'mini', 'minimum', 'prix mini', 'prix minimum', 'prix min', 'plancher', 'prix plancher'],
   max: ['max', 'maxi', 'ideal', 'prix ideal', 'prix max', 'prix maxi', 'plafond', 'prix plafond'],
