@@ -961,24 +961,27 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
 }
 .commande-bande-titre { font-family: var(--f-capitales); font-size: 15.5px; line-height: 1; letter-spacing: 0.02em; white-space: nowrap; color: var(--encre); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35); }
 .commande-bande .court { display: none; }
-/* The roll: a paper cylinder lit from above, its spiral showing at both ends. */
+/* The roll: a paper cylinder lit from above and from the left. Seen from slightly to the right, so
+   only its RIGHT end shows the spiral (an ellipse, turned away from the light, so darker); the left
+   end is seen edge-on: just the rounded silhouette, the paper curving away into shadow. */
 .rouleau-cylindre {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: 21px;
-  border-radius: 7px / 50%;
+  border-radius: 6px / 50%;
   background-color: #e4dfd0;
   background-image:
+    linear-gradient(90deg, rgba(45, 28, 8, 0.42), rgba(45, 28, 8, 0.12) 5px, transparent 11px),
     linear-gradient(180deg, rgba(60, 40, 15, 0.5) 0%, rgba(255, 255, 255, 0.05) 16%, rgba(255, 255, 255, 0.55) 32%, rgba(255, 255, 255, 0.08) 50%, rgba(80, 58, 25, 0.28) 74%, rgba(35, 20, 5, 0.72) 100%),
     linear-gradient(180deg, transparent 21%, rgba(90, 70, 40, 0.35) 23%, transparent 26%),
     linear-gradient(90deg, rgba(150, 112, 55, 0.22), rgba(150, 112, 55, 0.06) 35%, rgba(150, 112, 55, 0.12) 70%, rgba(150, 112, 55, 0.26)),
     var(--chiffon);
-  background-size: auto, auto, auto, 512px 512px;
-  background-position: 0 0, 0 0, 0 0, 30% 60%;
+  background-size: auto, auto, auto, auto, 512px 512px;
+  background-position: 0 0, 0 0, 0 0, 0 0, 30% 60%;
 }
-.rouleau-cylindre::before, .rouleau-cylindre::after, .commande-rouleau::before, .commande-rouleau::after {
+.rouleau-cylindre::after, .commande-rouleau::after {
   content: '';
   position: absolute;
   top: 0;
@@ -987,7 +990,6 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   border-radius: 50%;
   background: var(--bout-rouleau);
 }
-.rouleau-cylindre::before, .commande-rouleau::before { left: 0; box-shadow: inset 1px 0 1px rgba(255, 255, 255, 0.4), inset -1px 0 2px rgba(60, 40, 15, 0.45); }
 .rouleau-cylindre::after, .commande-rouleau::after { right: 0; filter: brightness(0.8); box-shadow: inset -1px 0 1px rgba(255, 255, 255, 0.25), inset 1px 0 2px rgba(40, 25, 8, 0.5); }
 /* Red ribbon tied round the roll. */
 .rouleau-lien, .commande-rouleau-lien {
@@ -1162,12 +1164,13 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
   height: 16px;
   opacity: 0;
   pointer-events: none;
-  border-radius: 7px / 50%;
+  border-radius: 6px / 50%;
   background-color: #e4dfd0;
   background-image:
+    linear-gradient(90deg, rgba(45, 28, 8, 0.42), rgba(45, 28, 8, 0.12) 5px, transparent 11px),
     linear-gradient(180deg, rgba(60, 40, 15, 0.5) 0%, rgba(255, 255, 255, 0.05) 16%, rgba(255, 255, 255, 0.55) 32%, rgba(255, 255, 255, 0.08) 50%, rgba(80, 58, 25, 0.28) 74%, rgba(35, 20, 5, 0.72) 100%),
     var(--chiffon);
-  background-size: auto, 512px 512px;
+  background-size: auto, auto, 512px 512px;
   box-shadow: 0 6px 9px rgba(25, 12, 0, 0.45), 0 2px 2px rgba(25, 12, 0, 0.35);
 }
 .commande-rouleau-lien { left: 44px; width: 18px; opacity: 0; }
@@ -1441,22 +1444,22 @@ mark { background: var(--surligne); color: var(--encre-rouge); border-radius: 2p
     filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.6)) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.6));
     animation: monte 360ms cubic-bezier(.3, 1.2, .5, 1) both;
   }
-  /* The roll: paper cylinder lit from above, a spiral at each end. */
+  /* The roll: same viewpoint as on the desktop table, only the right end shows its spiral. */
   .commande-barre::before {
     content: '';
     position: absolute;
     inset: 0;
     z-index: -1;
-    border-radius: 12px / 50%;
+    border-radius: 11px / 50%;
     background-color: #e4dfd0;
     background-image:
+      radial-gradient(ellipse closest-side, rgba(30, 18, 5, 0.2) 96%, transparent 100%),
       var(--bout-rouleau),
-      var(--bout-rouleau),
-      linear-gradient(90deg, transparent calc(100% - 24px), rgba(40, 25, 8, 0.25) calc(100% - 22px)),
+      linear-gradient(90deg, rgba(45, 28, 8, 0.45), rgba(45, 28, 8, 0.12) 9px, transparent 20px, transparent calc(100% - 24px), rgba(40, 25, 8, 0.25) calc(100% - 22px)),
       linear-gradient(180deg, rgba(60, 40, 15, 0.5) 0%, rgba(255, 255, 255, 0.05) 14%, rgba(255, 255, 255, 0.55) 30%, rgba(255, 255, 255, 0.1) 52%, rgba(80, 58, 25, 0.24) 76%, rgba(35, 20, 5, 0.68) 100%),
       var(--chiffon);
     background-size: 22px 100%, 22px 100%, auto, auto, 512px 512px;
-    background-position: left center, right center, 0 0, 0 0, 30% 60%;
+    background-position: right center, right center, 0 0, 0 0, 30% 60%;
     background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
   }
   .commande-barre .icone {
