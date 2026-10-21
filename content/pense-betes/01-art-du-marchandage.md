@@ -20,6 +20,18 @@ Le prix le plus bas auquel un marchand de la caravane peut céder l'objet. Pas u
 
 Le seul vrai plafond est celui du talent oratoire de Khajiit. Mieux vaut commencer plus haut et se laisser « convaincre ».
 
+## Lire la bourse
+
+Avant d'annoncer un prix, Khajiit regarde l'habit. Belle étoffe et bottes cirées : rien en dessous de **50 septims**. Hardes rapiécées et bottes crottées : on parle plutôt de **10 à 15 septims**.
+
+Mieux encore, apprenez ce que pèse la bourse. Le client bavard qui avoue porter 90 septims repartira avec un objet à 85 : Khajiit n'est pas cruel, il lui laisse de quoi boire à la santé de la caravane.
+
+> Mon savoir ? Il est dans la bourse des gens.\
+> — *J'Zahir*
+
+> Règle d'or du marchandage khajiit : qui annonce sa bourse est déjà cuit.\
+> — *Ri'Yazz*
+
 ## Quelques usages
 
 - Le client aime gagner : laissez-le gagner un peu, mais jamais en dessous du plancher.
