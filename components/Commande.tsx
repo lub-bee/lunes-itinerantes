@@ -211,11 +211,11 @@ export function BandeCommande({ c, bande, icones }: { c: EtatCommande; bande: Re
       onClick={c.ouvrir}
       tabIndex={c.ouverte ? -1 : 0}
       aria-hidden={c.ouverte}
-      title={c.lignes.length ? 'Reprendre la commande' : 'Préparer une commande'}
+      title={c.lignes.length ? 'Reprendre la commande' : 'Bon de commande'}
     >
       <span className="rouleau-feuille">
         <span className="commande-bande-titre">
-          <span className="long">{c.lignes.length ? 'Reprendre la commande' : 'Préparer une commande'}</span>
+          <span className="long">{c.lignes.length ? 'Reprendre la commande' : 'Bon de commande'}</span>
           <span className="court">Commande</span>
         </span>
       </span>
@@ -633,7 +633,7 @@ export function BarreCommande({ c, icones }: { c: EtatCommande; icones: Record<s
     return (
       <button type="button" className="commande-barre au-repos" onClick={c.ouvrir}>
         <Icone corps={icones['tied-scroll']} />
-        <span>{c.lignes.length ? `Reprendre la commande · ${prix(b.total)} septims` : 'Préparer une commande'}</span>
+        <span>{c.lignes.length ? `Reprendre la commande · ${prix(b.total)} septims` : 'Bon de commande'}</span>
       </button>
     )
   }
