@@ -18,7 +18,11 @@ export const cle = (s: string) =>
 /** Default share of a reward split equally between every member of the caravan (the rest goes by merit). */
 export const PART_COMMUNE_DEFAUT = 20
 
-export type Ressource = { nom: string; en: string; categorie: string; valeur: number | null; note: string }
+/**
+ * A raw material: goods the caravan harvests, loots, crafts or buys (never sells). `prix`: the usual
+ * buying price per unit (weighs contributions); `bonneAffaire`: buy without hesitation at or below it.
+ */
+export type Ressource = { nom: string; en: string; origine: string; prix: number | null; bonneAffaire: number | null; note: string }
 export type Ingredient = { nom: string; quantite: number }
 /** `rendement`: units of the product made by one craft. */
 export type Recette = { produit: string; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
@@ -29,21 +33,38 @@ export type Missive = {
   titre: string
   commanditaire: string
   echeance: string
-  statut: 'en cours' | 'close'
+  /** livrée: delivered and closed; inachevée: closed without being completed. */
+  statut: StatutMissive
   ecritePar: string
   lignes: LigneMissive[]
   recompense: number | null
   partCommune: number | null
   closeLe: string
   closePar: string
+  /** Optional word written when closing (e.g. why it could not be completed). */
+  noteCloture: string
 }
+
+export type StatutMissive = 'en cours' | 'livrée' | 'inachevée'
+export const estClose = (m: { statut: StatutMissive }) => m.statut !== 'en cours'
 export type TypeMouvement = 'relevé' | 'dépôt' | 'fabrication' | 'livraison' | 'partage'
 /**
  * One ledger row. `quantite` is signed (dépôt +, livraison −, fabrication − inputs / + outputs), except
  * for a relevé, where it is the counted quantity of the item in the chest. `action` groups the rows
  * of one gesture (a craft's inputs and outputs).
  */
-export type Mouvement = { horodatage: string; action: string; missive: string; membre: string; type: TypeMouvement; objet: string; quantite: number; note: string }
+export type Mouvement = {
+  horodatage: string
+  action: string
+  missive: string
+  membre: string
+  type: TypeMouvement
+  objet: string
+  quantite: number
+  note: string
+  /** Written on the page, the registre's answer still awaited (shown in fresh, faded ink). */
+  enAttente?: boolean
+}
 
 /** What the page receives (never the members' names: only how many they are). */
 export type DonneesRegistre = {
@@ -56,7 +77,8 @@ export type DonneesRegistre = {
 }
 
 /** Actions a member can take; each one goes through the permission hook (lib/droits.ts). */
-export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'livraison' | 'cloture' | 'recette' | 'ressource'
+/** `cloture`: deliver the missive (success) or give it up (inachevée); both close it and share the reward. */
+export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource'
 
 /* ───────────────────────── Lookups ───────────────────────── */
 
@@ -79,7 +101,7 @@ type ArticleValeur = { fr: string; en: string; prod: number | null }
 
 /**
  * Value of an item, in septims per unit (weighs contributions): its catalogue production cost, else
- * the sum of its recipe's ingredients ÷ its yield, else its Ressources value, else 0.
+ * the sum of its recipe's ingredients ÷ its yield, else its Ressources « prix courant », else 0.
  */
 export function evaluateur(articles: ArticleValeur[], recettes: Recette[], ressources: Ressource[]) {
   const catalogue = new Map<string, number>()
@@ -90,7 +112,7 @@ export function evaluateur(articles: ArticleValeur[], recettes: Recette[], resso
   }
   const recs = indexRecettes(recettes)
   const res = new Map<string, number>()
-  for (const r of ressources) if (r.valeur !== null) res.set(cle(r.nom), r.valeur)
+  for (const r of ressources) if (r.prix !== null) res.set(cle(r.nom), r.prix)
   const memo = new Map<string, number>()
   const valeur = (nom: string, chemin: string[] = []): number => {
     const k = cle(nom)
@@ -131,6 +153,24 @@ export function arbre(nom: string, quantite: number, recettes: Map<string, Recet
     cycle: false,
     enfants: r.ingredients.map((i) => arbre(i.nom, i.quantite * fournees, recettes, [...chemin, k])),
   }
+}
+
+/**
+ * Cost of the raw materials of a recipe tree, at their « prix courant »; `sansPrix`: leaves with no
+ * known price (not counted).
+ */
+export function coutMatieres(n: Noeud, ressources: Ressource[]): { cout: number; sansPrix: string[] } {
+  const prix = new Map(ressources.map((r) => [cle(r.nom), r.prix]))
+  let cout = 0
+  const sansPrix = new Set<string>()
+  const visiter = (x: Noeud) => {
+    if (x.enfants.length) return x.enfants.forEach(visiter)
+    const p = prix.get(cle(x.nom))
+    if (p === undefined || p === null) sansPrix.add(x.nom)
+    else cout += p * x.quantite
+  }
+  n.enfants.forEach(visiter)
+  return { cout: Math.round(cout * 100) / 100, sansPrix: [...sansPrix] }
 }
 
 /** The first recipe loop reachable from `nom`, or null. */
@@ -182,7 +222,8 @@ export const enStock = (stock: Stock, nom: string) => stock.get(cle(nom))?.qte ?
 /* ───────────────────────── Needs of a missive ───────────────────────── */
 
 export type Niveau = 'fini' | 'intermediaire' | 'brut'
-export type LigneBesoin = { nom: string; niveau: Niveau; besoin: number; auCoffre: number; manque: number; fournees: number }
+/** `rendement`: units per craft when the item has a recipe (null: no recipe); `fournees`: crafts needed for what is missing. */
+export type LigneBesoin = { nom: string; niveau: Niveau; besoin: number; auCoffre: number; manque: number; fournees: number; rendement: number | null }
 
 /** Delivered quantity per requested product (livraison rows of that missive). */
 export function livres(numero: string, mouvements: Mouvement[]): Map<string, number> {
@@ -208,7 +249,7 @@ export function besoins(lignes: LigneMissive[], recettes: Map<string, Recette>, 
     if (chemin.includes(k)) throw new Cycle([...noms.slice(chemin.indexOf(k)), nom])
     const r = recettes.get(k)
     const niveau: Niveau = finis.has(k) ? 'fini' : r && r.ingredients.length ? 'intermediaire' : 'brut'
-    const ligne = res.get(k) ?? { nom: r?.produit ?? nom, niveau, besoin: 0, auCoffre: 0, manque: 0, fournees: 0 }
+    const ligne = res.get(k) ?? { nom: r?.produit ?? nom, niveau, besoin: 0, auCoffre: 0, manque: 0, fournees: 0, rendement: r && r.ingredients.length ? r.rendement : null }
     res.set(k, ligne)
     ligne.besoin += qte
     const pris = Math.min(Math.max(0, reserve.get(k) ?? 0), qte)
@@ -332,29 +373,32 @@ export type EtatMissive = {
   journal: Mouvement[]
 }
 
-/** Every missive computed: open ones share the chest in order of writing (oldest first). */
+/**
+ * Every missive computed: open ones share the chest in order of writing (oldest first). A closed
+ * missive is shown as it stood when it was closed: the ledger up to its closing, the whole chest.
+ */
 export function calculerMissives(d: DonneesRegistre, valeur: (nom: string) => number): EtatMissive[] {
   const recettes = indexRecettes(d.recettes)
   const { stock } = rejouer(d.mouvements)
   const reserve = new Map([...stock].map(([k, s]) => [k, s.qte]))
   const ordonnees = [...d.missives].sort((a, b) => a.horodatage.localeCompare(b.horodatage))
-  const etats = ordonnees.map((m): EtatMissive => {
-    const liv = livres(m.numero, d.mouvements)
-    const ouverte = m.statut !== 'close'
+  return ordonnees.map((m): EtatMissive => {
+    const close = estClose(m)
+    const avantCloture = close && m.closeLe ? d.mouvements.filter((x) => x.horodatage < m.closeLe) : d.mouvements
+    const liv = livres(m.numero, avantCloture)
     const lignes = m.lignes.map((l) => {
       const livre = liv.get(cle(l.produit)) ?? 0
       const reste = Math.max(0, l.quantite - livre)
       return { ...l, livre, auCoffre: 0, reste, avance: 0 }
     })
+    const coffre = close ? new Map([...rejouer(avantCloture).stock].map(([k, s]) => [k, s.qte])) : reserve
     let bs: LigneBesoin[] = []
     let cycle: string[] | null = null
-    if (ouverte) {
-      try {
-        bs = besoins(lignes.map((l) => ({ produit: l.produit, quantite: l.reste })), recettes, reserve)
-      } catch (e) {
-        if (e instanceof Cycle) cycle = e.chemin
-        else throw e
-      }
+    try {
+      bs = besoins(lignes.map((l) => ({ produit: l.produit, quantite: l.reste })), recettes, coffre)
+    } catch (e) {
+      if (e instanceof Cycle) cycle = e.chemin
+      else throw e
     }
     for (const l of lignes) {
       l.auCoffre = bs.find((b) => b.niveau === 'fini' && cle(b.nom) === cle(l.produit))?.auCoffre ?? 0
@@ -368,12 +412,11 @@ export function calculerMissives(d: DonneesRegistre, valeur: (nom: string) => nu
       lignes,
       besoins: bs,
       cycle,
-      avance: ouverte ? avance : 1,
+      avance: m.statut === 'livrée' ? 1 : avance,
       contributions: contributions(m.numero, d.mouvements, valeur),
       journal: d.mouvements.filter((x) => x.missive === m.numero),
     }
   })
-  return etats
 }
 
 /* ───────────────────────── Rows read from the sheet ───────────────────────── */
@@ -393,6 +436,14 @@ const date = (v: unknown) => {
   return Number.isNaN(d.getTime()) ? t : d.toISOString()
 }
 
+/** Status as written in the sheet (a bare "close" counts as delivered). */
+function statutLu(s: string): StatutMissive {
+  const k = cle(s)
+  if (k.startsWith('inach') || k.startsWith('aband')) return 'inachevée'
+  if (k.startsWith('livr') || k.startsWith('clos')) return 'livrée'
+  return 'en cours'
+}
+
 export type Onglets = {
   membres?: Record<string, unknown>[]
   ressources?: Record<string, unknown>[]
@@ -406,7 +457,7 @@ export function lireOnglets(o: Onglets) {
   const membres = (o.membres ?? []).map((r) => ({ nom: texte(r.nom), role: texte(r.role) })).filter((m) => m.nom)
 
   const ressources: Ressource[] = (o.ressources ?? [])
-    .map((r) => ({ nom: texte(r.nom), en: texte(r.en), categorie: texte(r.categorie), valeur: nombre(r.valeur), note: texte(r.note) }))
+    .map((r) => ({ nom: texte(r.nom), en: texte(r.en), origine: texte(r.origine), prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: texte(r.note) }))
     .filter((r) => r.nom)
 
   const recettes: Recette[] = []
@@ -435,13 +486,14 @@ export function lireOnglets(o: Onglets) {
         titre: texte(r.titre) || numero,
         commanditaire: texte(r.commanditaire),
         echeance: texte(r.echeance),
-        statut: cle(texte(r.statut)).startsWith('clos') ? 'close' : 'en cours',
+        statut: statutLu(texte(r.statut)),
         ecritePar: texte(r.ecritePar),
         lignes: [],
         recompense: nombre(r.recompense),
         partCommune: nombre(r.partCommune),
         closeLe: date(r.closeLe),
         closePar: texte(r.closePar),
+        noteCloture: texte(r.noteCloture),
       }
       missives.push(m)
     }

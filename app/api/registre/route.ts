@@ -6,7 +6,10 @@ import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 import {
   cle,
   contributions,
+  estClose,
   evaluateur,
+  livres,
+  PART_COMMUNE_DEFAUT,
   indexRecettes,
   partager,
   rejouer,
@@ -130,7 +133,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
   const missiveOuverte = () => {
     const m = lu.missives.find((x) => x.numero === mot(b.missive, 40))
     if (!m) non('Cette missive est introuvable dans le registre.')
-    if (m!.statut === 'close') non('Cette missive est déjà close : son registre ne bouge plus.')
+    if (estClose(m!)) non('Cette missive est déjà close : son registre ne bouge plus.')
     return m!
   }
   const quand = horodatage()
@@ -212,24 +215,14 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       return { action, charge: { mouvements: [...entrees, ...sorties] }, message: `Façonnage consigné : ${sorties.map((s) => `${s.quantite} ${s.objet}`).join(', ')} au coffre.` }
     }
 
-    case 'livraison': {
-      const m = missiveOuverte()
-      const demandes = new Map(m.lignes.map((l) => [cle(l.produit), l.produit]))
-      const note = mot(b.note, 200)
-      const mouvements = liste(b.lignes, 40, 'La livraison').flatMap((l) => {
-        const tape = mot(l.objet, 120)
-        const objet = demandes.get(cle(tape)) ?? non(`« ${tape} » n'est pas demandé par cette missive.`)
-        const q = entier(l.quantite, 0, 1_000_000, `Quantité de ${objet}`)
-        return q ? [{ horodatage: quand, action: '', missive: m.numero, membre: qui.nom, objet, quantite: -q, note }] : []
-      })
-      if (!mouvements.length) non('Rien à livrer sur ce feuillet.')
-      return { action, charge: { mouvements }, message: `Livraison consignée : les ouvrages ont quitté le coffre pour ${m.commanditaire || 'le commanditaire'}.` }
-    }
-
     case 'cloture': {
+      // Two ways out: « livrée » (the requested goods still owed leave the chest for the client) or
+      // « inachevée » (closed without being completed, reward optional). Both share the reward.
       const m = missiveOuverte()
-      const recompense = nombreOuVide(b.recompense, 1e9, 'La récompense') ?? non('Inscris la récompense reçue, même nulle.')
-      const partCommune = nombreOuVide(b.partCommune, 100, 'La part commune') ?? non('Inscris la part commune, en centièmes.')
+      const livree = b.issue !== 'inachevee'
+      const recompense = nombreOuVide(b.recompense, 1e9, 'La récompense') ?? (livree ? non('Inscris la récompense reçue, même nulle.') : 0)
+      const partCommune = nombreOuVide(b.partCommune, 100, 'La part commune') ?? PART_COMMUNE_DEFAUT
+      const note = mot(b.note, 200)
       const valeur = evaluateur(articles, lu.recettes, lu.ressources)
       const p = partager(recompense, partCommune, lu.membres.map((x) => x.nom), contributions(m.numero, lu.mouvements, valeur))
       const parMembre = new Map<string, { membre: string; base: number; merite: number }>()
@@ -238,10 +231,20 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       const partage = [...parMembre.values()]
         .filter((x) => x.base + x.merite > 0)
         .map((x) => ({ membre: x.membre, montant: x.base + x.merite, note: `part commune ${x.base} + mérite ${x.merite}` }))
+      const deja = livres(m.numero, lu.mouvements)
+      const livraisons = livree
+        ? m.lignes.flatMap((l) => {
+            const reste = l.quantite - (deja.get(cle(l.produit)) ?? 0)
+            return reste > 0 ? [{ objet: l.produit, quantite: -reste, note: 'livré au commanditaire' }] : []
+          })
+        : []
+      const statut = livree ? 'livrée' : 'inachevée'
       return {
         action,
-        charge: { cloture: { numero: m.numero, action: numero('A'), horodatage: quand, membre: qui.nom, recompense: p.recompense, partCommune: p.partCommune, partage } },
-        message: `La missive est close : ${p.recompense} septims partagés entre ${partage.length} membre${partage.length > 1 ? 's' : ''}.`,
+        charge: { cloture: { numero: m.numero, action: numero('A'), horodatage: quand, membre: qui.nom, statut, recompense: p.recompense, partCommune: p.partCommune, note, livraisons, partage } },
+        message: livree
+          ? `Missive livrée et close${p.recompense ? ` : ${p.recompense} septims partagés entre ${partage.length} membre${partage.length > 1 ? 's' : ''}` : ''}.`
+          : `Missive close, inachevée${p.recompense ? ` : ${p.recompense} septims partagés malgré tout` : ''}.`,
       }
     }
 
@@ -274,13 +277,21 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
     case 'ressource': {
       const nom = mot(b.nom, 120) || non('Le nom de la ressource manque.')
       const ancien = mot(b.ancienNom, 120)
-      const ressource = { nom, ancienNom: ancien || undefined, en: mot(b.en, 120), categorie: mot(b.categorie, 60), valeur: nombreOuVide(b.valeur, 1e7, 'La valeur'), note: mot(b.note, 200) }
+      const ressource = {
+        nom,
+        ancienNom: ancien || undefined,
+        en: mot(b.en, 120),
+        origine: mot(b.origine, 60),
+        prix: nombreOuVide(b.prix, 1e7, 'Le prix courant'),
+        bonneAffaire: nombreOuVide(b.bonneAffaire, 1e7, 'La bonne affaire'),
+        note: mot(b.note, 200),
+      }
       return { action, charge: { ressource }, message: `La ressource ${nom} est inscrite au registre.` }
     }
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'livraison', 'cloture', 'recette', 'ressource']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource']
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)
@@ -288,6 +299,9 @@ export async function POST(req: NextRequest) {
   const action = b.action as ActionRegistre
   if (!ACTIONS.includes(action)) return refus('Khajiit ne comprend pas ce que tu demandes au registre.')
 
+  // Timings (Server-Timing header and logs): the read before the write (often cached), the write
+  // (Vercel → Apps Script → back, the fresh tabs coming with the answer).
+  const t0 = performance.now()
   let lu: Lu
   try {
     lu = await lireRegistre()
@@ -295,6 +309,7 @@ export async function POST(req: NextRequest) {
     console.error('[registre] read failed', e)
     return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
   }
+  const tLire = performance.now() - t0
   const qui = await identite(req.cookies, lu.membres)
   if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
   if (!peut(action, qui.roles)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
@@ -306,17 +321,24 @@ export async function POST(req: NextRequest) {
     if (err instanceof Refus) return refus(err.message)
     throw err
   }
+  const t1 = performance.now()
   try {
     await ecrireRegistre(e.action, e.charge)
   } catch (err) {
     console.error(`[registre] ${action} refused by the script`, err)
     return refus("Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard.", 502)
   }
+  const tEcrire = performance.now() - t1
+  const t2 = performance.now()
   let donnees: DonneesRegistre | null = null
   try {
     donnees = vue(await lireRegistre())
   } catch {
     donnees = null
   }
-  return NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })
+  const tRelire = performance.now() - t2
+  console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms, re-read ${tRelire.toFixed(0)} ms`)
+  const rep = NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })
+  rep.headers.set('Server-Timing', `lire;dur=${tLire.toFixed(0)}, ecrire;dur=${tEcrire.toFixed(0)}, relire;dur=${tRelire.toFixed(0)}`)
+  return rep
 }

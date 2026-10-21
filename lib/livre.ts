@@ -14,7 +14,7 @@ const CONTENU = path.join(process.cwd(), 'content')
 export const PARTIES: Partie[] = [
   { id: 'sommaire', titre: 'Sommaire', court: 'Sommaire', couleur: '#8a6a1f', icone: 'open-book' },
   { id: 'marchandises', titre: 'Livre des Marchandises', court: 'Marchandises', couleur: '#8a1c12', icone: 'coins' },
-  { id: 'pense-betes', titre: 'Pense-bêtes', court: 'Pense-bêtes', couleur: '#2f5b3a', icone: 'scroll-quill' },
+  { id: 'atelier', titre: "L'Atelier", court: 'Atelier', couleur: '#2f5b3a', icone: 'cauldron' },
   { id: 'missives', titre: 'Missives en cours', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
   { id: 'caravane', titre: 'La Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
 ]
@@ -144,7 +144,7 @@ async function lireNotes(): Promise<PageNote[]> {
       return {
         type: 'note' as const,
         id: `note-${slug(f.replace(/\.md$/, '').replace(/^\d+-/, ''))}`,
-        partie: 'pense-betes' as const,
+        partie: 'caravane' as const,
         titre,
         court: meta.court || titre,
         icone: meta.icone || 'scroll-unfurled',
@@ -189,7 +189,14 @@ export async function chargerLivre(): Promise<Livre> {
     { type: 'sommaire', id: 'sommaire', partie: 'sommaire', titre: 'Sommaire', court: 'Sommaire', icone: 'open-book',
       citation: "Un marchand sans registre est un marchand qui oublie ; un marchand qui oublie est un marchand ruiné." },
     ...chapitres,
-    ...(await lireNotes()),
+    {
+      type: 'atelier', vue: 'recettes', id: 'recettes', partie: 'atelier', titre: 'Recettes', court: 'Recettes', icone: 'cauldron',
+      intro: 'Les recettes des artisans : ce qu’il faut pour une fournée, et ce que coûtent ses matières. Chacun peut en consigner une nouvelle ou corriger une quantité.',
+    },
+    {
+      type: 'atelier', vue: 'matieres', id: 'matieres', partie: 'atelier', titre: 'Matières premières', court: 'Matières', icone: 'wheat',
+      intro: 'Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre : le prix qu’on en paie d’ordinaire, et celui auquel on achète sans hésiter.',
+    },
     {
       type: 'missives', id: 'missives', partie: 'missives', titre: 'Missives', court: 'Missives', icone: 'wax-seal',
       intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
@@ -199,10 +206,8 @@ export async function chargerLivre(): Promise<Livre> {
       type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', court: 'Le coffre', icone: 'open-chest',
       intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
     },
-    {
-      type: 'atelier', id: 'atelier', partie: 'missives', titre: "L'atelier", court: 'Atelier', icone: 'cauldron',
-      intro: 'Les recettes des artisans et la valeur des matières. Chacun peut en consigner une nouvelle ou corriger une quantité : un registre juste fait des parts justes.',
-    },
+    // The memos (« pense-bêtes ») now live in the Caravane's book, before its roster.
+    ...(await lireNotes()),
     {
       type: 'avenir', id: 'caravane', partie: 'caravane', titre: 'La Caravane', court: 'Caravane', icone: 'lynx-head',
       intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rôle que chacun tient sur la route.',

@@ -11,7 +11,7 @@ export type Article = {
   note: string
 }
 
-export type PartieId = 'sommaire' | 'marchandises' | 'pense-betes' | 'missives' | 'caravane'
+export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'caravane'
 
 export type Partie = { id: PartieId; titre: string; court: string; couleur: string; icone: string }
 
@@ -29,8 +29,12 @@ export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string
 export type PageMissives = Base & { type: 'missives'; intro: string; citation: string }
 export type PageMissive = Base & { type: 'missive'; numero: string }
 export type PageCoffre = Base & { type: 'coffre'; intro: string }
-export type PageAtelier = Base & { type: 'atelier'; intro: string }
+/** The workshop: `vue` « recettes » (every recipe) or « matieres » (the raw materials' buying ledger). */
+export type PageAtelier = Base & { type: 'atelier'; vue: 'recettes' | 'matieres'; intro: string }
 
-export type Page = PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageCoffre | PageAtelier
+/** The bookplate pasted inside the cover: the reader signs it with their name (added by the page when the registre is linked). */
+export type PageExLibris = Base & { type: 'exlibris' }
+
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageCoffre | PageAtelier
 
 export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string> }

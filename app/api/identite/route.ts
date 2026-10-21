@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
-import { poserNom, trouverMembre } from '@/lib/identite'
+import { poserNom, rolesDe, trouverMembre } from '@/lib/identite'
+import { droitsDe } from '@/lib/droits'
 import { lireRegistre, registreRelie } from '@/lib/registre'
 
 // Signing with one's name: POST { nom } is matched against the Membres tab (never sent to the page);
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     await new Promise((r) => setTimeout(r, 600))
     return refus(`Nul membre du nom de « ${tape} » n'est inscrit au registre de la caravane. Rien n'a été consigné.`, 403)
   }
-  const rep = NextResponse.json({ ok: true, nom: m.nom })
+  const rep = NextResponse.json({ ok: true, nom: m.nom, droits: droitsDe(rolesDe(m, s.genre === 'discord' && s.membre.patriarche)) })
   await poserNom(rep, m.nom)
   return rep
 }

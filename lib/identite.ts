@@ -21,7 +21,7 @@ export function trouverMembre(nom: string, membres: Membre[]): Membre | null {
   return k ? (membres.find((m) => cle(m.nom) === k) ?? null) : null
 }
 
-const rolesDe = (m: Membre, patriarche = false): Role[] => {
+export const rolesDe = (m: Membre, patriarche = false): Role[] => {
   const roles = m.role.split(/[,;/]/).map(cle).filter(Boolean)
   if (patriarche && !roles.includes('patriarche')) roles.push('patriarche')
   return roles
@@ -31,6 +31,16 @@ const rolesDe = (m: Membre, patriarche = false): Role[] => {
 export async function nomSigne(biscuits: Biscuits): Promise<string | null> {
   const v = await verifier<{ nom?: string }>('nom', biscuits.get(COOKIE_NOM)?.value)
   return typeof v?.nom === 'string' && v.nom ? v.nom : null
+}
+
+/**
+ * Quick identity for display (no call to the sheet): the signed cookie's name, as validated when it
+ * was set. Discord sessions need the list (their nickname is mapped to it): null here.
+ */
+export async function identiteSignee(biscuits: Biscuits): Promise<string | null> {
+  const s = await lireSession(biscuits)
+  if (!s.valide || s.genre === 'discord') return null
+  return nomSigne(biscuits)
 }
 
 /** The visitor's identity checked against the current members' list (null: unknown or not signed). */

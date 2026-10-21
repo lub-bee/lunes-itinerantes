@@ -14,8 +14,7 @@ export const ROLES_REQUIS: Record<ActionRegistre, Role[] | null> = {
   releve: null,
   depot: null,
   fabrication: null,
-  livraison: null,
-  cloture: null, // later perhaps ['patriarche']
+  cloture: null, // deliver or give up a missive; later perhaps ['patriarche']
   recette: null, // later perhaps ['maitreartisan', 'patriarche']
   ressource: null, // later perhaps ['maitreartisan', 'patriarche']
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession, nomDe } from '@/lib/sceau'
-import { identite } from '@/lib/identite'
-import { droitsDe } from '@/lib/droits'
+import { identite, identiteSignee } from '@/lib/identite'
+import { droitsDe, type Role } from '@/lib/droits'
 import { lireRegistre, registreRelie } from '@/lib/registre'
 
 // Who holds the pen: the order sheet and the missives show this name.
@@ -25,13 +25,19 @@ export async function GET(req: NextRequest) {
   } catch {
     // Malformed cookie: no remembered name.
   }
+  // Fast: a password session's signed name needs no call to the sheet (writes re-check it against
+  // the list); a Discord session's nickname is looked up in the list.
   const relie = registreRelie()
-  let qui = null
+  let qui: { nom: string; roles: Role[] } | null = null
   if (relie) {
-    try {
-      qui = await identite(req.cookies, (await lireRegistre()).membres)
-    } catch (e) {
-      console.error('[marchand] registre unreachable', e)
+    const signe = await identiteSignee(req.cookies)
+    if (signe) qui = { nom: signe, roles: [] }
+    else if (s.genre === 'discord') {
+      try {
+        qui = await identite(req.cookies, (await lireRegistre()).membres)
+      } catch (e) {
+        console.error('[marchand] registre unreachable', e)
+      }
     }
   }
   return NextResponse.json({

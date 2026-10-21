@@ -43,16 +43,29 @@ const lireBrut = unstable_cache(
   { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] },
 )
 
+/**
+ * Tabs as the last write on this server instance returned them (a write answers with every tab read
+ * afresh): used until they are as old as the cache, so a write needs no second call to the script.
+ */
+let frais: { onglets: Onglets; le: number } | null = null
+
 /** Every tab of the registre, typed (members included: server use only). */
 export async function lireRegistre() {
+  if (frais && Date.now() - frais.le < FRAICHEUR * 1000) return lireOnglets(frais.onglets)
   return lireOnglets(await lireBrut())
 }
 
-/** A write action of the script; the cached read is dropped afterwards. */
+/** A write action of the script; its answer carries the tabs as they now are. */
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
   try {
-    return await appelerScript({ action, ...charge })
+    const r = await appelerScript<{ onglets?: Onglets }>({ action, ...charge })
+    frais = r.onglets ? { onglets: r.onglets, le: Date.now() } : null
+    return r
+  } catch (e) {
+    frais = null
+    throw e
   } finally {
+    // Other server instances read the sheet again.
     revalidateTag(ETIQUETTE_REGISTRE)
   }
 }
