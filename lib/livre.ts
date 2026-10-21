@@ -3,6 +3,7 @@ import path from 'node:path'
 import { marked } from 'marked'
 import { parserCsv } from './csv'
 import { ICONE_COPIE } from './copie'
+import { ICONES_COMMANDE } from './commande'
 import { icones } from './icones'
 import { ICONES_ARTISANS, normaliser } from './recherche'
 import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
@@ -24,7 +25,8 @@ function slug(s: string): string {
 }
 
 function nombre(s: string | undefined): number | null {
-  const t = (s ?? '').replace(/\s/g, '').replace(',', '.')
+  // Tolerates units and symbols typed in a sheet ("25 septims", "12,5 ¤").
+  const t = (s ?? '').replace(/[^\d.,-]/g, '').replace(',', '.')
   if (!t) return null
   const n = Number(t)
   return Number.isFinite(n) ? n : null
@@ -52,10 +54,51 @@ async function lireCatalogue(): Promise<string> {
   return fs.readFile(path.join(CONTENU, 'marchandises.csv'), 'utf8')
 }
 
+/**
+ * Accepted header names per column (compared without case, accents or punctuation). The sheet of
+ * the caravan's owner names its columns in plain French ("Détail", "Prix de prod", "Prix mini",
+ * "Prix idéal"); the original `marchandises.csv` names stay valid. A header that matches no alias
+ * exactly may still start with one ("Prix idéal (septims)"). Documented in README.md.
+ */
+export const ALIAS_COLONNES = {
+  chapitre: ['chapitre', 'categorie', 'rubrique', 'section'],
+  fr: ['fr', 'article', 'articles', 'detail', 'details', 'designation', 'nom', 'objet', 'produit'],
+  en: ['en', 'anglais', 'english', 'nom anglais', 'nom en'],
+  prod: ['prod', 'prix de prod', 'prix prod', 'prix de production', 'cout', 'cout de prod', 'cout de production'],
+  min: ['min', 'mini', 'minimum', 'prix mini', 'prix minimum', 'prix min', 'plancher', 'prix plancher'],
+  max: ['max', 'maxi', 'ideal', 'prix ideal', 'prix max', 'prix maxi', 'plafond', 'prix plafond'],
+  artisan: ['artisan', 'metier', 'atelier'],
+  note: ['note', 'notes', 'remarque', 'commentaire'],
+} as const
+
+type Colonne = keyof typeof ALIAS_COLONNES
+
+const cle = (s: string) => normaliser(s).replace(/[^a-z0-9]+/g, ' ').trim()
+
+/** Column index of each known field (-1 when absent). Exact aliases first, then prefixes. */
+function colonnes(entete: string[]): Record<Colonne, number> {
+  const noms = entete.map(cle)
+  const pris = new Set<number>()
+  const res = {} as Record<Colonne, number>
+  const champs = Object.keys(ALIAS_COLONNES) as Colonne[]
+  for (const champ of champs) {
+    const i = noms.findIndex((n, k) => !pris.has(k) && (ALIAS_COLONNES[champ] as readonly string[]).includes(n))
+    res[champ] = i
+    if (i >= 0) pris.add(i)
+  }
+  for (const champ of champs) {
+    if (res[champ] >= 0) continue
+    const alias = [...ALIAS_COLONNES[champ]].filter((a) => a.length > 2).sort((a, b) => b.length - a.length)
+    const i = noms.findIndex((n, k) => !pris.has(k) && alias.some((a) => n.startsWith(`${a} `)))
+    res[champ] = i
+    if (i >= 0) pris.add(i)
+  }
+  return res
+}
+
 function lireArticles(csv: string): (Article & { chapitre: string })[] {
-  const [entete, ...lignes] = parserCsv(csv)
-  const col = (nom: string) => entete.findIndex((c) => normaliser(c.trim()) === nom)
-  const i = { chapitre: col('chapitre'), fr: col('fr'), en: col('en'), prod: col('prod'), min: col('min'), max: col('max'), artisan: col('artisan'), note: col('note') }
+  const [entete = [], ...lignes] = parserCsv(csv)
+  const i = colonnes(entete)
   const vus = new Set<string>()
   return lignes
     .map((l) => {
@@ -68,7 +111,7 @@ function lireArticles(csv: string): (Article & { chapitre: string })[] {
         id,
         chapitre: slug(l[i.chapitre] ?? ''),
         fr: fr || en,
-        en: en || fr,
+        en: i.en < 0 ? '' : en || fr, // no English column: no English name (rather than the French one twice)
         prod: nombre(l[i.prod]),
         min: nombre(l[i.min]),
         max: nombre(l[i.max]),
@@ -113,6 +156,11 @@ async function lireNotes(): Promise<PageNote[]> {
   )
 }
 
+/** Every article of the catalogue (CSV or published sheet), for the order route. */
+export async function chargerArticles(): Promise<Article[]> {
+  return lireArticles(await lireCatalogue())
+}
+
 export async function chargerLivre(): Promise<Livre> {
   const defs = JSON.parse(await fs.readFile(path.join(CONTENU, 'chapitres.json'), 'utf8')) as DefChapitre[]
   const articles = lireArticles(await lireCatalogue())
@@ -153,6 +201,6 @@ export async function chargerLivre(): Promise<Livre> {
     },
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

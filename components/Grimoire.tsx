@@ -8,6 +8,7 @@ import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
 import { ICONE_COPIE } from '@/lib/copie'
+import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Commande'
 
 type Tourne = { de: number; vers: number; manuel: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
@@ -80,6 +81,8 @@ export default function Grimoire({ livre }: { livre: Livre }) {
   const champ = useRef<HTMLInputElement>(null)
   const etroit = useMedia('(max-width: 860px)')
   const sansAnimation = useMedia('(prefers-reduced-motion: reduce)')
+  const commande = useCommande()
+  const bande = useRef<HTMLButtonElement>(null)
 
   // Latest values for the window-level pointer handlers.
   const indexRef = useRef(index)
@@ -353,6 +356,7 @@ export default function Grimoire({ livre }: { livre: Livre }) {
       cible: interactif ? cible : null,
       scrollInitial: scrolls.current[id],
       onScroll: interactif ? (v) => (scrolls.current[id] = v) : undefined,
+      commande: interactif && commande.ouverte ? { ajouter: commande.ajouter } : undefined,
     }
   }
 
@@ -478,6 +482,8 @@ export default function Grimoire({ livre }: { livre: Livre }) {
             </svg>
             <Icone corps={icones[ICONE_COPIE]} />
           </a>
+          {/* Order mode: a strip of paper on the table under the field (absolute, desktop only). */}
+          {etroit === false && <BandeCommande c={commande} bande={bande} icones={icones} />}
           {indexOuvert && requete && (
             <div className="index-recherche" role="listbox">
               {resultats.length === 0 ? (
@@ -615,9 +621,19 @@ export default function Grimoire({ livre }: { livre: Livre }) {
               disabled={destination === pages.length - 1}
               onClick={() => !clicIgnore.current && aller(destination + 1)}
             />
+            {etroit === false && commande.ouverte && (
+              <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} />
+            )}
           </div>
         </div>
       </main>
+
+      {etroit && (
+        <>
+          {commande.ouverte && commande.deployee && <FeuilleCommande c={commande} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} />}
+          <BarreCommande c={commande} icones={icones} />
+        </>
+      )}
     </div>
   )
 }

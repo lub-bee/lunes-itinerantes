@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import type { Livre, Page, PageChapitre } from '@/lib/types'
+import type { Article, Livre, Page, PageChapitre } from '@/lib/types'
 import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
@@ -18,6 +18,8 @@ export type Ctx = {
   cible?: string | null
   scrollInitial?: number
   onScroll?: (v: number) => void
+  /** Order mode: present while the order sheet is out; clicking a ledger row writes the article on it. */
+  commande?: { ajouter: (a: Article) => number }
 }
 
 const EFFACEMENT_MS = 320
@@ -305,6 +307,19 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.requete, ctx.locale, ctx.interactif])
 
+  // Order mode: a drop of ink and a "+1" where the row was clicked.
+  const [gouttes, setGouttes] = useState<{ id: string; x: number; y: number; texte: string; n: number }[]>([])
+  const inscrire = (a: Article, e: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>) => {
+    if (!ctx.commande) return
+    const qte = ctx.commande.ajouter(a)
+    const r = e.currentTarget.getBoundingClientRect()
+    const x = 'clientX' in e && e.clientX ? e.clientX - r.left : r.width / 2
+    const y = 'clientY' in e && e.clientY ? e.clientY - r.top : r.height / 2
+    const n = Date.now() + Math.random()
+    setGouttes((g) => [...g.slice(-4), { id: a.id, x, y, texte: qte > 1 ? `+1 (${qte})` : 'inscrit', n }])
+    setTimeout(() => setGouttes((g) => g.filter((d) => d.n !== n)), 1100)
+  }
+
   const filtres = page.articles.filter((a) => articleCorrespond(a, montre.requete) && articleCorrespond(a, montre.locale))
   const requetes = [montre.requete, montre.locale].filter(Boolean)
 
@@ -315,7 +330,7 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
   }, [ctx.cible, ctx.interactif, generation])
 
   return (
-    <div className="registre">
+    <div className={`registre ${ctx.commande ? 'en-commande' : ''}`}>
       <div className="registre-entete" role="row">
         <span className="col-article">Article</span>
         <span>Coût</span>
@@ -329,7 +344,29 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
             data-article={a.id}
             className={`ligne ${generation > 0 ? 'ecrit' : ''} ${ctx.cible === a.id ? 'cible' : ''}`}
             style={{ '--i': Math.min(i, 16) } as React.CSSProperties}
+            {...(ctx.commande
+              ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  title: `Inscrire ${a.fr} sur la commande`,
+                  onClick: (e: React.MouseEvent<HTMLDivElement>) => inscrire(a, e),
+                  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      inscrire(a, e)
+                    }
+                  },
+                }
+              : {})}
           >
+            {gouttes
+              .filter((d) => d.id === a.id)
+              .map((d) => (
+                <span key={d.n} className="goutte" style={{ left: d.x, top: d.y } as React.CSSProperties} aria-hidden>
+                  <span className="goutte-tache" />
+                  <span className="goutte-mot">{d.texte}</span>
+                </span>
+              ))}
             <GlypheArtisan artisan={a.artisan} icones={ctx.livre.icones} />
             <div className="noms">
               <span className="nom-fr"><Surligne texte={a.fr} requetes={requetes} /></span>

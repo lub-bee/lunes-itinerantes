@@ -1,0 +1,95 @@
+import { NextResponse, type NextRequest } from 'next/server'
+import { COOKIE_SCEAU, egaux, jetonAttendu } from '@/lib/sceau'
+import { chargerArticles } from '@/lib/livre'
+import { calculerLigne, totaux, type CommandeEnvoyee } from '@/lib/commande'
+
+// Seals an order: validates it, recomputes every total from the catalogue, and hands it to the
+// Google Apps Script web app that writes it in the "Commandes" sheet (scripts/apps-script/commandes.gs).
+// COMMANDES_SCRIPT_URL and COMMANDES_JETON stay on the server.
+
+export const dynamic = 'force-dynamic'
+
+const MAX_LIGNES = 200
+
+const refus = (message: string, status: number) => NextResponse.json({ ok: false, message }, { status })
+
+function numeroCommande(maintenant: Date): string {
+  // JST calendar day: the caravan lives in Asia/Tokyo time.
+  const jour = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: '2-digit', month: '2-digit', day: '2-digit' })
+    .format(maintenant)
+    .replace(/-/g, '')
+  const hasard = Array.from(crypto.getRandomValues(new Uint8Array(3)), (o) => o.toString(36).padStart(2, '0')).join('').toUpperCase()
+  return `C-${jour}-${hasard.slice(0, 5)}`
+}
+
+export async function POST(req: NextRequest) {
+  // The middleware already guards /api/*; checked again so the route never relies on it alone.
+  const jeton = req.cookies.get(COOKIE_SCEAU)?.value
+  const attendu = await jetonAttendu()
+  if (!jeton || !attendu || !egaux(jeton, attendu)) return refus("Le sceau de la caravane manque à cette commande.", 401)
+
+  const url = process.env.COMMANDES_SCRIPT_URL
+  const secret = process.env.COMMANDES_JETON
+  if (!url || !secret) return refus("Aucun coursier n'attend à la porte : le registre des commandes n'est pas encore relié.", 503)
+
+  const corps = (await req.json().catch(() => null)) as Partial<CommandeEnvoyee> | null
+  const vendeur = typeof corps?.vendeur === 'string' ? corps.vendeur.trim().slice(0, 80) : ''
+  if (!vendeur) return refus('Qui tient la plume ? Le nom du vendeur manque.', 400)
+  const brutes = Array.isArray(corps?.lignes) ? corps.lignes : []
+  if (!brutes.length) return refus('Une commande sans article ne se scelle pas.', 400)
+  if (brutes.length > MAX_LIGNES) return refus('Trop de lignes pour un seul parchemin.', 400)
+
+  // Floor and ceiling come from the catalogue when the article is still in it.
+  const catalogue = new Map((await chargerArticles()).map((a) => [a.id, a]))
+  const lignes = []
+  for (const b of brutes) {
+    const quantite = Number(b?.quantite)
+    const prixUnitaire = Number(b?.prixUnitaire)
+    const article = typeof b?.article === 'string' ? b.article.trim().slice(0, 160) : ''
+    if (!article || !Number.isInteger(quantite) || quantite < 1 || quantite > 9999 || !Number.isFinite(prixUnitaire) || prixUnitaire < 0 || prixUnitaire > 1e7) {
+      return refus(`Une ligne est mal écrite${article ? ` (${article})` : ''} : quantité ou prix illisible.`, 400)
+    }
+    const connu = typeof b.id === 'string' ? catalogue.get(b.id) : undefined
+    const nombreOuNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+    const min = connu ? connu.min : nombreOuNull(b.min)
+    const max = connu ? connu.max : nombreOuNull(b.max)
+    lignes.push({
+      article: connu?.fr ?? article,
+      articleEn: connu?.en ?? (typeof b.articleEn === 'string' ? b.articleEn.slice(0, 160) : ''),
+      prixMini: min,
+      prixIdeal: max,
+      ...calculerLigne(quantite, prixUnitaire, min, max),
+    })
+  }
+
+  const maintenant = new Date()
+  const commande = { numero: numeroCommande(maintenant), horodatage: maintenant.toISOString(), vendeur, ...totaux(lignes), lignes }
+
+  try {
+    // Apps Script answers a POST with a redirect to the result; fetch follows it.
+    const rep = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jeton: secret, commande }),
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20000),
+    })
+    const texte = await rep.text()
+    let reponse: { ok?: boolean; erreur?: string } | null = null
+    try {
+      reponse = JSON.parse(texte)
+    } catch {
+      reponse = null
+    }
+    if (!rep.ok || !reponse?.ok) {
+      console.error(`[commande] script refused ${commande.numero}: HTTP ${rep.status}`, reponse?.erreur ?? texte.slice(0, 300))
+      return refus("Le registre des commandes a refusé le parchemin. Ta commande reste sur la table : réessaie plus tard.", 502)
+    }
+  } catch (e) {
+    console.error(`[commande] script unreachable for ${commande.numero}`, e)
+    return refus("Le coursier s'est perdu en route. Ta commande reste sur la table : réessaie plus tard.", 504)
+  }
+
+  return NextResponse.json({ ok: true, numero: commande.numero, total: commande.total })
+}
