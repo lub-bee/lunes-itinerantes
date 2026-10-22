@@ -24,6 +24,7 @@ export type Fiche =
   | { genre: 'fabrication'; numero: string; produit?: string }
   | { genre: 'livrer' | 'abandonner'; numero: string }
   | { genre: 'mouvement'; lignes: Mouvement[] }
+  | { genre: 'rang'; cle: string }
 
 export type CtxRegistre = {
   r: EtatRegistre
@@ -322,7 +323,7 @@ function LigneBesoinVue({ b, e, reg, ouverte, icones }: { b: LigneBesoin; e: Eta
             </button>
           )}
         </span>
-        <AFaconner b={b} />
+        {b.niveau !== 'fini' && <AFaconner b={b} />}
         <Jauge avance={avance} />
       </span>
       <span>{quantite(b.besoin)}</span>

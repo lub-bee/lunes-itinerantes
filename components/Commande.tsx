@@ -552,11 +552,11 @@ export function FeuilleCommande({
           </label>
           <div className="commande-totaux">
             <span>
-              Total mini <b>{prix(b.totalMini)}</b>
+              Total plancher <b>{prix(b.totalMini)}</b>
             </span>
             {b.lignes > 0 && b.total > 0 && <span className={`commande-statut statut-${CLASSES_STATUT[b.statut]}`}>{LIBELLES_STATUT[b.statut]}</span>}
             <span>
-              Total idéal <b>{prix(b.totalIdeal)}</b>
+              Total plafond <b>{prix(b.totalIdeal)}</b>
             </span>
           </div>
           <div className="commande-total">
@@ -632,7 +632,7 @@ function LigneFeuille({ l, c, icones, nouvelle, part }: { l: LigneCommande; c: E
   const fixerQte = (v: number) => c.regler(l.id, { qte: Math.max(1, Math.min(9999, Math.round(v) || 1)) })
   const sansPrix = lirePrix(l.prix) === null
   const negocie = l.min === null && l.max === null
-  const bornes = negocie ? 'à négocier' : `mini ${prix(l.min)} · idéal ${prix(l.max)}`
+  const bornes = negocie ? 'à négocier' : `plancher ${prix(l.min)} · plafond ${prix(l.max)}`
   const sous = !l.rayee && calc?.sousPlancher
 
   return (

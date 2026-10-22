@@ -7,6 +7,7 @@ import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
 import { ExLibris, Gaufrage } from './ExLibris'
+import { ArbreRangs } from './Caravane'
 import { DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -140,6 +141,12 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return (
           <EnTete surtitre="L'Atelier" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'caravane':
+        return (
+          <EnTete surtitre="La Caravane" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            {!compact && <p className="intro lettrine">{page.intro}</p>}
           </EnTete>
         )
       case 'metier':
@@ -301,6 +308,13 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
         return <DroiteCoffre reg={ctx.registre} />
       case 'atelier':
         return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} />
+      case 'caravane':
+        return (
+          <>
+            <ArbreRangs reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} />
+            <CitationFin texte={page.citation} />
+          </>
+        )
       case 'metier':
         return <DroiteMetier page={page} reg={ctx.registre} interactif={ctx.interactif} anglais={(nom) => nomAnglais(ctx, nom)} />
       case 'avenir':
@@ -492,11 +506,11 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
                       }}
                       onKeyDown={(e) => e.stopPropagation()}
                     >
-                      <Icone corps={ctx.livre.icones['cauldron']} />
+                      <Icone corps={ctx.livre.icones['scroll-quill']} />
                     </button>
                   ) : (
                     <span className="glyphe-recette" aria-hidden>
-                      <Icone corps={ctx.livre.icones['cauldron']} />
+                      <Icone corps={ctx.livre.icones['scroll-quill']} />
                     </span>
                   ))}
               </span>

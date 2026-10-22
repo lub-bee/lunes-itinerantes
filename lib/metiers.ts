@@ -7,7 +7,7 @@ import { cle } from './missives'
 type Metier = { nom: string; icone: string; intro: string }
 
 export const METIERS: Record<string, Metier> = {
-  alchimiste: { nom: 'Alchimiste', icone: 'fizzing-flask', intro: 'Fioles, philtres et breuvages : ce qui guérit, ce qui grise, et ce qui se vend le plus cher au plus pressé.' },
+  alchimiste: { nom: 'Alchimiste', icone: 'drink-me', intro: 'Fioles, philtres et breuvages : ce qui guérit, ce qui grise, et ce qui se vend le plus cher au plus pressé.' },
   brasseur: { nom: 'Brasseur', icone: 'beer-stein', intro: 'Bières, hydromels et vins : la soif des Nordiques est le plus sûr des marchés.' },
   cuisinier: { nom: 'Cuisinier', icone: 'cooking-pot', intro: 'Ragoûts, pains et pâtés : une caravane qui mange bien marche loin.' },
   forgeron: { nom: 'Forgeron', icone: 'anvil', intro: 'Lames, armures et clous : le fer se paie au poids, le savoir-faire au double.' },

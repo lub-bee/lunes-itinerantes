@@ -6,6 +6,7 @@ import { ICONE_COPIE } from './copie'
 import { ICONES_COMMANDE } from './commande'
 import { ICONES_MISSIVES } from './missives'
 import { ICONES_METIERS } from './metiers'
+import { ICONES_RANGS } from './rangs'
 import { icones } from './icones'
 import { ICONES_ARTISANS, normaliser } from './recherche'
 import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
@@ -208,15 +209,14 @@ export async function chargerLivre(): Promise<Livre> {
       intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
     },
     {
-      type: 'avenir', id: 'caravane', partie: 'caravane', titre: 'La Caravane', court: 'Caravane', icone: 'lynx-head',
-      intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rôle que chacun tient sur la route.',
-      attente: 'Le scribe compte encore les moustaches. Ce registre sera bientôt rempli.',
+      type: 'caravane', id: 'caravane', partie: 'caravane', titre: 'La Caravane', court: 'Caravane', icone: 'lynx-head',
+      intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rang que chacun tient sur la route. Touche un sceau pour lire les noms de ceux qui le portent.',
       citation: "Une caravane n'est forte que de ceux qui marchent avec elle.",
     },
     // The memos (« pense-bêtes ») live in the Caravane's book, after its roster.
     ...(await lireNotes()),
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

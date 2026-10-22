@@ -31,6 +31,9 @@ export type PageMissives = Base & { type: 'missives'; intro: string; citation: s
 /** One craft of the workshop and its recipes (added by the page from the Recettes tab). */
 export type PageMetier = Base & { type: 'metier'; metier: string }
 
+/** The caravan's ranks drawn as a tree; touching a rank lists its members. */
+export type PageCaravane = Base & { type: 'caravane'; intro: string; citation: string }
+
 export type PageMissive = Base & { type: 'missive'; numero: string; close: boolean }
 export type PageCoffre = Base & { type: 'coffre'; intro: string }
 /** The workshop: `vue` « recettes » (every recipe) or « matieres » (the raw materials' buying ledger). */
@@ -39,6 +42,6 @@ export type PageAtelier = Base & { type: 'atelier'; vue: 'recettes' | 'matieres'
 /** The bookplate pasted inside the cover: the reader signs it with their name (added by the page when the registre is linked). */
 export type PageExLibris = Base & { type: 'exlibris' }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCoffre | PageAtelier
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier
 
 export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string> }

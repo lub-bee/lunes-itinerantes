@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Ctx } from './Pages'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
+import { GAUFRAGE } from '@/lib/gaufrage'
 import { Icone } from './Ornements'
 
 /*
@@ -22,6 +23,8 @@ const APRES_SIGNATURE = 700
  * centre sits on the spine and each page shows its half. Static (painted once).
  */
 export function Gaufrage({ cote }: { cote: 'gauche' | 'droite' | 'unique' }) {
+  // Pressed into every page instead (a baked background, see lib/gaufrage.ts).
+  if (GAUFRAGE.partout) return null
   return (
     <div className={`gaufrage gaufrage-${cote}`} aria-hidden>
       <svg viewBox={EMBLEME_VIEWBOX} preserveAspectRatio="xMidYMid meet">

@@ -220,14 +220,15 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   sealing), line sum, a quill to strike the line out (struck lines are not sent). A price under the
   floor turns red with a one-line warning under the row (not blocking). Long orders scroll inside the
   sheet; the column heads and the footer stay in view.
-- Each line shows its floor and ceiling written out under the name (« mini 25 · idéal 30 »).
+- Each line shows its floor and ceiling written out under the name (« plancher 25 · plafond 30 »); the
+  page says plancher / plafond everywhere, the sheet's columns keep their names (Prix mini / Prix idéal…).
 - **Prix convenu pour l'ensemble** (footer, optional): a price agreed for the whole order — a bulk price
   or a rounding (e.g. two articles at 30 and 70 sold together for 85). When filled it becomes the
   order's total, the line prices become optional (greyed) and each line shows its share, pro rata to
-  its « total idéal » (cents, the sum exact); the status stamp compares that total with Total mini and
-  Total idéal. Sealed, each line's *Prix réel vendu* is its share (its status from that share) and the
+  its « total idéal » (Σ qty × ceiling; cents, the sum exact); the status stamp compares that total with
+  Total plancher and Total plafond. Sealed, each line's *Prix réel vendu* is its share (its status from that share) and the
   **Prix global** column holds the agreed total (empty for an ordinary order).
-- Footer: Total mini (Σ qty × floor), Total idéal (Σ qty × ceiling), **Total** (Σ lines) and a status
+- Footer: Total plancher (Σ qty × floor), Total plafond (Σ qty × ceiling), **Total** (Σ lines) and a status
   stamp: *À perte* (< mini), *Marché honnête*, *Excellente affaire* (≥ idéal). An *à négocier* line
   counts its own price as mini and idéal, so it never tips the status.
 - The order lives in the browser (`localStorage`) until it is sealed or thrown away (« Jeter la
@@ -290,6 +291,17 @@ missive, « Le coffre »; only missives in progress get a side tab, closed ones 
 and **Caravane** (the roster still to be written, then the memo pages). When the sheet is linked (see
 below), an **ex-libris** is the page before the title page: the book opens on it for a reader not yet
 signed, and turning back from the title spread always reaches it; folios still start at the title page.
+
+**Ranks** (« La Caravane » page): a tree of the caravan's ranks — Patriarche; Maître des routes, Voix
+du commerce, Voix de la sécurité; Marchand de lune; Petites lunes — each a coloured seal (an icon can
+be set per rank). Touching a seal lists the members who hold it (signed readers only, through
+`/api/caravane`); members whose « Rôle » names no rank are under « Sans rang ». Ranks (order, names,
+colours, accepted spellings, future icons) live in `lib/rangs.ts`. A row whose « Rôle » is « Ami des
+Lunes » is not a member at all: no signing, not listed, no share.
+
+**Blind-pressed emblem**: `lib/gaufrage.ts` switches the emblem pressed into every page on or off
+(`partout`) and sets its strength (fainter on the price ledgers). It is a baked image
+(`public/textures/gaufrage.webp`), a static background layer: page turns cost the same with or without it.
 
 ## Missives, the chest and the workshop (v3)
 
@@ -402,7 +414,7 @@ is `ONGLETS` at the top of `commandes.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
-| **Membres** (read only, imported by hand) | one member | `Nom`, optional `Rôle` |
+| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member) |
 | **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims per unit — older header `Valeur`), `Bonne affaire`, `Note` |
 | **Recettes** | one ingredient of one product | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note` |
 | **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture` |

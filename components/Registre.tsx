@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Article } from '@/lib/types'
 import { calculerMissives, evaluateur, indexRecettes, type ActionRegistre, type DonneesRegistre } from '@/lib/missives'
+import type { Hierarchie } from '@/lib/rangs'
 
 /*
  * The registre as the page sees it: who holds the pen (the member's name, checked by the server
@@ -41,6 +42,8 @@ export function useRegistre(articles: Article[]) {
   const [previsions, setPrevisions] = useState<Prevision[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
   const [avis, setAvis] = useState<{ texte: string; n: number } | null>(null)
+  /** Members by rank (signed readers only). */
+  const [hierarchie, setHierarchie] = useState<Hierarchie | null>(null)
   const compteur = useRef(0)
   /** Newest registre version seen: the server never answers with an older one (own writes stay). */
   const version = useRef(0)
@@ -72,6 +75,16 @@ export function useRegistre(articles: Article[]) {
     lireMarchand()
     lireDonnees()
   }, [lireMarchand, lireDonnees])
+
+  // The caravan's ranks, once the reader has signed.
+  const signe = marchand?.identite ?? null
+  useEffect(() => {
+    if (!signe) return setHierarchie(null)
+    fetch('/api/caravane')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { rangs?: Hierarchie } | null) => j?.rangs && setHierarchie(j.rangs))
+      .catch(() => {})
+  }, [signe])
 
   useEffect(() => {
     if (!avis) return
@@ -141,7 +154,7 @@ export function useRegistre(articles: Article[]) {
     return { valeur, recettes: indexRecettes(donnees.recettes), etats: calculerMissives(donnees, valeur) }
   }, [donnees, articles])
 
-  return { marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }
+  return { hierarchie, marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }
 }
 
 export type EtatRegistre = ReturnType<typeof useRegistre>

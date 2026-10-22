@@ -449,6 +449,10 @@ function statutLu(s: string): StatutMissive {
   return 'en cours'
 }
 
+/** Roles of people outside the caravan, though listed in the Membres tab. */
+export const HORS_CARAVANE = ['Ami des Lunes', 'Amie des Lunes', 'Amis des Lunes']
+export const horsCaravane = (role: string) => String(role ?? '').split(/[,;/]/).some((x) => HORS_CARAVANE.some((h) => cle(h) === cle(x)))
+
 export type Onglets = {
   membres?: Record<string, unknown>[]
   ressources?: Record<string, unknown>[]
@@ -459,7 +463,11 @@ export type Onglets = {
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */
 export function lireOnglets(o: Onglets) {
-  const membres = (o.membres ?? []).map((r) => ({ nom: texte(r.nom), role: texte(r.role) })).filter((m) => m.nom)
+  // « Ami des Lunes » is not part of the caravan (no access to the grimoire): such rows are not members
+  // at all — they cannot sign, are not listed, and get no share of a reward.
+  const membres = (o.membres ?? [])
+    .map((r) => ({ nom: texte(r.nom), role: texte(r.role) }))
+    .filter((m) => m.nom && !horsCaravane(m.role))
 
   const ressources: Ressource[] = (o.ressources ?? [])
     .map((r) => ({ nom: texte(r.nom), en: texte(r.en), origine: texte(r.origine), prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: texte(r.note) }))

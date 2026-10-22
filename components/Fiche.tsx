@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, 
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
 import { METIERS, metierDe, SANS_METIER } from '@/lib/metiers'
+import { RANGS, SANS_RANG } from '@/lib/rangs'
 import {
   arbre,
   cle,
@@ -180,11 +181,37 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Façonner', corps: <Signe env={env} action="fabrication"><FormFabrication env={env} numero={f.numero} produit={f.produit} /></Signe> }
     case 'livrer':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Livrer la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer /></Signe> }
+    case 'rang': {
+      const r = RANGS.find((x) => x.cle === f.cle)
+      return { surtitre: 'La Caravane', titre: r?.nom ?? SANS_RANG.nom, corps: <MembresDuRang cle={f.cle} env={env} /> }
+    }
     case 'mouvement':
       return { surtitre: 'Journal du coffre', titre: TITRES_MOUVEMENT[f.lignes[0]?.type] ?? 'Écriture', corps: <DetailMouvement lignes={f.lignes} env={env} /> }
     case 'abandonner':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Abandonner la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer={false} /></Signe> }
   }
+}
+
+/** The members who hold a rank (names only, for signed readers). */
+function MembresDuRang({ cle: k, env }: { cle: string; env: Env }) {
+  const h = env.reg.r.hierarchie
+  if (!env.reg.r.marchand?.identite) return <p className="fiche-note">Seuls les membres qui ont signé l&apos;ex-libris lisent ce registre.</p>
+  if (!h) return <p className="fiche-note">Le scribe déroule le registre des membres…</p>
+  const noms = h[k] ?? []
+  return (
+    <div className="membres-rang">
+      {k === SANS_RANG.cle && <p className="fiche-note">Ceux dont le rôle n&apos;est pas encore inscrit au registre des membres.</p>}
+      {noms.length ? (
+        <ul className="liste-membres">
+          {noms.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="fiche-note">Nul membre ne porte encore ce rang.</p>
+      )}
+    </div>
+  )
 }
 
 const TITRES_MOUVEMENT: Record<string, string> = { relevé: 'Relevé du coffre', dépôt: 'Dépôt', fabrication: 'Façonnage', livraison: 'Livraison', partage: 'Partage' }

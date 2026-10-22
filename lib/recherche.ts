@@ -8,7 +8,7 @@ export const ARTISANS: Record<Artisan, string> = {
 }
 
 export const ICONES_ARTISANS: Record<Artisan, string> = {
-  alchimiste: 'fizzing-flask',
+  alchimiste: 'drink-me',
   forgeron: 'anvil',
   couturier: 'sewing-needle',
   divers: 'two-coins',

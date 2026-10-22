@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
 import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
+import { GAUFRAGE } from '@/lib/gaufrage'
 import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
@@ -551,8 +552,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           tranches={TRANCHES}
           recto={avant ? <PageDroite page={pages[m]} ctx={cm} /> : <PageGauche page={pages[m]} ctx={cm} />}
           verso={avant ? <PageGauche page={pages[suivante]} ctx={cs} /> : <PageDroite page={pages[suivante]} ctx={cs} />}
-          classeRecto={`page ${avant ? 'droite' : 'gauche'}`}
-          classeVerso={`page ${avant ? 'gauche' : 'droite'}`}
+          classeRecto={`page ${avant ? 'droite' : 'gauche'} page-${pages[m].type}`}
+          classeVerso={`page ${avant ? 'gauche' : 'droite'} page-${pages[suivante].type}`}
         />
       )
     })
@@ -565,7 +566,10 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const portee = tourne ? <div className="ombre-portee" data-portee aria-hidden /> : null
 
   return (
-    <div className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''}`}>
+    <div
+      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''}`}
+      style={{ '--gaufrage': GAUFRAGE.intensite, '--gaufrage-registres': GAUFRAGE.registres, '--gaufrage-exlibris': GAUFRAGE.exLibris } as CSSProperties}
+    >
       <header className="entete">
         <div className="blason">
           <Embleme taille={64} className="embleme-entete" />
@@ -753,7 +757,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           <div className="feuillets" ref={feuillets} onPointerDown={debutGeste}>
             {etroit === null || !pretSignature ? null : etroit ? (
               <>
-                <div className="page unique">
+                <div className={`page unique page-${pages[uniqueBase].type}`}>
                   <PageUnique key={pages[uniqueBase].id} page={pages[uniqueBase]} ctx={ctx(uniqueBase, !tourne)} />
                   {portee}
                 </div>
@@ -764,7 +768,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                       tranches={TRANCHES_ETROIT}
                       recto={<PageUnique page={pages[uniqueVolet]} ctx={ctx(uniqueVolet, false)} />}
                       verso={null}
-                      classeRecto="page unique"
+                      classeRecto={`page unique page-${pages[uniqueVolet].type}`}
                       classeVerso="page unique dos"
                     />
                   </div>
@@ -772,11 +776,11 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
               </>
             ) : (
               <>
-                <div className="page gauche">
+                <div className={`page gauche page-${pages[gaucheBase].type}`}>
                   <PageGauche key={pages[gaucheBase].id} page={pages[gaucheBase]} ctx={ctx(gaucheBase, !tourne)} />
                   {portee}
                 </div>
-                <div className="page droite">
+                <div className={`page droite page-${pages[droiteBase].type}`}>
                   <PageDroite key={pages[droiteBase].id} page={pages[droiteBase]} ctx={ctx(droiteBase, !tourne)} />
                   {portee}
                 </div>

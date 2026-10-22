@@ -2866,3 +2866,52 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 @media (max-width: 860px) {
   .fiche.mobile.note-droite { left: 10px; rotate: 0deg; }
 }
+
+/* ─── Page titles never push the medallion out of the page: the title shrinks with the room it has
+   (container units) and wraps, the line stays centred only while it fits (safe center). ─── */
+.contenu .en-tete { container-type: inline-size; }
+.contenu .titre-ligne { justify-content: safe center; }
+.contenu .titre-ligne .titre-page { min-width: 0; overflow-wrap: break-word; font-size: min(clamp(40px, 4.4vw, 60px), 12.5cqi); }
+.contenu .en-tete.compact .titre-page { font-size: min(40px, 11cqi); }
+/* The medallion's rings spread 4.5px around it: room so the page's scroll box never cuts them. */
+.contenu .titre-ligne { padding-inline: 6px; }
+
+/* ─── The caravan's ranks: an engraved family tree ─── */
+.arbre-rangs { display: flex; flex-direction: column; align-items: center; margin: 4px 0 6px; }
+.arbre-rangs svg { width: 100%; max-width: 420px; height: auto; overflow: visible; }
+.trait-encre { fill: none; stroke: rgba(52, 30, 12, 0.82); stroke-width: 1.6; stroke-linecap: round; }
+.trait-clair { fill: none; stroke: rgba(255, 249, 228, 0.7); stroke-width: 1.2; stroke-linecap: round; }
+.rang { cursor: pointer; outline: none; }
+.rang-anneau { fill: rgba(255, 248, 228, 0.35); stroke: rgba(120, 60, 30, 0.5); stroke-width: 1.4; }
+.rang-sceau { stroke: rgba(30, 14, 4, 0.55); stroke-width: 1.2; filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)); }
+.rang-filet { fill: none; stroke: rgba(255, 236, 190, 0.45); stroke-width: 1; stroke-dasharray: 2 2.6; }
+.rang-icone { fill: rgba(255, 238, 200, 0.92); }
+.rang-nom { font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.04em; fill: var(--encre); }
+.rang-compte { font-family: var(--f-texte); font-style: italic; font-size: 12px; fill: var(--encre-pale); }
+.rang:hover .rang-sceau, .rang:focus-visible .rang-sceau { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)) brightness(1.15); }
+.rang:hover .rang-nom, .rang:focus-visible .rang-nom { fill: var(--encre-rouge); }
+.arbre-sans-rang { margin-top: 2px; }
+.liste-membres { list-style: none; margin: 6px 0; padding: 0; columns: 2 120px; column-gap: 18px; }
+.liste-membres li { break-inside: avoid; padding: 2px 0; font-size: 17px; border-bottom: 1px dotted rgba(110, 80, 45, 0.25); }
+
+/* ─── The emblem blind-pressed into every page (lib/gaufrage.ts): a static background layer under
+   the page's content, centred on the spine on a spread (each page shows its half, cut by the edges),
+   larger than the page on mobile. ─── */
+.gaufrage-partout .page::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('/textures/gaufrage.webp') no-repeat center / auto 128%;
+  opacity: var(--gaufrage, 0.7);
+}
+.gaufrage-partout .page.gauche::after { right: -100%; }
+.gaufrage-partout .page.droite::after { left: -100%; }
+.gaufrage-partout .page.unique::after { background-size: auto 122%; }
+.gaufrage-partout .page.page-chapitre::after { opacity: var(--gaufrage-registres, 0.45); }
+.gaufrage-partout .page.page-exlibris::after { opacity: var(--gaufrage-exlibris, 1); }
+.gaufrage-partout .page.dos::after { display: none; }
