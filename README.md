@@ -113,7 +113,7 @@ then update the `chapitre` column of the affected articles.
 ### Icons
 
 Chapter, tab, ribbon and artisan icons come from [game-icons.net](https://game-icons.net) (CC BY 3.0,
-credited on the title page), through `@iconify-json/game-icons`. A chapter or memo page picks its icon
+credited on the title page and on the colophon), through `@iconify-json/game-icons`. A chapter or memo page picks its icon
 with an `icone` field holding the game-icons name (e.g. `beer-stein`, `crossed-swords`): browse the
 site, take the last part of the icon's URL. Only the icons in use are sent to the browser.
 
@@ -479,6 +479,25 @@ Code: `lib/missives.ts` (types, needs, stock, contributions, split, material cos
 `app/api/registre`, `app/api/identite`, `components/Registre.tsx` (page state, writes shown at once),
 `components/ExLibris.tsx`, `components/Missives.tsx` (pages), `components/Fiche.tsx` (slip, recipe tree,
 forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
+
+## Credits & licenses
+
+The book's last leaf, « Achevé de copier » (*Colophon & Credits*, `lib/credits.ts`), carries the same
+facts in character; it is listed at the end of the table of contents.
+
+- Grimoire bound and copied by **Ri'Oblan**, the caravan's copyist. The emblem (`public/logo.svg`) and
+  the rank medallions (`public/rangs/*`) were illustrated by Ri'Oblan with GPT Image 2.
+- Icons: [game-icons.net](https://game-icons.net) (Lorc, Delapouite and contributors), CC BY 3.0, also
+  credited in a short line on the title page.
+- Textures: Poly Haven's wood_table, brown_leather and rusty_metal_04 (CC0) for `table.jpg`, `cuir.jpg` /
+  `cuir-impression.jpg` and `fer.jpg`. `chiffon.jpg` (rag paper), `parchemin-impression.jpg` (print
+  parchment) and `gaufrage.webp` (blind-pressed emblem) are made for the project.
+- Fonts: UnifrakturMaguntia, IM Fell English / IM Fell English SC, Mrs Saint Delafield (SIL Open Font
+  License, Google Fonts).
+- Licenses: code under MIT (`LICENSE`); texts, poems, emblem and medallions under CC BY-NC 4.0, Ri'Oblan
+  (`LICENSE-CONTENT.md`, which lists exactly what it covers and the third-party exceptions).
+- The Elder Scrolls, Skyrim, the Khajiit and their lore belong to Bethesda Softworks / ZeniMax Media.
+  Fan work, not affiliated, not for sale.
 
 ## Deploy
 

@@ -3064,3 +3064,15 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 @media (prefers-reduced-motion: reduce) {
   .presence p { animation-duration: 300ms; }
 }
+
+/* ─── The last leaf: colophon and credits (lib/credits.ts) ─── */
+.contenu-colophon .signature { margin: 6px 0 0; }
+.credits { display: flex; flex-direction: column; justify-content: center; flex: 1 0 auto; min-height: 100%; text-align: center; padding: 0 4%; }
+.credits section { margin: 0 0 9px; }
+.credits h4 { margin: 0 0 2px; font-family: var(--f-capitales); font-weight: 400; font-size: 16px; letter-spacing: 0.14em; color: var(--encre-rouge); }
+.credits p { margin: 0; font-size: 14.5px; line-height: 1.4; color: var(--encre-douce); hyphens: manual; }
+.credits .fleuron { margin-top: 4px; }
+.table-fin { margin-top: 14px !important; }
+@media (max-width: 860px) {
+  .credits { min-height: 0; padding: 14px 0 0; }
+}

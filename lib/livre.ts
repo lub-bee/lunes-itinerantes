@@ -8,6 +8,7 @@ import { ICONES_MISSIVES } from './missives'
 import { ICONES_METIERS } from './metiers'
 import { ICONES_RANGS } from './rangs'
 import { icones } from './icones'
+import { COLOPHON } from './credits'
 import { ICONES_ARTISANS, normaliser } from './recherche'
 import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
@@ -217,6 +218,8 @@ export async function chargerLivre(): Promise<Livre> {
     },
     // The memos (« pense-bêtes ») live in the Caravane's book, after its roster.
     ...(await lireNotes()),
+    // The last leaf: who copied the book, and the credits (lib/credits.ts).
+    { type: 'colophon', id: 'colophon', partie: 'sommaire', titre: COLOPHON.titre, titreEn: COLOPHON.titreEn, court: 'Colophon', icone: 'quill' },
   ]
 
   const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS]

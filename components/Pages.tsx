@@ -6,6 +6,7 @@ import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
+import { COLOPHON } from '@/lib/credits'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
@@ -125,6 +126,15 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return <Frontispice ctx={ctx} compact={compact} />
       case 'divinite':
         return null
+      case 'colophon':
+        return (
+          <EnTete surtitre={COLOPHON.surtitre} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <p className="intro lettrine">{COLOPHON.intro}</p>
+            <p className="intro">{COLOPHON.enluminures}</p>
+            <p className="signature">{COLOPHON.signature}</p>
+            {!compact && <CitationFin texte={COLOPHON.citation} />}
+          </EnTete>
+        )
       case 'poemes': {
         const d = divinite(page.divinite)
         return (
@@ -324,6 +334,18 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
             <ExLibris ctx={ctx} />
           </>
         )
+      case 'colophon':
+        return (
+          <div className="credits">
+            {COLOPHON.rubriques.map((r) => (
+              <section key={r.titre}>
+                <h4>{r.titre}</h4>
+                <p>{r.texte}</p>
+              </section>
+            ))}
+            <Fleuron />
+          </div>
+        )
       case 'divinite':
         return (
           <div className="presence">
@@ -441,6 +463,19 @@ function TableDesMatieres({ ctx }: { ctx: Ctx }) {
             </ol>
           </section>
         ))}
+      {pages.map((p, i) =>
+        p.type !== 'colophon' ? null : (
+          <ol key={p.id} className="table-fin">
+            <li>
+              <button type="button" tabIndex={ctx.interactif ? 0 : -1} onClick={() => ctx.aller?.(i)}>
+                <span className="entree">{p.titre}</span>
+                <span className="points" />
+                <span className="renvoi">{romain((i - avantSommaire(ctx)) * 2 + 1)}</span>
+              </button>
+            </li>
+          </ol>
+        ),
+      )}
     </nav>
   )
 }

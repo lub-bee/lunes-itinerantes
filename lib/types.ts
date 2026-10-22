@@ -49,9 +49,12 @@ export type PageExLibris = Base & { type: 'exlibris' }
  * A god signed the ex-libris (lib/oeufs.ts): a blank page that bows, then the poems sung to that god.
  * Not chapters: no side tab, not in the contents, no folio; turning back returns to the ex-libris.
  */
+/** The book's last leaf: colophon and credits (lib/credits.ts). Back matter: no chapter, no side tab. */
+export type PageColophon = Base & { type: 'colophon' }
+
 export type PageDivinite = Base & { type: 'divinite'; divinite: string }
 export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon
 
 export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string> }
