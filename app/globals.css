@@ -2915,3 +2915,9 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .gaufrage-partout .page.page-chapitre::after { opacity: var(--gaufrage-registres, 0.45); }
 .gaufrage-partout .page.page-exlibris::after { opacity: var(--gaufrage-exlibris, 1); }
 .gaufrage-partout .page.dos::after { display: none; }
+/* Rank medallions given as images: same footprint and shadow as the seals. */
+.rang-medaillon { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)); }
+.rang:hover .rang-medaillon, .rang:focus-visible .rang-medaillon { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)) brightness(1.1); }
+.fiche-embleme { display: flex; justify-content: center; margin: 2px 0 2px; }
+.fiche-medaillon { width: 56px; height: 56px; filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)); }
+.fiche-sceau { display: block; width: 44px; height: 44px; margin: 6px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(30, 14, 4, 0.55), inset 6px 6px 12px rgba(255, 243, 208, 0.35), 0 0 0 4px rgba(255, 248, 228, 0.4), 0 0 0 5.4px rgba(120, 60, 30, 0.5), 0 2px 3px rgba(40, 20, 5, 0.45); }

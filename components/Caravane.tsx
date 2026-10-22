@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { RANGS, SANS_RANG, type Rang } from '@/lib/rangs'
+import { estImage, RANGS, SANS_RANG, type Rang } from '@/lib/rangs'
 import type { CtxRegistre } from './Missives'
 
 /*
@@ -15,6 +15,8 @@ const LARGEUR = 420
 const RAYON = 25
 const Y = { 1: 46, 2: 176, 3: 302, 4: 414 } as Record<number, number>
 const HAUTEUR = 482
+/** Drawn size of an image medallion: its ring matches a seal's ring (the points stand out). */
+const MEDAILLON = (RAYON + 5) * 2 * 1.18
 
 /** Seal positions: siblings spread across the width. */
 function positions(): (Rang & { x: number; y: number })[] {
@@ -92,10 +94,17 @@ export function ArbreRangs({ reg, icones, interactif }: { reg?: CtxRegistre; ico
                 ouvrir(p.cle)
               }}
             >
-              <circle cx={p.x} cy={p.y} r={RAYON + 5} className="rang-anneau" />
-              <circle cx={p.x} cy={p.y} r={RAYON} fill={`url(#sceau-${p.cle})`} className="rang-sceau" />
-              <circle cx={p.x} cy={p.y} r={RAYON - 5} className="rang-filet" />
-              {p.icone && icones[p.icone] && (
+              {estImage(p.icone) ? (
+                // The rank's own medallion, at the size of a seal and its ring, with the same shadow.
+                <image href={p.icone} x={p.x - MEDAILLON / 2} y={p.y - MEDAILLON / 2} width={MEDAILLON} height={MEDAILLON} className="rang-medaillon" />
+              ) : (
+                <>
+                  <circle cx={p.x} cy={p.y} r={RAYON + 5} className="rang-anneau" />
+                  <circle cx={p.x} cy={p.y} r={RAYON} fill={`url(#sceau-${p.cle})`} className="rang-sceau" />
+                  <circle cx={p.x} cy={p.y} r={RAYON - 5} className="rang-filet" />
+                </>
+              )}
+              {p.icone && !estImage(p.icone) && icones[p.icone] && (
                 <svg x={p.x - RAYON * 0.6} y={p.y - RAYON * 0.6} width={RAYON * 1.2} height={RAYON * 1.2} viewBox="0 0 512 512" className="rang-icone" dangerouslySetInnerHTML={{ __html: icones[p.icone] }} />
               )}
               {lignes.map((l, i) => (

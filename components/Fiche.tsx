@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, 
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
 import { METIERS, metierDe, SANS_METIER } from '@/lib/metiers'
-import { RANGS, SANS_RANG } from '@/lib/rangs'
+import { estImage, RANGS, SANS_RANG } from '@/lib/rangs'
 import {
   arbre,
   cle,
@@ -129,7 +129,7 @@ export function FicheVolante({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { surtitre, titre, corps } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
+  const { surtitre, titre, corps, embleme } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
 
   return (
     <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''} ${vue.genre === 'mouvement' ? 'note-droite' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
@@ -145,6 +145,7 @@ export function FicheVolante({
             <div className="fiche-papier" aria-hidden />
             <span className="fiche-epingle" aria-hidden />
             <header className="fiche-tete">
+              {embleme && <div className="fiche-embleme">{embleme}</div>}
               <div className="fiche-surtitre">{surtitre}</div>
               <h2 className="fiche-titre">{titre}</h2>
               <button type="button" className="fiche-ranger" onClick={partir}>
@@ -162,7 +163,7 @@ export function FicheVolante({
 
 type Env = { reg: CtxRegistre; articles: Article[]; icones: Record<string, string>; changer: (f: Fiche) => void; fermer: () => void }
 
-function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: ReactNode } {
+function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: ReactNode; embleme?: ReactNode } {
   const missive = 'numero' in f && f.numero ? env.reg.r.calcul?.etats.find((e) => e.missive.numero === f.numero) : undefined
   switch (f.genre) {
     case 'recette':
@@ -183,7 +184,12 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Livrer la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer /></Signe> }
     case 'rang': {
       const r = RANGS.find((x) => x.cle === f.cle)
-      return { surtitre: 'La Caravane', titre: r?.nom ?? SANS_RANG.nom, corps: <MembresDuRang cle={f.cle} env={env} /> }
+      return {
+        surtitre: 'La Caravane',
+        titre: r?.nom ?? SANS_RANG.nom,
+        embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={56} height={56} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
+        corps: <MembresDuRang cle={f.cle} env={env} />,
+      }
     }
     case 'mouvement':
       return { surtitre: 'Journal du coffre', titre: TITRES_MOUVEMENT[f.lignes[0]?.type] ?? 'Écriture', corps: <DetailMouvement lignes={f.lignes} env={env} /> }

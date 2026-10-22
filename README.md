@@ -296,7 +296,9 @@ signed, and turning back from the title spread always reaches it; folios still s
 du commerce, Voix de la sécurité; Marchand de lune; Petites lunes — each a coloured seal (an icon can
 be set per rank). Touching a seal lists the members who hold it (signed readers only, through
 `/api/caravane`); members whose « Rôle » names no rank are under « Sans rang ». Ranks (order, names,
-colours, accepted spellings, future icons) live in `lib/rangs.ts`. A row whose « Rôle » is « Ami des
+colours, accepted spellings, medallions) live in `lib/rangs.ts`; a rank's `icone` is either an image
+under `public/rangs/` (round, transparent outside, ~224 px WebP, drawn instead of the coloured seal) or a
+game-icons name drawn inside the seal. A row whose « Rôle » is « Ami des
 Lunes » is not a member at all: no signing, not listed, no share.
 
 **Blind-pressed emblem**: `lib/gaufrage.ts` switches the emblem pressed into every page on or off
