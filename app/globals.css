@@ -2250,7 +2250,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .ex-libris-lunes .lune { font-size: 26px; color: #b48a3a; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6), 0 0 6px rgba(201, 162, 78, 0.35); }
 .ex-libris-embleme { flex: none; filter: drop-shadow(0 1px 0 rgba(60, 30, 10, 0.55)) drop-shadow(0 2px 3px rgba(60, 30, 10, 0.35)); }
 .ex-libris-texte { margin: 8px 0 2px; font-style: italic; font-size: 18px; color: var(--encre-douce); }
-.ex-libris-ligne { position: relative; display: flex; align-items: flex-end; gap: 8px; min-height: 64px; margin: 0 4px; border-bottom: 1.5px dotted rgba(90, 64, 41, 0.6); }
+.ex-libris-ligne { position: relative; display: flex; align-items: flex-end; gap: 8px; min-height: 74px; margin: 0 4px; border-bottom: 1.5px dotted rgba(90, 64, 41, 0.6); }
 .ex-libris-ligne.signee { justify-content: center; }
 .ex-libris-saisie { position: relative; flex: 1; min-width: 0; }
 .ex-libris-saisie input {
@@ -2260,12 +2260,13 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   background: transparent;
   outline: none;
   font-family: var(--font-plume), var(--f-texte);
-  font-size: 32px;
+  font-size: 42px;
   line-height: 1.5;
-  color: #1e1208;
+  color: #1c1008;
   text-align: center;
   transition: opacity 600ms ease;
 }
+.ex-libris-saisie input:not(:placeholder-shown) { filter: url(#encre-plume); }
 .ex-libris-saisie input::placeholder { font-family: var(--f-texte); font-style: italic; font-size: 17px; color: var(--encre-pale); }
 .ex-libris-saisie input.bave { opacity: 0.25; }
 /* An unknown name: an ink blot spreads on it, then dries pale. */
@@ -2288,10 +2289,21 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .ex-libris-signer:hover:not(:disabled) .commande-cire, .ex-libris-signer:focus-visible .commande-cire { transform: rotate(-12deg) scale(1.06); }
 .ex-libris-signer:disabled { cursor: default; opacity: 0.55; }
 .ex-libris-signer:focus-visible { outline: none; }
-.ex-libris-nom { font-family: var(--font-plume), var(--f-texte); font-size: 42px; line-height: 1.4; color: #1e1208; white-space: nowrap; }
-.ex-libris-nom span { display: inline-block; }
-.ex-libris-nom.frais span { animation: trace 420ms ease-out both; }
-@keyframes trace { from { opacity: 0; transform: translate(-3px, 1px) scale(0.92); } }
+/* The signed name (Mrs Saint Delafield, in the ink of #encre-plume), by a hand that trembles a little
+   (each letter's lean and lift set in ExLibris.tsx), a flourish and a drop of ink under it. Fresh ink:
+   the letters appear in turn, then the flourish is drawn out from the left, then the drop falls. */
+.filtre-encre { position: absolute; }
+.ex-libris-nom { position: relative; display: inline-block; padding: 0 8px 12px; font-family: var(--font-plume), var(--f-texte); font-size: 58px; line-height: 1.2; color: #1c1008; white-space: nowrap; filter: url(#encre-plume); }
+.ex-libris-nom > span { display: inline-block; }
+.ex-libris-paraphe { position: absolute; left: 6%; bottom: 0; width: 88%; height: 16px; overflow: visible; fill: #24140a; transform-origin: left center; }
+.ex-libris-paraphe .delie { fill: none; stroke: #24140a; stroke-width: 0.9; }
+.ex-libris-goutte { position: absolute; right: -2px; bottom: 1px; width: 12px; height: 16px; fill: #1e1008; }
+.ex-libris-nom.frais > span { animation: trace 420ms ease-out both; }
+.ex-libris-nom.frais .ex-libris-paraphe { animation: paraphe 380ms ease-out both; }
+.ex-libris-nom.frais .ex-libris-goutte { animation: goutte 260ms ease-out both; }
+@keyframes trace { from { opacity: 0; } }
+@keyframes paraphe { from { opacity: 0; transform: scaleX(0); } 30% { opacity: 1; } }
+@keyframes goutte { from { opacity: 0; transform: scale(0.3); } }
 .ex-libris-refus { margin: 8px 0 0; font-style: italic; font-size: 15px; line-height: 1.35; color: var(--encre-rouge); }
 .ex-libris-attente { margin: 8px 0 0; font-style: italic; font-size: 15px; color: var(--encre-douce); }
 .ex-libris-voeu { margin: 14px 4px 10px; font-style: italic; font-size: 14.5px; line-height: 1.45; color: var(--encre-douce); hyphens: auto; }
@@ -2304,7 +2316,8 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 @media (max-width: 860px) {
   .ex-libris { padding: 26px 22px 20px; }
   .ex-libris-titre { font-size: 32px; }
-  .ex-libris-nom { font-size: 34px; }
+  .ex-libris-nom { font-size: 50px; }
+  .ex-libris-saisie input { font-size: 38px; }
   .part { grid-template-columns: minmax(0, 1fr) 60px 90px; }
   .fiche-releve-ligne.fiche-plain { grid-template-columns: minmax(0, 1fr) 16px 70px; }
 }
