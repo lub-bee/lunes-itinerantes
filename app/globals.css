@@ -2891,7 +2891,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .rang:hover .rang-sceau, .rang:focus-visible .rang-sceau { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)) brightness(1.15); }
 .rang:hover .rang-nom, .rang:focus-visible .rang-nom { fill: var(--encre-rouge); }
 .arbre-sans-rang { margin-top: 2px; }
-.liste-membres { list-style: none; margin: 6px 0; padding: 0; columns: 2 120px; column-gap: 18px; }
+.liste-membres { list-style: none; margin: 6px 0; padding: 0; }
 .liste-membres li { break-inside: avoid; padding: 2px 0; font-size: 17px; border-bottom: 1px dotted rgba(110, 80, 45, 0.25); }
 
 /* ─── The emblem blind-pressed into every page (lib/gaufrage.ts): a static background layer under
@@ -2919,5 +2919,5 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .rang-medaillon { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)); }
 .rang:hover .rang-medaillon, .rang:focus-visible .rang-medaillon { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)) brightness(1.1); }
 .fiche-embleme { display: flex; justify-content: center; margin: 2px 0 2px; }
-.fiche-medaillon { width: 56px; height: 56px; filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)); }
-.fiche-sceau { display: block; width: 44px; height: 44px; margin: 6px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(30, 14, 4, 0.55), inset 6px 6px 12px rgba(255, 243, 208, 0.35), 0 0 0 4px rgba(255, 248, 228, 0.4), 0 0 0 5.4px rgba(120, 60, 30, 0.5), 0 2px 3px rgba(40, 20, 5, 0.45); }
+.fiche-medaillon { width: 88px; height: 88px; filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)); }
+.fiche-sceau { display: block; width: 68px; height: 68px; margin: 6px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(30, 14, 4, 0.55), inset 6px 6px 12px rgba(255, 243, 208, 0.35), 0 0 0 4px rgba(255, 248, 228, 0.4), 0 0 0 5.4px rgba(120, 60, 30, 0.5), 0 2px 3px rgba(40, 20, 5, 0.45); }

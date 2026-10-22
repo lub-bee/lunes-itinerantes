@@ -27,8 +27,8 @@ export const RANGS: Rang[] = [
   { cle: 'maitre-des-routes', nom: 'Maître des routes', niveau: 2, couleur: '#1f3a5f', lignes: ['Maître', 'des routes'], icone: '/rangs/maitre-des-routes.webp' },
   { cle: 'voix-du-commerce', nom: 'Voix du commerce', niveau: 2, couleur: '#9a7420', lignes: ['Voix', 'du commerce'], icone: '/rangs/voix-du-commerce.webp' },
   { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', niveau: 2, couleur: '#2f5b3a', lignes: ['Voix', 'de la sécurité'], icone: '/rangs/voix-de-la-securite.webp' },
-  { cle: 'marchand-de-lune', nom: 'Marchand de lune', niveau: 3, couleur: '#5a2d6b', alias: ['Marchands de lune', 'Marchande de lune'] },
-  { cle: 'petites-lunes', nom: 'Petites lunes', niveau: 4, couleur: '#5d6a86', alias: ['Petite lune'] },
+  { cle: 'marchand-de-lune', nom: 'Marchand de lune', niveau: 3, couleur: '#5a2d6b', alias: ['Marchands de lune', 'Marchande de lune'], icone: '/rangs/marchand-de-lune.webp' },
+  { cle: 'petites-lunes', nom: 'Petites lunes', niveau: 4, couleur: '#5d6a86', alias: ['Petite lune'], icone: '/rangs/petites-lunes.webp' },
 ]
 
 export const SANS_RANG = { cle: 'sans-rang', nom: 'Sans rang' }

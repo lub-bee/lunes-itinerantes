@@ -187,7 +187,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
       return {
         surtitre: 'La Caravane',
         titre: r?.nom ?? SANS_RANG.nom,
-        embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={56} height={56} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
+        embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={88} height={88} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
         corps: <MembresDuRang cle={f.cle} env={env} />,
       }
     }
