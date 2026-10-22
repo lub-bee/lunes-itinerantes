@@ -187,7 +187,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
       return {
         surtitre: 'La Caravane',
         titre: r?.nom ?? SANS_RANG.nom,
-        embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={88} height={88} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
+        embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={118} height={118} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
         corps: <MembresDuRang cle={f.cle} env={env} />,
       }
     }
@@ -204,17 +204,24 @@ function MembresDuRang({ cle: k, env }: { cle: string; env: Env }) {
   if (!env.reg.r.marchand?.identite) return <p className="fiche-note">Seuls les membres qui ont signé l&apos;ex-libris lisent ce registre.</p>
   if (!h) return <p className="fiche-note">Le scribe déroule le registre des membres…</p>
   const noms = h[k] ?? []
+  const rang = RANGS.find((x) => x.cle === k)
+  const citation = (rang ?? (k === SANS_RANG.cle ? SANS_RANG : undefined))?.citation
   return (
     <div className="membres-rang">
       {k === SANS_RANG.cle && <p className="fiche-note">Ceux dont le rôle n&apos;est pas encore inscrit au registre des membres.</p>}
       {noms.length ? (
-        <ul className="liste-membres">
+        <ul className={`liste-membres${rang?.disposition === 'cote-a-cote' ? ' cote-a-cote' : ''}`}>
           {noms.map((n) => (
             <li key={n}>{n}</li>
           ))}
         </ul>
       ) : (
         <p className="fiche-note">Nul membre ne porte encore ce rang.</p>
+      )}
+      {citation && (
+        <blockquote className="citation-fin citation-rang">
+          <p>{citation}</p>
+        </blockquote>
       )}
     </div>
   )

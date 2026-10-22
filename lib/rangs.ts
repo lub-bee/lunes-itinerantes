@@ -20,18 +20,29 @@ export type Rang = {
   alias?: string[]
   /** The name cut in lines under the seal (defaults to the name). */
   lignes?: string[]
+  /**
+   * How the members note lays out the names: one per line (default, a roll of honour), or side by side
+   * on one line ('cote-a-cote', wrapping only when needed) for a rank whose holders are equals.
+   */
+  disposition?: 'cote-a-cote'
+  /** The closing quote at the foot of the rank's members note (❦ then italic). */
+  citation?: string
 }
 
 export const RANGS: Rang[] = [
-  { cle: 'patriarche', nom: 'Patriarche', niveau: 1, couleur: '#8a1c12', alias: ['Patriarches'], icone: '/rangs/patriarche.webp' },
-  { cle: 'maitre-des-routes', nom: 'Maître des routes', niveau: 2, couleur: '#1f3a5f', lignes: ['Maître', 'des routes'], icone: '/rangs/maitre-des-routes.webp' },
-  { cle: 'voix-du-commerce', nom: 'Voix du commerce', niveau: 2, couleur: '#9a7420', lignes: ['Voix', 'du commerce'], icone: '/rangs/voix-du-commerce.webp' },
-  { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', niveau: 2, couleur: '#2f5b3a', lignes: ['Voix', 'de la sécurité'], icone: '/rangs/voix-de-la-securite.webp' },
-  { cle: 'marchand-de-lune', nom: 'Marchand de lune', niveau: 3, couleur: '#5a2d6b', alias: ['Marchands de lune', 'Marchande de lune'], icone: '/rangs/marchand-de-lune.webp' },
-  { cle: 'petites-lunes', nom: 'Petites lunes', niveau: 4, couleur: '#5d6a86', alias: ['Petite lune'], icone: '/rangs/petites-lunes.webp' },
+  { cle: 'patriarche', nom: 'Patriarche', niveau: 1, couleur: '#8a1c12', alias: ['Patriarches'], icone: '/rangs/patriarche.webp', disposition: 'cote-a-cote', citation: "Ceux qui marchent devant portent la lanterne. Khajiit suit leur lumière, et la caravane ne se perd jamais." },
+  { cle: 'maitre-des-routes', nom: 'Maître des routes', niveau: 2, couleur: '#1f3a5f', lignes: ['Maître', 'des routes'], icone: '/rangs/maitre-des-routes.webp', citation: "Toute route mène quelque part ; le Maître des routes sait laquelle ramène Khajiit sous les lunes." },
+  { cle: 'voix-du-commerce', nom: 'Voix du commerce', niveau: 2, couleur: '#9a7420', lignes: ['Voix', 'du commerce'], icone: '/rangs/voix-du-commerce.webp', citation: "Une pièce bien comptée vaut dix pièces promises. La Voix du commerce compte pour toute la caravane." },
+  { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', niveau: 2, couleur: '#2f5b3a', lignes: ['Voix', 'de la sécurité'], icone: '/rangs/voix-de-la-securite.webp', citation: "Khajiit dort tranquille sous Masser et Secunda, car d'autres yeux veillent dans le noir." },
+  { cle: 'marchand-de-lune', nom: 'Marchand de lune', niveau: 3, couleur: '#5a2d6b', alias: ['Marchands de lune', 'Marchande de lune'], icone: '/rangs/marchand-de-lune.webp', citation: "Khajiit a des marchandises, si tu as de l'or. Le reste, les lunes le règlent." },
+  { cle: 'petites-lunes', nom: 'Petites lunes', niveau: 4, couleur: '#5d6a86', alias: ['Petite lune'], icone: '/rangs/petites-lunes.webp', citation: "Les petites lunes grandissent à chaque route parcourue ; un jour, elles éclaireront le chemin des autres." },
 ]
 
-export const SANS_RANG = { cle: 'sans-rang', nom: 'Sans rang' }
+export const SANS_RANG = {
+  cle: 'sans-rang',
+  nom: 'Sans rang',
+  citation: "Nul nom au registre, mais les mêmes lunes au-dessus de la tête : qui marche avec la caravane est de la caravane.",
+}
 
 /** An image medallion (a path), as opposed to a game-icons glyph. */
 export const estImage = (icone?: string) => Boolean(icone && icone.startsWith('/'))
