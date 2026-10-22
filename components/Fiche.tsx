@@ -132,7 +132,7 @@ export function FicheVolante({
   const { surtitre, titre, corps, embleme } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
 
   return (
-    <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''} ${vue.genre === 'mouvement' ? 'note-droite' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
+    <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
       <svg className="fiche-defs" width="0" height="0" aria-hidden focusable="false">
         <filter id="fiche-barbes" x="-3%" y="-3%" width="106%" height="106%">
           <feTurbulence type="fractalNoise" baseFrequency="0.08 0.06" numOctaves="3" seed="9" result="b" />
