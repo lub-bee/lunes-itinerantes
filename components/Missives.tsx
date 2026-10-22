@@ -232,15 +232,21 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
             {m.noteCloture && <em> ({m.noteCloture})</em>}
           </p>
         )}
+        {close && (
+          <button
+            type="button"
+            className="lien-encre"
+            onClick={() => document.querySelector('[data-pattes]')?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+          >
+            voir le partage
+          </button>
+        )}
       </div>
-      <h3 className="titre-section">Ouvrages demandés</h3>
-      <ul className="lignes-missive simples">
-        {e.lignes.map((l) => (
-          <li key={l.produit}>
-            <strong>{quantite(l.quantite)}</strong> {l.produit}
-          </li>
-        ))}
-      </ul>
+      {/* The goods themselves are in the table on the right page: one line here, the actions right after. */}
+      <p className="missive-resume">
+        {e.lignes.length} marchandise{e.lignes.length > 1 ? 's' : ''} demandée{e.lignes.length > 1 ? 's' : ''}
+        {!close && <> · {Math.round(e.avance * 100)} % réuni</>}
+      </p>
       {!close && (
         <>
           <Signature reg={reg} />
@@ -470,7 +476,7 @@ export function DroiteMissive({ page, reg, interactif, icones }: { page: PageMis
           )}
         </>
       )}
-      <h3 className="titre-section" title={EXPLICATION_PARTS}>
+      <h3 className="titre-section" title={EXPLICATION_PARTS} data-pattes>
         Les pattes de la missive
       </h3>
       <Contributions e={e} nbMembres={reg.r.donnees?.nbMembres ?? 0} />

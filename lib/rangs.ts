@@ -23,7 +23,7 @@ export type Rang = {
 }
 
 export const RANGS: Rang[] = [
-  { cle: 'patriarche', nom: 'Patriarche', niveau: 1, couleur: '#8a1c12', alias: ['Patriarches'] },
+  { cle: 'patriarche', nom: 'Patriarche', niveau: 1, couleur: '#8a1c12', alias: ['Patriarches'], icone: '/rangs/patriarche.webp' },
   { cle: 'maitre-des-routes', nom: 'Maître des routes', niveau: 2, couleur: '#1f3a5f', lignes: ['Maître', 'des routes'], icone: '/rangs/maitre-des-routes.webp' },
   { cle: 'voix-du-commerce', nom: 'Voix du commerce', niveau: 2, couleur: '#9a7420', lignes: ['Voix', 'du commerce'], icone: '/rangs/voix-du-commerce.webp' },
   { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', niveau: 2, couleur: '#2f5b3a', lignes: ['Voix', 'de la sécurité'], icone: '/rangs/voix-de-la-securite.webp' },
