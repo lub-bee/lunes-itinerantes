@@ -614,8 +614,11 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const destination = tourne?.vers ?? index
   const partieActive: PartieId = pages[destination].partie
   const partieOnglets: PartieId = partieActive === 'sommaire' ? 'marchandises' : partieActive
-  // Closed missives keep their page (reached from the list) but get no side tab.
-  const onglets = pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === partieOnglets && !(p.type === 'missive' && p.close))
+  // Closed missives keep their page (reached from the list) but get no side tab. On the colophon, its own tab only.
+  const onglets =
+    pages[destination].type === 'colophon'
+      ? [{ p: pages[destination], i: destination }]
+      : pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === partieOnglets && !(p.type === 'missive' && p.close))
   const avant = tourne ? tourne.vers > tourne.de : true
 
   const voletsDoubles = () => {
