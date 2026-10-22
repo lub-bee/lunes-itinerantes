@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
+import { divinite as divin, EMBLEME, oeufDeRecherche } from '@/lib/oeufs'
 import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
 import { GAUFRAGE } from '@/lib/gaufrage'
@@ -15,8 +16,10 @@ import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Co
 import { useRegistre } from './Registre'
 import { idMissive, metiersDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
+import { DUREES_OEUFS, EffetsOeufs, useMinuit, type Oeuf } from './Oeufs'
 
-type Tourne = { de: number; vers: number; manuel: boolean }
+/** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
+type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
 type Resultat = { i: number; page: Page; total: number; articles: Article[] }
 type Geste = {
   id: number
@@ -31,6 +34,8 @@ type Geste = {
 
 const DUREE_TOURNE = 1050
 const DECALAGE_FEUILLETS = 140
+const DUREE_RAPIDE = 430
+const DECALAGE_RAPIDE = 70
 const MAX_FEUILLETS = 3
 const TRANCHES = 10
 const TRANCHES_ETROIT = 8
@@ -81,6 +86,9 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   // The ex-libris first (when the registre is linked), and one page per missive after the list of
   // missives: open ones (oldest first), then closed ones.
   const relie = Boolean(registre.marchand?.relie)
+  // A god signed the ex-libris (an egg, lib/oeufs.ts): its two pages follow the ex-libris until the
+  // reader turns back to it. Nothing is signed.
+  const [divinite, setDivinite] = useState<string | null>(null)
   const livre = useMemo((): Livre => {
     const etats = registre.calcul?.etats ?? []
     const vues: PageMissive[] = [...etats.filter((e) => !estClose(e.missive)), ...etats.filter((e) => estClose(e.missive))].map((e) => ({
@@ -93,7 +101,14 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       court: e.missive.titre.length > COURT_MAX ? `${e.missive.titre.slice(0, COURT_MAX - 1).trimEnd()}…` : e.missive.titre,
       icone: estClose(e.missive) ? 'wax-seal' : 'tied-scroll',
     }))
-    const exLibris: PageExLibris[] = relie ? [{ type: 'exlibris', id: 'ex-libris', partie: 'sommaire', titre: 'Ex-libris', court: 'Ex-libris', icone: 'quill' }] : []
+    const d = relie && divinite ? divin(divinite) : null
+    const exLibris: Page[] = relie ? [{ type: 'exlibris', id: 'ex-libris', partie: 'sommaire', titre: 'Ex-libris', court: 'Ex-libris', icone: 'quill' } as PageExLibris] : []
+    if (d) {
+      exLibris.push(
+        { type: 'divinite', id: 'divinite', partie: 'sommaire', titre: d.nom, court: d.nom, icone: 'quill', divinite: d.cle },
+        { type: 'poemes', id: 'poemes', partie: 'sommaire', titre: d.nom, court: d.nom, icone: 'quill', divinite: d.cle },
+      )
+    }
     // One page per craft of the workshop, after the recipes' contents.
     const metiers: PageMetier[] = metiersDe(registre.donnees?.recettes ?? []).map((m) => ({
       type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, titreEn: m.en, court: m.nom, icone: m.icone,
@@ -106,7 +121,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       ...livreServeur,
       pages: [...exLibris, ...p.slice(0, apresRecettes), ...metiers, ...p.slice(apresRecettes, apresMissives), ...vues, ...p.slice(apresMissives)],
     }
-  }, [livreServeur, registre.calcul, registre.donnees, relie])
+  }, [livreServeur, registre.calcul, registre.donnees, relie, divinite])
   const { pages } = livre
 
   const [index, setIndex] = useState(0)
@@ -162,10 +177,13 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       { duration: 760, easing: 'ease-out' },
     )
   }, [])
-  const bloque = (vers: number) => verrouilleRef.current && vers !== 0 && vers > indexRef.current
+  const pagesRef = useRef(pages)
+  pagesRef.current = pages
+  const devotion = (i: number) => ['divinite', 'poemes'].includes(pagesRef.current[i]?.type)
+  const bloque = (vers: number) => verrouilleRef.current && vers !== 0 && vers > indexRef.current && !devotion(vers)
 
   const aller = useCallback(
-    (vers: number, cibleArticle?: string) => {
+    (vers: number, cibleArticle?: string, rapide = false) => {
       if (vers < 0 || vers >= pages.length) return
       if (bloque(vers)) return resister()
       if (cibleArticle) setCible(cibleArticle)
@@ -178,7 +196,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         setIndex(vers)
         return
       }
-      setTourne({ de: indexRef.current, vers, manuel: false })
+      setTourne({ de: indexRef.current, vers, manuel: false, rapide })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pages.length, sansAnimation, resister],
@@ -206,15 +224,15 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         sens: etroit || avant ? -1 : 1,
         inverse: Boolean(etroit) && !avant,
         manuel: tourne.manuel,
-        duree: DUREE_TOURNE,
-        delai: tourne.manuel ? 0 : k * DECALAGE_FEUILLETS,
+        duree: tourne.rapide ? DUREE_RAPIDE : DUREE_TOURNE,
+        delai: tourne.manuel ? 0 : k * (tourne.rapide ? DECALAGE_RAPIDE : DECALAGE_FEUILLETS),
         z: (n - k) * 0.7,
         souplesse: etroit ? SOUPLESSE_ETROIT : SOUPLESSE,
       }),
     )
     feuillets.current
       .querySelectorAll<HTMLElement>('[data-portee]')
-      .forEach((el) => anims.push(animerPortee(el, { duree: DUREE_TOURNE + (n - 1) * DECALAGE_FEUILLETS, delai: 0 })))
+      .forEach((el) => anims.push(animerPortee(el, { duree: tourne.rapide ? DUREE_RAPIDE + (n - 1) * DECALAGE_RAPIDE : DUREE_TOURNE + (n - 1) * DECALAGE_FEUILLETS, delai: 0 })))
 
     const j = ++jeton.current
     moteur.current = { anims, jeton: j }
@@ -471,6 +489,74 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requete])
 
+  /* ── Easter eggs (lib/oeufs.ts) ─────────────────────────── */
+
+  const [oeuf, setOeuf] = useState<Oeuf | null>(null)
+  const [ivre, setIvre] = useState(false)
+  const minuit = useMinuit()
+  useEffect(() => {
+    if (!oeuf) return
+    const t = setTimeout(() => setOeuf(null), DUREES_OEUFS[oeuf.genre])
+    return () => clearTimeout(t)
+  }, [oeuf])
+  useEffect(() => {
+    if (!ivre) return
+    const t = setTimeout(() => setIvre(false), 1500)
+    return () => clearTimeout(t)
+  }, [ivre])
+
+  // Typed in the search: the normal search runs all the same.
+  useEffect(() => {
+    const o = oeufDeRecherche(requete)
+    if (!o) return
+    setOeuf({ genre: o.oeuf, n: Date.now(), note: o.note })
+    if (o.oeuf === 'skooma') {
+      setIvre(true)
+      if (!sansAnimation)
+        feuillets.current?.closest<HTMLElement>('.couverture')?.animate(
+          [0, -3, 3, -2, 2, -1, 0].map((x, k) => ({ transform: `translate(${x}px, ${k % 2 ? 1 : -1}px) rotate(${x * 0.08}deg)` })),
+          { duration: 620, easing: 'ease-out' },
+        )
+    }
+    if (o.oeuf === 'fus') {
+      // The pages riffle back to the title page; the order scroll is blown off the table and comes back.
+      aller(pages.findIndex((p) => p.type === 'sommaire'), undefined, true)
+      const rouleau = document.querySelector<HTMLElement>('.commande-bande, .commande-barre')
+      if (rouleau && !sansAnimation) {
+        const loin = rouleau.classList.contains('commande-barre') ? 'translate(0, 160px) rotate(6deg)' : 'translate(340px, -150px) rotate(38deg)'
+        const temps = { duration: 2300, easing: 'cubic-bezier(.3,.6,.3,1)' }
+        // Added to the scroll's own transform; its opacity simply goes and comes back.
+        rouleau.animate([{ transform: 'none' }, { offset: 0.22, transform: loin }, { offset: 0.7, transform: loin }, { transform: 'none' }], { ...temps, composite: 'add' })
+        rouleau.animate([{ opacity: 1 }, { offset: 0.22, opacity: 0 }, { offset: 0.7, opacity: 0 }, { opacity: 1 }], temps)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requete])
+
+  // Seven clicks on the paper (the emblem pressed into it) within a few seconds: the moons light up.
+  const clics = useRef<number[]>([])
+  const clicPapier = (e: React.MouseEvent) => {
+    const t = e.target as HTMLElement
+    if (t.closest('button, a, input, textarea, select, label, summary, [role="button"], [tabindex], .fiche, .commande-feuille')) return
+    const maintenant = e.timeStamp
+    clics.current = [...clics.current.filter((x) => maintenant - x < EMBLEME.fenetreMs), maintenant]
+    if (clics.current.length < EMBLEME.clics) return
+    clics.current = []
+    setOeuf({ genre: 'lunes', n: Date.now(), note: EMBLEME.note })
+  }
+
+  // A god signed the ex-libris: its pages appear and the book turns to them. Back on the ex-libris, they go.
+  const invoquer = useCallback((k: string) => {
+    setDivinite(k)
+    setVersId('divinite')
+  }, [])
+  const indexAvant = useRef(index)
+  useEffect(() => {
+    const venait = indexAvant.current
+    indexAvant.current = index
+    if (index === 0 && venait !== 0 && divinite) setDivinite(null)
+  }, [index, divinite])
+
   /* ── Keyboard ───────────────────────────────────────────── */
 
   useEffect(() => {
@@ -516,6 +602,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       registre: ctxRegistre,
       signe,
       refus: interactif ? refus : 0,
+      invoquer,
     }
   }
 
@@ -526,8 +613,9 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     if (!tourne) return null
     if (tourne.manuel) return { retour: null }
     const n = Math.min(Math.abs(tourne.vers - tourne.de), MAX_FEUILLETS)
-    const dernier = (n - 1) * DECALAGE_FEUILLETS
-    return { retour: tourne.vers > tourne.de ? dernier + DUREE_TOURNE - 60 : dernier + DUREE_TOURNE * 0.56 }
+    const [duree, decalage] = tourne.rapide ? [DUREE_RAPIDE, DECALAGE_RAPIDE] : [DUREE_TOURNE, DECALAGE_FEUILLETS]
+    const dernier = (n - 1) * decalage
+    return { retour: tourne.vers > tourne.de ? dernier + duree - 60 : dernier + duree * 0.56 }
   }, [tourne])
 
   const destination = tourne?.vers ?? index
@@ -567,7 +655,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   return (
     <div
-      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''}`}
+      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''} ${ivre ? 'ivre' : ''} ${minuit ? 'minuit' : ''}`}
       style={{ '--gaufrage': GAUFRAGE.intensite, '--gaufrage-registres': GAUFRAGE.registres, '--gaufrage-exlibris': GAUFRAGE.exLibris } as CSSProperties}
     >
       <header className="entete">
@@ -754,7 +842,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           <CoinLaiton className="bg" />
           <CoinLaiton className="bd" />
           <div className="bloc-papier" aria-hidden />
-          <div className="feuillets" ref={feuillets} onPointerDown={debutGeste}>
+          <div className="feuillets" ref={feuillets} onPointerDown={debutGeste} onClick={clicPapier}>
             {etroit === null || !pretSignature ? null : etroit ? (
               <>
                 <div className={`page unique page-${pages[uniqueBase].type}`}>
@@ -808,6 +896,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
               disabled={destination === pages.length - 1}
               onClick={() => !clicIgnore.current && aller(destination + 1)}
             />
+            <EffetsOeufs oeuf={oeuf} sansAnimation={Boolean(sansAnimation)} />
             {etroit === false && commande.ouverte && (
               <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
             )}

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import type { Ctx } from './Pages'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
 import { GAUFRAGE } from '@/lib/gaufrage'
+import { oeufDeNom } from '@/lib/oeufs'
 import { Icone } from './Ornements'
 
 /*
@@ -170,6 +171,17 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
     e.preventDefault()
     const tape = nom.trim()
     if (!r || !tape || envoi) return
+    // Some names have an answer of their own (lib/oeufs.ts): nothing is asked of the registre, nothing signed.
+    const oeuf = oeufDeNom(tape)
+    if (oeuf && 'refus' in oeuf) {
+      setRefus({ texte: oeuf.refus, tache: tape, n: Date.now() })
+      return
+    }
+    if (oeuf) {
+      setNom('')
+      ctx.invoquer?.(oeuf.divinite)
+      return
+    }
     setEnvoi(true)
     setRefus(null)
     const rep = await r.signer(tape)

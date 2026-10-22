@@ -45,6 +45,13 @@ export type PageAtelier = Base & { type: 'atelier'; vue: 'recettes' | 'matieres'
 /** The bookplate pasted inside the cover: the reader signs it with their name (added by the page when the registre is linked). */
 export type PageExLibris = Base & { type: 'exlibris' }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier
+/**
+ * A god signed the ex-libris (lib/oeufs.ts): a blank page that bows, then the poems sung to that god.
+ * Not chapters: no side tab, not in the contents, no folio; turning back returns to the ex-libris.
+ */
+export type PageDivinite = Base & { type: 'divinite'; divinite: string }
+export type PagePoemes = Base & { type: 'poemes'; divinite: string }
+
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes
 
 export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string> }

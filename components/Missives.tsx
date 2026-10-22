@@ -25,6 +25,7 @@ export type Fiche =
   | { genre: 'livrer' | 'abandonner'; numero: string }
   | { genre: 'mouvement'; lignes: Mouvement[] }
   | { genre: 'rang'; cle: string }
+  | { genre: 'poeme'; divinite: string; n: number }
 
 export type CtxRegistre = {
   r: EtatRegistre

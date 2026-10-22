@@ -5,6 +5,7 @@ import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
 import { METIERS, metierDe, SANS_METIER } from '@/lib/metiers'
 import { estImage, RANGS, SANS_RANG } from '@/lib/rangs'
+import { divinite, poemesDe } from '@/lib/oeufs'
 import {
   arbre,
   cle,
@@ -191,6 +192,19 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
         sousTitre: r?.nomEn ?? SANS_RANG.nomEn,
         embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={118} height={118} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
         corps: <MembresDuRang cle={f.cle} env={env} />,
+      }
+    }
+    case 'poeme': {
+      const d = divinite(f.divinite)
+      const p = poemesDe(f.divinite)[f.n]
+      return {
+        surtitre: `Dévotions · ${d?.nom ?? ''}`,
+        titre: p?.titre ?? '',
+        corps: (
+          <div className="poeme">
+            {(p?.vers ?? []).map((v, i) => (v ? <p key={i}>{v}</p> : <p key={i} className="strophe" aria-hidden />))}
+          </div>
+        ),
       }
     }
     case 'mouvement':

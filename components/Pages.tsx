@@ -6,6 +6,8 @@ import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
+import { divinite, MINUIT, poemesDe, PRESENCE } from '@/lib/oeufs'
+import { useMinuit } from './Oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
 import { DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
@@ -30,7 +32,12 @@ export type Ctx = {
   signe?: () => void
   /** How many times an unsigned reader tried to turn past the ex-libris (shows Azurah's word). */
   refus?: number
+  /** A god's name was signed on the ex-libris (an egg): the book turns to that god's pages. */
+  invoquer?: (divinite: string) => void
 }
+
+/** Pages without a folio: the ex-libris and a god's pages (not part of the book proper). */
+const sansFolio = (p: Page) => p.type === 'exlibris' || p.type === 'divinite' || p.type === 'poemes'
 
 /** Pages before the title page (the ex-libris) carry no folio: the numbering starts at the title page. */
 const avantSommaire = (ctx: Ctx) => Math.max(0, ctx.livre.pages.findIndex((p) => p.type === 'sommaire'))
@@ -117,6 +124,20 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return compact ? null : <Gaufrage cote="gauche" />
       case 'sommaire':
         return <Frontispice ctx={ctx} compact={compact} />
+      case 'divinite':
+        return null
+      case 'poemes': {
+        const d = divinite(page.divinite)
+        return (
+          <EnTete surtitre="Dévotions" titre={d?.nom ?? page.titre} compact={compact}>
+            {d && <p className="dedicace">{d.dedicace}</p>}
+            {!compact && <p className="note-encre devotion-note">Ce que les Khajiits de la caravane chantent à sa gloire. Touche un titre pour lire le poème.</p>}
+            <button type="button" className="lien-encre" tabIndex={ctx.interactif ? 0 : -1} onClick={() => ctx.aller?.(0)}>
+              ce n&apos;est pas mon nom
+            </button>
+          </EnTete>
+        )
+      }
       case 'chapitre':
         return <TeteChapitre page={page} ctx={ctx} compact={compact} />
       case 'note':
@@ -193,7 +214,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
     <div className={`contenu gauche-contenu contenu-${page.type}`} style={teinte(ctx, page)}>
       {/* Scrolls inside the page's margins, as the right page does: the folio and the frame stay clear. */}
       <div className="defile defile-gauche">{corps}</div>
-      {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 1} />}
+      {!sansFolio(page) && <Folio n={folio(ctx) * 2 + 1} />}
     </div>
   )
 }
@@ -232,13 +253,15 @@ export function EnTete({
 }
 
 export function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
+  // The midnight hour (an egg): the title page turns night-blue and says something else.
+  const minuit = useMinuit()
   return (
     <div className={`frontispice ${compact ? 'compact' : ''}`}>
       <Embleme taille={160} className="frontispice-embleme" />
       <div className="frontispice-sur">Grimoire de la</div>
       <h2 className="frontispice-titre">Caravane des Lunes Itinérantes</h2>
       <Fleuron />
-      <p className="citation">« Il n&apos;existe rien qu&apos;un bon Khajiit ne saurait vendre. »</p>
+      <p className="citation">{minuit ? MINUIT.citation : '« Il n’existe rien qu’un bon Khajiit ne saurait vendre. »'}</p>
       {!compact && (
         <p className="frontispice-texte">
           Registre de la Caravane des Lunes Itinérantes. Qu&apos;on le consulte avant chaque vente, et que jamais d&apos;yeux non
@@ -303,6 +326,29 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
             <ExLibris ctx={ctx} />
           </>
         )
+      case 'divinite':
+        return (
+          <div className="presence">
+            <p>{PRESENCE}</p>
+          </div>
+        )
+      case 'poemes':
+        return (
+          <ol className="liste-poemes">
+            {poemesDe(page.divinite).map((p, n) => (
+              <li key={n}>
+                <button
+                  type="button"
+                  tabIndex={ctx.interactif ? 0 : -1}
+                  onClick={() => ctx.registre?.ouvrir({ genre: 'poeme', divinite: page.divinite, n })}
+                >
+                  <span className="renvoi">{romain(n + 1).toUpperCase()}.</span>
+                  <span className="entree">{p.titre}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        )
       case 'sommaire':
         return (
           <>
@@ -352,7 +398,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
   return (
     <div className={`contenu droite-contenu contenu-${page.type}`} style={teinte(ctx, page)}>
       <Defile ctx={ctx}>{corps}</Defile>
-      {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 2} />}
+      {!sansFolio(page) && <Folio n={folio(ctx) * 2 + 2} />}
     </div>
   )
 }
@@ -364,7 +410,7 @@ export function PageUnique({ page, ctx }: { page: Page; ctx: Ctx }) {
       <Defile ctx={ctx}>
         <PageGauche page={page} ctx={ctx} compact />
         <PageDroite page={page} ctx={ctx} integre />
-        {page.type !== 'exlibris' && <Folio n={folio(ctx) + 1} />}
+        {!sansFolio(page) && <Folio n={folio(ctx) + 1} />}
       </Defile>
     </div>
   )

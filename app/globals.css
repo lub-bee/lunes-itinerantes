@@ -2990,3 +2990,82 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   .gauche-contenu.contenu-missive .gestes { margin-top: 8px; gap: 2px 14px; }
   .gauche-contenu.contenu-missive .geste-cachet { width: 30px; height: 30px; }
 }
+
+/* ─── Easter eggs (lib/oeufs.ts, components/Oeufs.tsx): laid over the pages, never in the way ─── */
+.oeufs { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+/* A note written in the margin of the right page, then fading. */
+.oeuf-note {
+  position: absolute;
+  right: 6%;
+  bottom: 9%;
+  max-width: min(320px, 40%);
+  margin: 0;
+  /* Ink written over a scraped, paler patch of the page, so it reads over whatever is there. */
+  background: radial-gradient(closest-side, rgba(244, 230, 196, 0.95) 0 62%, rgba(244, 230, 196, 0.6) 82%, transparent 100%);
+  padding: 18px 30px;
+  font-family: var(--f-texte);
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.35;
+  text-align: right;
+  color: #5e2412;
+  text-shadow: 0 0 0.6px rgba(94, 36, 18, 0.6);
+  rotate: -2.5deg;
+  animation: oeuf-note 6s ease-in-out both;
+}
+@keyframes oeuf-note { 0% { opacity: 0; transform: translateY(3px); } 12% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; } }
+/* Skooma: the ink swims for a moment. */
+.scene.ivre .feuillets .contenu { filter: blur(1.1px); }
+/* Moon sugar: a few golden flakes falling. */
+.oeuf-flocons { position: absolute; inset: 0; }
+.oeuf-flocons span {
+  position: absolute;
+  top: -10px;
+  border-radius: 38% 62% 45% 55%;
+  background: radial-gradient(circle at 35% 35%, #fff7d4, #ecc760 55%, #a87a2c);
+  box-shadow: 0 0 6px 1px rgba(255, 222, 140, 0.9), 0 0 1px rgba(120, 80, 20, 0.6);
+  opacity: 0;
+  animation-name: flocon;
+  animation-timing-function: cubic-bezier(.35, .1, .6, 1);
+  animation-fill-mode: both;
+}
+@keyframes flocon {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  12% { opacity: 1; }
+  80% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--chute)) rotate(var(--rot)); }
+}
+.oeuf-flocons.immobiles span { animation: flocon-calme 3.2s ease-in-out both; }
+@keyframes flocon-calme { 0%, 100% { opacity: 0; } 30%, 70% { opacity: 0.9; } }
+/* The emblem's moons light up over the pressed paper, Jone then Jode. */
+.oeuf-lunes { position: absolute; top: 50%; left: 50%; height: 128%; width: auto; translate: -50% -50%; overflow: visible; mix-blend-mode: screen; }
+.oeuf-lunes .halo { fill: rgba(255, 214, 140, 0.42); }
+.oeuf-lunes .trait { fill: rgba(255, 236, 180, 0.14); }
+.oeuf-lunes g { opacity: 0; animation: lune-veille 6.2s ease-in-out both; }
+.oeuf-lunes .lune-jode { animation-delay: 0.9s; animation-duration: 5.3s; }
+@keyframes lune-veille { 0% { opacity: 0; } 18% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+.page.unique ~ .oeufs .oeuf-lunes, .oeufs .oeuf-lunes.etroit { height: 122%; }
+/* Midnight: the title page under a night-blue wash. */
+.scene.minuit .page.page-sommaire { box-shadow: inset 0 0 50px rgba(130, 80, 25, 0.28), inset 0 0 0 2000px rgba(36, 52, 110, 0.15), inset 0 0 120px rgba(20, 28, 70, 0.25); }
+.scene.minuit .page.page-sommaire .citation { color: #22305e; }
+.oeufs.sans-animation .oeuf-note { animation-duration: 6s; }
+.oeufs.sans-animation .oeuf-lunes g, .oeufs.sans-animation .oeuf-lunes .lune-jode { animation-delay: 0s; animation-duration: 4s; }
+@media (max-width: 860px) {
+  .oeuf-note { right: 8%; bottom: 5%; max-width: 70%; font-size: 17px; }
+}
+
+/* ─── A god signed the ex-libris: a blank page that bows, then the poems sung to that god ─── */
+.presence { flex: 1 0 auto; min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 0 8%; }
+.presence p { margin: 0; font-family: var(--f-gothique); font-size: clamp(30px, 3vw, 42px); line-height: 1.25; text-align: center; color: var(--encre); text-shadow: 0 1px 0 rgba(255, 250, 230, 0.5); animation: encre-apparait 1600ms ease-out both; }
+.dedicace { margin: 2px 0 10px; font-style: italic; font-size: 18px; text-align: center; color: var(--encre-douce); }
+.devotion-note { text-align: center; }
+.liste-poemes { list-style: none; margin: 18px 0 0; padding: 0; }
+.liste-poemes button { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 6px 4px; border: 0; border-bottom: 1px dotted rgba(110, 80, 45, 0.3); background: none; text-align: left; font-family: var(--f-capitales); font-size: 19px; letter-spacing: 0.03em; color: var(--encre); cursor: pointer; transition: background 160ms ease; }
+.liste-poemes button:hover, .liste-poemes button:focus-visible { outline: none; background: rgba(201, 162, 78, 0.18); }
+.liste-poemes .renvoi { min-width: 2.6em; text-align: right; color: var(--encre-rouge); }
+.poeme { margin: 10px 0 4px; text-align: center; }
+.poeme p { margin: 0; font-style: italic; font-size: 18px; line-height: 1.5; color: var(--encre); }
+.poeme .strophe { height: 0.7em; }
+@media (prefers-reduced-motion: reduce) {
+  .presence p { animation-duration: 300ms; }
+}
