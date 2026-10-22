@@ -7,9 +7,9 @@ export const COLOPHON = {
   titreEn: 'Colophon & Credits',
   /** Left page. */
   intro:
-    'Ce grimoire fut relié, réglé et copié par Ri’Oblan, copiste de la caravane, afin que nul marchand des Lunes Itinérantes ne cède jamais une pièce en dessous de sa valeur.',
+    'Ce grimoire fut relié, réglé et copié par Ri’Oblan, copiste autoproclamé de la caravane, afin que nul marchand des Lunes Itinérantes ne cède jamais une pièce en dessous de sa valeur.',
   enluminures: 'L’emblème de la caravane et les médaillons des rangs sont de sa main : Ri’Oblan les a illustrés avec GPT Image 2.',
-  signature: 'Ri’Oblan, copiste de la caravane',
+  signature: 'Ri’Oblan, copiste autoproclamé de la caravane',
   citation: 'Ce qui est copié avec soin ne se perd jamais tout à fait.',
   /** Right page: one short paragraph per heading. */
   rubriques: [
