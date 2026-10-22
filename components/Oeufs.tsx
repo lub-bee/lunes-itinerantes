@@ -15,11 +15,12 @@ export type Oeuf = { genre: 'skooma' | 'sucre' | 'genou' | 'fus' | 'lunes'; n: n
 /** How long each egg stays (ms), before it is taken away. */
 export const DUREES_OEUFS: Record<Oeuf['genre'], number> = { skooma: 11000, sucre: 6500, genou: 6500, fus: 2600, lunes: 7000 }
 
-/** The reader's clock reads the midnight hour (checked every minute). */
+/** The reader's clock reads the midnight hour (checked every minute). `?minuit` in the URL forces it, for testing. */
 export function useMinuit(): boolean {
   const [minuit, setMinuit] = useState(false)
   useEffect(() => {
-    const voir = () => setMinuit(new Date().getHours() === MINUIT.heure)
+    const force = new URLSearchParams(window.location.search).has('minuit')
+    const voir = () => setMinuit(force || new Date().getHours() === MINUIT.heure)
     voir()
     const t = setInterval(voir, 60_000)
     return () => clearInterval(t)
