@@ -7,19 +7,18 @@ import { POEMES } from './poemes'
 
 /* ── Typed in the global search ── */
 
+/** An egg hatches when the WHOLE query is one of its words (after this short pause), once per query. */
+export const ATTENTE_RECHERCHE_MS = 300
+
 export type OeufRecherche = 'skooma' | 'sucre' | 'genou' | 'fus'
 
 export const RECHERCHES: { oeuf: OeufRecherche; mots: string[]; note?: string }[] = [
-  // The page trembles, the ink blurs for a moment, a note in the margin.
+  // The book sways like a drunkard for a few seconds, the ink swims and doubles, then a note in the margin.
   { oeuf: 'skooma', mots: ['skooma'], note: 'Khajiit ne sait pas de quoi tu parles… mais si tu demandes à voix basse…' },
   // Golden flakes fall over the book for a few seconds.
-  { oeuf: 'sucre', mots: ['sucre de lune', 'sucre lunaire', 'moon sugar', 'moonsugar'] },
-  // An inked reply in the margin.
-  {
-    oeuf: 'genou',
-    mots: ['flèche au genou', 'flèche dans le genou', 'une flèche dans le genou', 'arrow to the knee', 'arrow in the knee', 'an arrow in the knee'],
-    note: 'Khajiit était aventurier, lui aussi. Puis…',
-  },
+  { oeuf: 'sucre', mots: ['sucrelune', 'sucre de lune', 'sucre lunaire', 'moon sugar', 'moonsugar'] },
+  // An inked reply in the margin. Only the bare word: « Flèches en fer » are real goods.
+  { oeuf: 'genou', mots: ['flèche'], note: 'Khajiit était aventurier, lui aussi. Puis…' },
   // The pages riffle back to the Sommaire, the order scroll is blown off the table and comes back.
   { oeuf: 'fus', mots: ['fus ro dah', 'fus ro dah!', 'fusrodah'] },
 ]
@@ -32,7 +31,7 @@ export function oeufDeRecherche(requete: string): (typeof RECHERCHES)[number] | 
 
 /* ── The emblem pressed into the pages ── */
 
-/** Clicked this many times on the paper within the window: the two moons light up, Jone then Jode. */
+/** Clicked this many times on the paper within the window: the whole pressed emblem lights up. */
 export const EMBLEME = {
   clics: 7,
   fenetreMs: 4000,

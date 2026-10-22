@@ -3015,7 +3015,6 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 }
 @keyframes oeuf-note { 0% { opacity: 0; transform: translateY(3px); } 12% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; } }
 /* Skooma: the ink swims for a moment. */
-.scene.ivre .feuillets .contenu { filter: blur(1.1px); }
 /* Moon sugar: a few golden flakes falling. */
 .oeuf-flocons { position: absolute; inset: 0; }
 .oeuf-flocons span {
@@ -3037,19 +3036,18 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 }
 .oeuf-flocons.immobiles span { animation: flocon-calme 3.2s ease-in-out both; }
 @keyframes flocon-calme { 0%, 100% { opacity: 0; } 30%, 70% { opacity: 0.9; } }
-/* The emblem's moons light up over the pressed paper, Jone then Jode. */
+/* The whole emblem pressed into the paper lights up, a glow sweeping across it band by band. */
 .oeuf-lunes { position: absolute; top: 50%; left: 50%; height: 128%; width: auto; translate: -50% -50%; overflow: visible; mix-blend-mode: screen; }
 .oeuf-lunes .halo { fill: rgba(255, 214, 140, 0.42); }
 .oeuf-lunes .trait { fill: rgba(255, 236, 180, 0.14); }
 .oeuf-lunes g { opacity: 0; animation: lune-veille 6.2s ease-in-out both; }
-.oeuf-lunes .lune-jode { animation-delay: 0.9s; animation-duration: 5.3s; }
-@keyframes lune-veille { 0% { opacity: 0; } 18% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes lune-veille { 0% { opacity: 0; } 14% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 .page.unique ~ .oeufs .oeuf-lunes, .oeufs .oeuf-lunes.etroit { height: 122%; }
 /* Midnight: the title page under a night-blue wash. */
 .scene.minuit .page.page-sommaire { box-shadow: inset 0 0 50px rgba(130, 80, 25, 0.28), inset 0 0 0 2000px rgba(36, 52, 110, 0.15), inset 0 0 120px rgba(20, 28, 70, 0.25); }
 .scene.minuit .page.page-sommaire .citation { color: #22305e; }
 .oeufs.sans-animation .oeuf-note { animation-duration: 6s; }
-.oeufs.sans-animation .oeuf-lunes g, .oeufs.sans-animation .oeuf-lunes .lune-jode { animation-delay: 0s; animation-duration: 4s; }
+.oeufs.sans-animation .oeuf-lunes g { animation-delay: 0s !important; animation-duration: 4s !important; }
 @media (max-width: 860px) {
   .oeuf-note { right: 8%; bottom: 5%; max-width: 70%; font-size: 17px; }
 }

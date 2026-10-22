@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
-import { divinite as divin, EMBLEME, oeufDeRecherche } from '@/lib/oeufs'
+import { ATTENTE_RECHERCHE_MS, divinite as divin, EMBLEME, oeufDeRecherche } from '@/lib/oeufs'
 import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
 import { GAUFRAGE } from '@/lib/gaufrage'
@@ -16,7 +16,7 @@ import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Co
 import { useRegistre } from './Registre'
 import { idMissive, metiersDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
-import { DUREES_OEUFS, EffetsOeufs, useMinuit, type Oeuf } from './Oeufs'
+import { DUREES_OEUFS, EffetsOeufs, ivresse, useMinuit, type Oeuf } from './Oeufs'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
 type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
@@ -492,32 +492,26 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   /* ── Easter eggs (lib/oeufs.ts) ─────────────────────────── */
 
   const [oeuf, setOeuf] = useState<Oeuf | null>(null)
-  const [ivre, setIvre] = useState(false)
   const minuit = useMinuit()
   useEffect(() => {
     if (!oeuf) return
     const t = setTimeout(() => setOeuf(null), DUREES_OEUFS[oeuf.genre])
     return () => clearTimeout(t)
   }, [oeuf])
-  useEffect(() => {
-    if (!ivre) return
-    const t = setTimeout(() => setIvre(false), 1500)
-    return () => clearTimeout(t)
-  }, [ivre])
 
-  // Typed in the search: the normal search runs all the same.
+  // Typed in the search (the whole query, left alone for a second, once per query): the normal search
+  // runs all the same.
+  const [requeteOeuf, setRequeteOeuf] = useState('')
   useEffect(() => {
-    const o = oeufDeRecherche(requete)
+    const q = saisie.trim()
+    const t = setTimeout(() => setRequeteOeuf(oeufDeRecherche(q) ? q : ''), ATTENTE_RECHERCHE_MS)
+    return () => clearTimeout(t)
+  }, [saisie])
+  useEffect(() => {
+    const o = oeufDeRecherche(requeteOeuf)
     if (!o) return
     setOeuf({ genre: o.oeuf, n: Date.now(), note: o.note })
-    if (o.oeuf === 'skooma') {
-      setIvre(true)
-      if (!sansAnimation)
-        feuillets.current?.closest<HTMLElement>('.couverture')?.animate(
-          [0, -3, 3, -2, 2, -1, 0].map((x, k) => ({ transform: `translate(${x}px, ${k % 2 ? 1 : -1}px) rotate(${x * 0.08}deg)` })),
-          { duration: 620, easing: 'ease-out' },
-        )
-    }
+    if (o.oeuf === 'skooma') ivresse(feuillets.current?.closest<HTMLElement>('.couverture') ?? null, Boolean(sansAnimation))
     if (o.oeuf === 'fus') {
       // The pages riffle back to the title page; the order scroll is blown off the table and comes back.
       aller(pages.findIndex((p) => p.type === 'sommaire'), undefined, true)
@@ -531,7 +525,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requete])
+  }, [requeteOeuf])
 
   // Seven clicks on the paper (the emblem pressed into it) within a few seconds: the moons light up.
   const clics = useRef<number[]>([])
@@ -655,7 +649,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   return (
     <div
-      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''} ${ivre ? 'ivre' : ''} ${minuit ? 'minuit' : ''}`}
+      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''} ${minuit ? 'minuit' : ''}`}
       style={{ '--gaufrage': GAUFRAGE.intensite, '--gaufrage-registres': GAUFRAGE.registres, '--gaufrage-exlibris': GAUFRAGE.exLibris } as CSSProperties}
     >
       <header className="entete">
