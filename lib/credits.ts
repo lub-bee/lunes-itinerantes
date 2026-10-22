@@ -1,5 +1,5 @@
 // The book's last leaf: the colophon and its credits, in-character but exact. The same facts are in
-// README.md (« Credits & licenses »), LICENSE (code, MIT) and LICENSE-CONTENT.md (content, CC BY‑NC 4.0).
+// README.md (« Credits & licenses »), LICENSE (code, MIT) and NOTICE.md (content, CC BY‑NC 4.0).
 
 export const COLOPHON = {
   surtitre: 'Dernier feuillet',

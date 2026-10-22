@@ -495,7 +495,7 @@ facts in character; it is listed at the end of the table of contents.
 - Fonts: UnifrakturMaguntia, IM Fell English / IM Fell English SC, Mrs Saint Delafield (SIL Open Font
   License, Google Fonts).
 - Licenses: code under MIT (`LICENSE`); texts, poems, emblem and medallions under CC BY-NC 4.0, Ri'Oblan
-  (`LICENSE-CONTENT.md`, which lists exactly what it covers and the third-party exceptions).
+  (`NOTICE.md`, which lists exactly what it covers and the third-party exceptions).
 - The Elder Scrolls, Skyrim, the Khajiit and their lore belong to Bethesda Softworks / ZeniMax Media.
   Fan work, not affiliated, not for sale.
 
