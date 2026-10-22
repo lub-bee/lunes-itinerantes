@@ -2257,7 +2257,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   background: transparent;
   outline: none;
   font-family: var(--font-plume), var(--f-texte);
-  font-size: 34px;
+  font-size: 32px;
   line-height: 1.5;
   color: #1e1208;
   text-align: center;
@@ -2285,7 +2285,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .ex-libris-signer:hover:not(:disabled) .commande-cire, .ex-libris-signer:focus-visible .commande-cire { transform: rotate(-12deg) scale(1.06); }
 .ex-libris-signer:disabled { cursor: default; opacity: 0.55; }
 .ex-libris-signer:focus-visible { outline: none; }
-.ex-libris-nom { font-family: var(--font-plume), var(--f-texte); font-size: 40px; line-height: 1.5; color: #1e1208; white-space: nowrap; }
+.ex-libris-nom { font-family: var(--font-plume), var(--f-texte); font-size: 42px; line-height: 1.4; color: #1e1208; white-space: nowrap; }
 .ex-libris-nom span { display: inline-block; }
 .ex-libris-nom.frais span { animation: trace 420ms ease-out both; }
 @keyframes trace { from { opacity: 0; transform: translate(-3px, 1px) scale(0.92); } }
@@ -2774,3 +2774,95 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .metier-icone .icone { width: 100%; height: 100%; }
 .liste-metiers .entree { font-family: var(--f-capitales); font-size: 17px; }
 .liste-metiers .renvoi { font-style: italic; }
+
+/* ─── Missive pages: narrower inner margins (still inside the ruled frame) ─── */
+.gauche-contenu.contenu-missive { padding-left: 32px; padding-right: 34px; }
+.droite-contenu.contenu-missive { padding-left: 38px; padding-right: 28px; }
+.missive-pour { font-family: var(--f-texte); font-size: 18px; color: var(--encre); }
+
+/* A quill's tick for what is gathered. */
+.coche { width: 20px; height: 15px; color: #2f5b3a; vertical-align: -2px; }
+.besoins-ligne.reuni .besoins-manque { font-style: normal; }
+
+/* Missives list: title across, then the client / deadline / progress beside the requested goods. */
+.entree-missive {
+  grid-template-columns: minmax(110px, 0.9fr) minmax(0, 2fr);
+  grid-template-areas: 'titre titre' 'gauche biens';
+  row-gap: 4px;
+  align-items: start;
+}
+.entree-missive-gauche { grid-area: gauche; display: flex; flex-direction: column; gap: 2px; font-style: italic; font-size: 14.5px; color: var(--encre-douce); line-height: 1.3; }
+.entree-missive-gauche .entree-missive-avance { margin-top: 3px; }
+.entree-missive-biens { grid-area: biens; columns: 2 130px; column-gap: 14px; font-size: 15px; line-height: 1.35; color: var(--encre); }
+.entree-missive-biens > span { display: block; break-inside: avoid; }
+.entree-missive-biens b { font-weight: 400; font-family: var(--f-capitales); color: var(--encre-rouge); }
+.entree-missive.close { grid-template-columns: minmax(110px, 0.9fr) minmax(0, 2fr); grid-template-areas: 'titre titre' 'gauche biens'; }
+.entree-missive.close .entree-missive-biens { color: var(--encre-pale); }
+
+/* The ledger: one short line per gesture; touching it pins its details on the right page. */
+.journal li { display: block; padding: 0; }
+.journal li button {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  padding: 3px 2px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+.journal li button:disabled { cursor: default; }
+.journal li button:not(:disabled):hover, .journal li button:focus-visible { outline: none; background: rgba(201, 162, 78, 0.16); }
+.journal-qui { font-weight: 400; font-family: var(--f-capitales); color: var(--encre); white-space: nowrap; }
+.journal li .journal-quand { display: inline; font-family: var(--f-capitales); font-size: 12px; color: var(--encre-pale); white-space: nowrap; padding: 0; }
+.journal li .journal-quoi { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* The ledger note, pinned on the right page. */
+.fiche.note-droite { left: calc(50% + 40px); rotate: -0.6deg; }
+.detail-lignes { list-style: none; margin: 4px 0; padding: 0; }
+.detail-lignes li { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; font-size: 16px; }
+.detail-lignes strong { font-weight: 400; font-variant-numeric: tabular-nums lining-nums; }
+.fiche-releve-entete.detail-releve, .fiche-releve-ligne.detail-releve { grid-template-columns: minmax(0, 1fr) 72px 56px 74px; }
+.detail-releve > span:not(:first-child) { text-align: right; }
+.fiche-releve-ligne.detail-releve.ecart > span:last-child { color: var(--encre-rouge); }
+
+@media (min-width: 861px) and (max-width: 1139px) {
+  .fiche.note-droite { left: calc(50% + 30px); }
+}
+@media (max-width: 860px) {
+  .entree-missive, .entree-missive.close { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .entree-missive-biens { columns: 1; font-size: 14.5px; }
+  .journal li button { grid-template-columns: auto minmax(0, 1fr); }
+  .journal li .journal-quand { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ─── Order sheet: floor and ceiling written out under the name; the agreed lump sum ─── */
+.commande-ligne-nom { flex-direction: column; align-items: stretch; gap: 0; }
+.commande-ligne-nom .repere, .commande-feuille.mobile .commande-ligne-nom .repere { display: block; margin-left: 0; font-size: 11.5px; line-height: 1.15; font-style: italic; color: var(--encre-pale); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.commande-prix.grise { opacity: 0.45; }
+.commande-ligne-total.part { font-style: italic; color: var(--encre-douce); }
+.commande-global { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 4px; }
+.commande-global > span { font-family: var(--f-capitales); font-size: 13.5px; letter-spacing: 0.03em; color: var(--encre-douce); white-space: nowrap; }
+.commande-global input {
+  width: 92px;
+  min-width: 0;
+  padding: 1px 4px;
+  border: 0;
+  border-bottom: 1px solid rgba(90, 64, 41, 0.4);
+  background: transparent;
+  color: var(--encre);
+  font-size: 16px;
+  text-align: right;
+  outline: none;
+}
+.commande-global input::placeholder { font-style: italic; color: var(--encre-pale); }
+.commande-global input:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.35); }
+.commande-global.actif > span { color: var(--encre-rouge); }
+@media (max-width: 860px) {
+  .fiche.mobile.note-droite { left: 10px; rotate: 0deg; }
+}

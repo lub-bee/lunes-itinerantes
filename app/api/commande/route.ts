@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
 import { nomSigne } from '@/lib/identite'
 import { chargerArticles } from '@/lib/livre'
-import { calculerLigne, totaux, type CommandeEnvoyee } from '@/lib/commande'
+import { calculerLigne, centimes, poidsLigne, repartirGlobal, statut, totaux, type CommandeEnvoyee } from '@/lib/commande'
 
 // Seals an order: validates it, recomputes every total from the catalogue, and hands it to the
 // Google Apps Script web app that writes it in the "Commandes" sheet (scripts/apps-script/commandes.gs).
@@ -66,8 +66,37 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // A price agreed for the whole order: each line's real sale is its share, pro rata to its « total
+  // idéal » (cents, the sum exact). Its unit price and total become that share, so a script that does
+  // not know `prixGlobal` still writes the right « Prix réel vendu »; a newer one also writes « Prix global ».
+  const global = typeof corps?.prixGlobal === 'number' && Number.isFinite(corps.prixGlobal) && corps.prixGlobal > 0 && corps.prixGlobal <= 1e8 ? centimes(corps.prixGlobal) : null
+  if (global !== null) {
+    const parts = repartirGlobal(global, lignes.map((l) => poidsLigne(l.quantite, l.prixMini, l.prixIdeal, l.prixUnitaire || null)))
+    lignes.forEach((l, i) => {
+      const part = parts[i]
+      const negocie = l.prixMini === null && l.prixIdeal === null
+      Object.assign(l, {
+        prixUnitaire: centimes(part / l.quantite),
+        total: part,
+        totalMini: negocie ? part : l.totalMini,
+        totalIdeal: negocie ? part : l.totalIdeal,
+        statut: negocie ? 'négocié' : statut(part, l.totalMini, l.totalIdeal),
+        sousPlancher: l.prixMini !== null && part / l.quantite < l.prixMini - 0.004,
+        prixReel: part,
+        prixGlobal: global,
+      })
+    })
+  }
   const maintenant = new Date()
-  const commande = { numero: numeroCommande(maintenant), horodatage: maintenant.toISOString(), vendeur, ...totaux(lignes), lignes }
+  const t = totaux(lignes)
+  const commande = {
+    numero: numeroCommande(maintenant),
+    horodatage: maintenant.toISOString(),
+    vendeur,
+    ...t,
+    ...(global !== null ? { total: global, statut: statut(global, t.totalMini, t.totalIdeal), prixGlobal: global } : {}),
+    lignes,
+  }
 
   try {
     // Apps Script answers a POST with a redirect to the result; fetch follows it.

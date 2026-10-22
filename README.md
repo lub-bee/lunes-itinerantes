@@ -220,6 +220,13 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   sealing), line sum, a quill to strike the line out (struck lines are not sent). A price under the
   floor turns red with a one-line warning under the row (not blocking). Long orders scroll inside the
   sheet; the column heads and the footer stay in view.
+- Each line shows its floor and ceiling written out under the name (« mini 25 · idéal 30 »).
+- **Prix convenu pour l'ensemble** (footer, optional): a price agreed for the whole order — a bulk price
+  or a rounding (e.g. two articles at 30 and 70 sold together for 85). When filled it becomes the
+  order's total, the line prices become optional (greyed) and each line shows its share, pro rata to
+  its « total idéal » (cents, the sum exact); the status stamp compares that total with Total mini and
+  Total idéal. Sealed, each line's *Prix réel vendu* is its share (its status from that share) and the
+  **Prix global** column holds the agreed total (empty for an ordinary order).
 - Footer: Total mini (Σ qty × floor), Total idéal (Σ qty × ceiling), **Total** (Σ lines) and a status
   stamp: *À perte* (< mini), *Marché honnête*, *Excellente affaire* (≥ idéal). An *à négocier* line
   counts its own price as mini and idéal, so it never tips the status.
@@ -241,11 +248,14 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
 One row per article, in the tab **Commandes** (created when missing; if its first row is not this
 header row, the header row is inserted above it, so nothing already there is overwritten):
 
-| Horodatage | N° commande | Vendeur | Article | Quantité | Prix unitaire | Total ligne | Total mini | Total idéal | Prix réel vendu | Statut | Total commande |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| date | C-261021-3R5U2 | Ri'Saad | Épée en fer | 2 | 30 | 60 | 50 | 60 | 60 | excellente affaire | 135 |
+| Horodatage | N° commande | Vendeur | Article | Quantité | Prix unitaire | Total ligne | Total mini | Total idéal | Prix réel vendu | Statut | Total commande | Prix global |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| date | C-261021-3R5U2 | Ri'Saad | Épée en fer | 2 | 30 | 60 | 50 | 60 | 60 | excellente affaire | 135 | |
 
-*Total mini / Total idéal / Prix réel vendu / Statut* are per line (qty × floor, qty × ceiling, line
+*Prix global* (added by the newer script at the end of an existing header row) holds the price
+agreed for the whole order, when there was one; the line's *Prix unitaire*, *Total ligne* and *Prix réel
+vendu* are then its share. An older script, which does not know that column, still writes the right
+*Prix réel vendu*. *Total mini / Total idéal / Prix réel vendu / Statut* are per line (qty × floor, qty × ceiling, line
 total, line status: `à perte`, `honnête`, `excellente affaire`, `négocié`); *Total commande* repeats
 the order total on each of its rows. To match another layout, edit only the `COLONNES` array at the
 top of `commandes.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
@@ -295,7 +305,9 @@ in v2. When the sheet cannot be read, the pages say so in character, with « ren
   in the Missive chest / missing, each row with its progress in ink and, for an item with a recipe,
   « à façonner : N » (units to make for what is missing, whole crafts; the tooltip gives the crafts).
   Touching a missing row opens the deposit slip filled with that item and the missing quantity; the
-  small anvil on a row with a recipe opens the craft slip for it. Then the contributors (« a apporté
+  small anvil on a row with a recipe opens the craft slip for it. A ✓ marks what is gathered. The raw
+  materials have their own table under « Matières premières ». The ledger shows one short line per
+  gesture (who, when, what); touching it pins a note with its details on the right page. Then the contributors (« a apporté
   X septims de valeur », « Y % du mérite », what each received once closed) and the ledger. A closed
   missive stays readable as it stood when it was closed.
 - **Le coffre**: the stock according to the ledger, « Relever le coffre », and every count: *Selon le

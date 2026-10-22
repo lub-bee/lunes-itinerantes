@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
-import { calculerLigne, centimes, LIBELLES_STATUT, lirePrix, statut, type CommandeEnvoyee, type LigneCommande } from '@/lib/commande'
+import { calculerLigne, centimes, LIBELLES_STATUT, lirePrix, poidsLigne, repartirGlobal, statut, type CommandeEnvoyee, type LigneCommande } from '@/lib/commande'
 import { Icone } from './Ornements'
 import type { EtatRegistre } from './Registre'
 
@@ -56,6 +56,8 @@ export function calculer(l: LigneCommande) {
 export function useCommande(reg: EtatRegistre) {
   const info = reg.marchand
   const [lignes, setLignes] = useState<LigneCommande[]>([])
+  /** « Prix convenu pour l'ensemble »: when filled, the order's real total (lines shared out pro rata). */
+  const [prixGlobal, setPrixGlobal] = useState('')
   const [ouverte, setOuverte] = useState(false)
   const [deployee, setDeployee] = useState(false)
   const [vendeur, setVendeur] = useState('')
@@ -77,8 +79,9 @@ export function useCommande(reg: EtatRegistre) {
   const vendeurServeur = useRef<string | null>(null)
 
   useEffect(() => {
-    const c = lire<{ lignes?: LigneCommande[]; ouverte?: boolean }>(CLE_COMMANDE)
+    const c = lire<{ lignes?: LigneCommande[]; ouverte?: boolean; prixGlobal?: string }>(CLE_COMMANDE)
     if (c && Array.isArray(c.lignes)) setLignes(c.lignes.filter((l) => l && typeof l.id === 'string'))
+    if (typeof c?.prixGlobal === 'string') setPrixGlobal(c.prixGlobal)
     if (c?.ouverte) setOuverte(true)
     local.current = lire<string>(CLE_VENDEUR)
     if (local.current) setVendeur(local.current)
@@ -106,8 +109,8 @@ export function useCommande(reg: EtatRegistre) {
     reg.oublier()
   }, [reg])
   useEffect(() => {
-    if (pret) ecrire(CLE_COMMANDE, lignes.length || ouverte ? { lignes, ouverte } : null)
-  }, [lignes, ouverte, pret])
+    if (pret) ecrire(CLE_COMMANDE, lignes.length || ouverte ? { lignes, ouverte, prixGlobal } : null)
+  }, [lignes, ouverte, pret, prixGlobal])
   // The seller's name stays until it is edited: browser storage at once, the cookie shortly after.
   useEffect(() => {
     if (!pret || membre) return
@@ -156,6 +159,7 @@ export function useCommande(reg: EtatRegistre) {
   }, [])
   const jeter = useCallback(() => {
     setLignes([])
+    setPrixGlobal('')
     setMessage({ genre: 'conseil', texte: 'La feuille part au feu. Une autre attend sous la plume.' })
   }, [])
 
@@ -164,12 +168,14 @@ export function useCommande(reg: EtatRegistre) {
     const signe = membre ?? vendeur.trim()
     if (!signe) return setMessage({ genre: 'erreur', texte: 'Qui tient la plume ? Inscris le nom du vendeur.' })
     if (!actives.length) return setMessage({ genre: 'erreur', texte: 'Une commande sans article ne se scelle pas.' })
-    if (actives.some((l) => lirePrix(l.prix) === null)) {
-      return setMessage({ genre: 'erreur', texte: 'Un article attend encore son prix. Fixe-le avant de sceller.' })
+    const global = lirePrix(prixGlobal)
+    if (global === null && actives.some((l) => lirePrix(l.prix) === null)) {
+      return setMessage({ genre: 'erreur', texte: 'Un article attend encore son prix. Fixe-le, ou inscris le prix convenu pour l’ensemble.' })
     }
     const envoyee: CommandeEnvoyee = {
       vendeur: signe,
-      lignes: actives.map((l) => ({ id: l.id, article: l.fr, articleEn: l.en, quantite: l.qte, prixUnitaire: lirePrix(l.prix)!, min: l.min, max: l.max })),
+      prixGlobal: global,
+      lignes: actives.map((l) => ({ id: l.id, article: l.fr, articleEn: l.en, quantite: l.qte, prixUnitaire: lirePrix(l.prix) ?? 0, min: l.min, max: l.max })),
     }
     setEnvoi(true)
     setMessage(null)
@@ -181,27 +187,47 @@ export function useCommande(reg: EtatRegistre) {
         return
       }
       setLignes([])
+      setPrixGlobal('')
       setMessage({ genre: 'ok', texte: `Marché conclu, l'encre sèche dans le registre.${r.numero ? ` (n° ${r.numero})` : ''}` })
     } catch {
       setMessage({ genre: 'erreur', texte: "Le coursier n'est pas revenu. Ta commande reste sur la table : réessaie." })
     } finally {
       setEnvoi(false)
     }
-  }, [vendeur, membre])
+  }, [vendeur, membre, prixGlobal])
 
-  return { membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
+  return { prixGlobal, setPrixGlobal, membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
 }
 
 export type EtatCommande = ReturnType<typeof useCommande>
 
-/** Totals over the lines still standing (struck lines and unpriced lines count for nothing). */
-export function bilan(lignes: LigneCommande[]) {
-  const calc = lignes.filter((l) => !l.rayee).map(calculer).filter((c): c is NonNullable<typeof c> => c !== null)
-  const total = centimes(calc.reduce((t, c) => t + c.total, 0))
+/** Each standing line's share of the agreed lump sum (by id), or null when no lump sum is set. */
+export function partsGlobales(lignes: LigneCommande[], prixGlobal: string): Map<string, number> | null {
+  const global = lirePrix(prixGlobal)
+  if (global === null) return null
+  const actives = lignes.filter((l) => !l.rayee)
+  const parts = repartirGlobal(global, actives.map((l) => poidsLigne(l.qte, l.min, l.max, lirePrix(l.prix))))
+  return new Map(actives.map((l, i) => [l.id, parts[i]]))
+}
+
+/**
+ * Totals over the lines still standing (struck lines and unpriced lines count for nothing). With a
+ * lump sum, the total is that sum and each line counts for its share.
+ */
+export function bilan(lignes: LigneCommande[], prixGlobal = '') {
+  const parts = partsGlobales(lignes, prixGlobal)
+  const actives = lignes.filter((l) => !l.rayee)
+  const calc = parts
+    ? actives.map((l) => {
+        const part = parts.get(l.id) ?? 0
+        const c = calculerLigne(l.qte, l.qte ? part / l.qte : 0, l.min, l.max)
+        return { ...c, total: part, totalMini: l.min === null && l.max === null ? part : c.totalMini, totalIdeal: l.min === null && l.max === null ? part : c.totalIdeal }
+      })
+    : actives.map(calculer).filter((c): c is NonNullable<typeof c> => c !== null)
+  const total = parts ? centimes(lirePrix(prixGlobal)!) : centimes(calc.reduce((t, c) => t + c.total, 0))
   const totalMini = centimes(calc.reduce((t, c) => t + c.totalMini, 0))
   const totalIdeal = centimes(calc.reduce((t, c) => t + c.totalIdeal, 0))
-  const actives = lignes.filter((l) => !l.rayee)
-  return { total, totalMini, totalIdeal, statut: statut(total, totalMini, totalIdeal), articles: actives.reduce((t, l) => t + l.qte, 0), lignes: actives.length }
+  return { total, totalMini, totalIdeal, statut: statut(total, totalMini, totalIdeal), articles: actives.reduce((t, l) => t + l.qte, 0), lignes: actives.length, parts }
 }
 
 const CLASSES_STATUT = { 'à perte': 'perte', honnête: 'honnete', 'excellente affaire': 'excellente', négocié: 'negocie' } as const
@@ -215,7 +241,7 @@ const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
  * that flat end, the roll itself (spiral ends, red ribbon, wax seal) lies nearest the reader.
  */
 export function BandeCommande({ c, bande, icones }: { c: EtatCommande; bande: RefObject<HTMLButtonElement | null>; icones: Record<string, string> }) {
-  const b = bilan(c.lignes)
+  const b = bilan(c.lignes, c.prixGlobal)
   const [revenue, setRevenue] = useState(false)
   const avant = useRef(c.ouverte)
   useEffect(() => {
@@ -283,7 +309,7 @@ export function FeuilleCommande({
   const ombre = useRef<HTMLDivElement>(null)
   const lien = useRef<HTMLSpanElement>(null)
   const [confirmer, setConfirmer] = useState(false)
-  const b = bilan(c.lignes)
+  const b = bilan(c.lignes, c.prixGlobal)
 
   useEffect(() => {
     if (!confirmer) return
@@ -466,11 +492,6 @@ export function FeuilleCommande({
             <strong className="commande-vendeur-nom" title="Ton nom signe la commande">
               {c.membre}
             </strong>
-            {!c.discord && (
-              <button type="button" className="lien-encre commande-vendeur-changer" onClick={c.oublierNom}>
-                ce n&apos;est pas mon nom
-              </button>
-            )}
           </div>
         ) : (
           <>
@@ -509,13 +530,26 @@ export function FeuilleCommande({
                 <span />
               </div>
               {c.lignes.map((l) => (
-                <LigneFeuille key={l.id} l={l} c={c} icones={icones} nouvelle={c.nouvelle?.id === l.id ? c.nouvelle.n : 0} />
+                <LigneFeuille key={l.id} l={l} c={c} icones={icones} nouvelle={c.nouvelle?.id === l.id ? c.nouvelle.n : 0} part={b.parts?.get(l.id)} />
               ))}
             </>
           )}
         </div>
 
         <footer className="commande-pied">
+          {/* A price agreed for the whole order (a bulk price, a rounding): it becomes the total, the
+              lines are shared out pro rata to their « total idéal ». */}
+          <label className={`commande-global ${b.parts ? 'actif' : ''}`}>
+            <span>Prix convenu pour l&apos;ensemble</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={c.prixGlobal}
+              placeholder="facultatif"
+              aria-label="Prix convenu pour l'ensemble, en septims"
+              onChange={(e) => c.setPrixGlobal(e.target.value.replace(/[^\d.,]/g, '').slice(0, 10))}
+            />
+          </label>
           <div className="commande-totaux">
             <span>
               Total mini <b>{prix(b.totalMini)}</b>
@@ -567,8 +601,10 @@ export function FeuilleCommande({
   )
 }
 
-function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCommande; icones: Record<string, string>; nouvelle: number }) {
-  const calc = calculer(l)
+function LigneFeuille({ l, c, icones, nouvelle, part }: { l: LigneCommande; c: EtatCommande; icones: Record<string, string>; nouvelle: number; part?: number }) {
+  /** With a lump sum, the line counts for its share of it (its own price becomes optional). */
+  const global = part !== undefined
+  const calc = global ? calculerLigne(l.qte, l.qte ? part / l.qte : 0, l.min, l.max) : calculer(l)
   const [qte, setQte] = useState(String(l.qte))
   useEffect(() => setQte(String(l.qte)), [l.qte])
   const ref = useRef<HTMLDivElement>(null)
@@ -596,14 +632,14 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
   const fixerQte = (v: number) => c.regler(l.id, { qte: Math.max(1, Math.min(9999, Math.round(v) || 1)) })
   const sansPrix = lirePrix(l.prix) === null
   const negocie = l.min === null && l.max === null
-  const bornes = negocie ? 'à négocier' : `${prix(l.min)}–${prix(l.max)}`
+  const bornes = negocie ? 'à négocier' : `mini ${prix(l.min)} · idéal ${prix(l.max)}`
   const sous = !l.rayee && calc?.sousPlancher
 
   return (
     <div ref={ref} className={`commande-ligne ${l.rayee ? 'rayee' : ''} ${sous ? 'sous-plancher' : ''}`}>
       <div className="commande-ligne-nom" title={`${l.fr} — ${l.en}${negocie ? ' — à négocier' : ` — plancher ${prix(l.min)}, plafond ${prix(l.max)}`}`}>
         <span className="fr">{l.fr}</span>
-        <sup className="repere">{bornes}</sup>
+        <span className="repere">{bornes}</span>
       </div>
       <span className="commande-qte">
         <button type="button" aria-label="Un de moins" disabled={l.rayee || l.qte <= 1} onClick={() => fixerQte(l.qte - 1)}>
@@ -627,16 +663,18 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
         </button>
       </span>
       <input
-        className={`commande-prix ${sansPrix ? 'a-fixer' : ''}`}
+        className={`commande-prix ${sansPrix && !global ? 'a-fixer' : ''} ${global ? 'grise' : ''}`}
         type="text"
         inputMode="decimal"
         value={l.prix}
         disabled={l.rayee}
-        placeholder="prix ?"
+        placeholder={global ? '—' : 'prix ?'}
         aria-label={`Prix unitaire de ${l.fr}`}
         onChange={(e) => c.regler(l.id, { prix: e.target.value.replace(/[^\d.,]/g, '').slice(0, 10) })}
       />
-      <span className="commande-ligne-total">{calc ? prix(calc.total) : '—'}</span>
+      <span className={`commande-ligne-total ${global ? 'part' : ''}`} title={global ? 'Part du prix convenu pour l’ensemble' : undefined}>
+        {global ? (l.rayee ? '—' : prix(part)) : calc ? prix(calc.total) : '—'}
+      </span>
       <button
         type="button"
         className="commande-rayer"
@@ -647,7 +685,7 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
         <Icone corps={icones['quill']} />
       </button>
       {sous && <p className="commande-alerte">sous le plancher ({prix(l.min)}) — à perte</p>}
-      {!l.rayee && sansPrix && <p className="commande-alerte douce">à négocier : inscris le prix convenu</p>}
+      {!l.rayee && sansPrix && !global && <p className="commande-alerte douce">à négocier : inscris le prix convenu</p>}
     </div>
   )
 }
@@ -655,7 +693,7 @@ function LigneFeuille({ l, c, icones, nouvelle }: { l: LigneCommande; c: EtatCom
 /* ─────────────────────────── Mobile: the scroll rolled at the bottom ─────────────────────────── */
 
 export function BarreCommande({ c, icones }: { c: EtatCommande; icones: Record<string, string> }) {
-  const b = bilan(c.lignes)
+  const b = bilan(c.lignes, c.prixGlobal)
   const [pouce, setPouce] = useState<{ texte: string; n: number } | null>(null)
 
   useEffect(() => {

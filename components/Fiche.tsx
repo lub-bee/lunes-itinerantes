@@ -23,7 +23,7 @@ import {
   type Recette,
   type Ressource,
 } from '@/lib/missives'
-import { auCoffre, idMissive, quantite, type CtxRegistre, type Fiche } from './Missives'
+import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
 import { Icone } from './Ornements'
 
 /*
@@ -131,7 +131,7 @@ export function FicheVolante({
   const { surtitre, titre, corps } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
 
   return (
-    <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
+    <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''} ${vue.genre === 'mouvement' ? 'note-droite' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
       <svg className="fiche-defs" width="0" height="0" aria-hidden focusable="false">
         <filter id="fiche-barbes" x="-3%" y="-3%" width="106%" height="106%">
           <feTurbulence type="fractalNoise" baseFrequency="0.08 0.06" numOctaves="3" seed="9" result="b" />
@@ -180,9 +180,90 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Façonner', corps: <Signe env={env} action="fabrication"><FormFabrication env={env} numero={f.numero} produit={f.produit} /></Signe> }
     case 'livrer':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Livrer la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer /></Signe> }
+    case 'mouvement':
+      return { surtitre: 'Journal du coffre', titre: TITRES_MOUVEMENT[f.lignes[0]?.type] ?? 'Écriture', corps: <DetailMouvement lignes={f.lignes} env={env} /> }
     case 'abandonner':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Abandonner la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer={false} /></Signe> }
   }
+}
+
+const TITRES_MOUVEMENT: Record<string, string> = { relevé: 'Relevé du coffre', dépôt: 'Dépôt', fabrication: 'Façonnage', livraison: 'Livraison', partage: 'Partage' }
+
+/** One gesture of the ledger in full: who, when, for which missive, every item with its quantity. */
+function DetailMouvement({ lignes, env }: { lignes: Mouvement[]; env: Env }) {
+  const m = lignes[0]
+  if (!m) return null
+  const d = env.reg.r.donnees
+  const missive = d?.missives.find((x) => x.numero === m.missive)
+  const releves = m.type === 'relevé' && d ? rejouer(d.mouvements).releves.filter((x) => x.horodatage === m.horodatage) : []
+  const signe = (q: number) => (q > 0 ? `+${quantite(q)}` : quantite(q))
+  return (
+    <div className="detail-mouvement">
+      <p className="fiche-note">
+        <strong>{m.membre}</strong>, {quandComplet(m.horodatage)}
+        {missive && (
+          <>
+            <br />
+            pour la missive « {missive.titre} »
+          </>
+        )}
+      </p>
+      {m.type === 'relevé' ? (
+        <div className="fiche-releve">
+          <div className="fiche-releve-entete detail-releve">
+            <span>Objet</span>
+            <span>Selon le registre</span>
+            <span>Compté</span>
+            <span>Écart</span>
+          </div>
+          {lignes.map((x, i) => {
+            const r = releves.find((y) => cle(y.objet) === cle(x.objet))
+            return (
+              <div key={i} className={`fiche-releve-ligne detail-releve ${r && r.ecart ? 'ecart' : ''}`}>
+                <span>{x.objet}</span>
+                <span className="fiche-releve-attendu">{r && !r.premier ? quantite(r.attendu) : '—'}</span>
+                <span>{quantite(x.quantite)}</span>
+                <span>{!r || r.premier ? 'premier compte' : r.ecart ? signe(r.ecart) : 'juste'}</span>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <>
+          {m.type === 'fabrication' && <p className="fiche-sous-titre">Mis au coffre</p>}
+          <ul className="detail-lignes">
+            {lignes
+              .filter((x) => m.type !== 'fabrication' || x.quantite > 0)
+              .map((x, i) => (
+                <li key={i}>
+                  <span>{m.type === 'partage' ? 'Septims' : x.objet}</span>
+                  <span className="points" />
+                  <strong>{m.type === 'partage' ? quantite(x.quantite) : signe(x.quantite)}</strong>
+                </li>
+              ))}
+          </ul>
+          {m.type === 'fabrication' && lignes.some((x) => x.quantite < 0) && (
+            <>
+              <p className="fiche-sous-titre">Pris dans le coffre</p>
+              <ul className="detail-lignes">
+                {lignes
+                  .filter((x) => x.quantite < 0)
+                  .map((x, i) => (
+                    <li key={i}>
+                      <span>{x.objet}</span>
+                      <span className="points" />
+                      <strong>{signe(x.quantite)}</strong>
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+      {m.note && m.type !== 'relevé' && <p className="fiche-note"><em>{m.note}</em></p>}
+      {m.enAttente && <p className="fiche-note"><em>L&apos;encre n&apos;est pas encore sèche : le registre confirme.</em></p>}
+    </div>
+  )
 }
 
 /** Forms need a signed member allowed to take the action. */

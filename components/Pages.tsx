@@ -119,12 +119,10 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
           </EnTete>
         )
       case 'missive': {
-        const m = ctx.registre?.r.calcul?.etats.find((e) => e.missive.numero === page.numero)?.missive
         return (
           <EnTete
             surtitre={`Missive n° ${page.numero}`}
             titre={page.titre}
-            sousTitre={m?.commanditaire ? `pour ${m.commanditaire}` : undefined}
             icone={ctx.livre.icones[page.icone]}
             compact={compact}
           >
@@ -165,7 +163,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
   })()
   if (compact) return corps
   return (
-    <div className="contenu gauche-contenu" style={teinte(ctx, page)}>
+    <div className={`contenu gauche-contenu contenu-${page.type}`} style={teinte(ctx, page)}>
       {/* Scrolls inside the page's margins, as the right page does: the folio and the frame stay clear. */}
       <div className="defile defile-gauche">{corps}</div>
       {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 1} />}
@@ -319,7 +317,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
   })()
   if (integre) return corps
   return (
-    <div className="contenu droite-contenu" style={teinte(ctx, page)}>
+    <div className={`contenu droite-contenu contenu-${page.type}`} style={teinte(ctx, page)}>
       <Defile ctx={ctx}>{corps}</Defile>
       {page.type !== 'exlibris' && <Folio n={folio(ctx) * 2 + 2} />}
     </div>

@@ -11,8 +11,11 @@
  *
  *  - Sealed orders (unchanged since v2, no `action` needed): { jeton, commande } where commande is
  *      { numero, horodatage (ISO), vendeur, total, totalMini, totalIdeal, statut,
+ *        prixGlobal?,
  *        lignes: [{ article, articleEn, quantite, prixUnitaire, prixMini, prixIdeal,
- *                   total, totalMini, totalIdeal, statut, sousPlancher }] }
+ *                   total, totalMini, totalIdeal, statut, sousPlancher, prixReel?, prixGlobal? }] }
+ *    With a price agreed for the whole order (`prixGlobal`), each line's `total` / `prixReel` is its
+ *    share of it, pro rata to its « total idéal ».
  *    One row per article in the "Commandes" tab.
  *
  *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements }, version, cache },
@@ -59,9 +62,11 @@ var COLONNES = [
   ['Total ligne', function (c, l) { return l.total; }],
   ['Total mini', function (c, l) { return l.totalMini; }],
   ['Total idéal', function (c, l) { return l.totalIdeal; }],
-  ['Prix réel vendu', function (c, l) { return l.total; }],
+  ['Prix réel vendu', function (c, l) { return l.prixReel !== undefined ? l.prixReel : l.total; }],
   ['Statut', function (c, l) { return l.statut; }],
   ['Total commande', function (c, l) { return c.total; }],
+  // The price agreed for the whole order when there was one (lines then share it pro rata), else empty.
+  ['Prix global', function (c, l) { return c.prixGlobal ? c.prixGlobal : ''; }],
 ];
 
 /**
@@ -179,7 +184,8 @@ function sceller(c) {
 
 /**
  * The orders tab. If its first row is not our header row (empty tab, or anything else in row 1),
- * a header row is inserted above, so nothing already in the tab is overwritten.
+ * a header row is inserted above, so nothing already in the tab is overwritten. A header row that
+ * only lacks the newest columns at its end (e.g. « Prix global ») gets them written in.
  */
 function onglet() {
   var classeur = SpreadsheetApp.getActiveSpreadsheet();
@@ -187,6 +193,13 @@ function onglet() {
   var entetes = COLONNES.map(function (col) { return col[0]; });
   var premiere = feuille.getLastRow() === 0 ? [] : feuille.getRange(1, 1, 1, entetes.length).getValues()[0];
   var dejaLa = entetes.every(function (e, i) { return String(premiere[i] || '').trim() === e; });
+  var debut = 0;
+  while (debut < entetes.length && String(premiere[debut] || '').trim() === entetes[debut]) debut++;
+  var resteVide = debut > 0 && entetes.slice(debut).every(function (e, i) { return String(premiere[debut + i] || '').trim() === ''; });
+  if (!dejaLa && resteVide) {
+    feuille.getRange(1, debut + 1, 1, entetes.length - debut).setValues([entetes.slice(debut)]).setFontWeight('bold');
+    return feuille;
+  }
   if (!dejaLa) {
     if (feuille.getLastRow() > 0) feuille.insertRowBefore(1);
     feuille.getRange(1, 1, 1, entetes.length).setValues([entetes]).setFontWeight('bold');
