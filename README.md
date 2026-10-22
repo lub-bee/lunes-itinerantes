@@ -136,6 +136,7 @@ Drop a Markdown file to add a page. Files are ordered by name (prefix with `03-`
 ```markdown
 ---
 titre: Les routes sûres
+titre_en: The Safe Roads
 court: Routes
 icone: treasure-map
 resume: Short in-character summary shown on the left page.

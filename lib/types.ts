@@ -15,8 +15,11 @@ export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'c
 
 export type Partie = { id: PartieId; titre: string; court: string; couleur: string; icone: string }
 
-/** `icone` is a game-icons.net name, resolved to its SVG body in `Livre.icones`. */
-type Base = { id: string; partie: PartieId; titre: string; court: string; icone: string }
+/**
+ * `icone` is a game-icons.net name, resolved to its SVG body in `Livre.icones`. `titreEn`: the English title shown
+ * in italics under the page's title (fixed titles only; a missive's title, written by a member, has none).
+ */
+type Base = { id: string; partie: PartieId; titre: string; court: string; icone: string; titreEn?: string }
 
 /** `citation`: closing quote at the foot of the right page. */
 export type PageSommaire = Base & { type: 'sommaire'; citation: string }

@@ -129,7 +129,7 @@ export function FicheVolante({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { surtitre, titre, corps, embleme } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
+  const { surtitre, titre, sousTitre, corps, embleme } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
 
   return (
     <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
@@ -148,6 +148,7 @@ export function FicheVolante({
               {embleme && <div className="fiche-embleme">{embleme}</div>}
               <div className="fiche-surtitre">{surtitre}</div>
               <h2 className="fiche-titre">{titre}</h2>
+              {sousTitre && <div className="fiche-titre-en">{sousTitre}</div>}
               <button type="button" className="fiche-ranger" onClick={partir}>
                 Ranger
               </button>
@@ -163,7 +164,7 @@ export function FicheVolante({
 
 type Env = { reg: CtxRegistre; articles: Article[]; icones: Record<string, string>; changer: (f: Fiche) => void; fermer: () => void }
 
-function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: ReactNode; embleme?: ReactNode } {
+function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTitre?: string; corps: ReactNode; embleme?: ReactNode } {
   const missive = 'numero' in f && f.numero ? env.reg.r.calcul?.etats.find((e) => e.missive.numero === f.numero) : undefined
   switch (f.genre) {
     case 'recette':
@@ -185,8 +186,9 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; corps: 
     case 'rang': {
       const r = RANGS.find((x) => x.cle === f.cle)
       return {
-        surtitre: 'La Caravane',
+        surtitre: 'Livre de la Caravane',
         titre: r?.nom ?? SANS_RANG.nom,
+        sousTitre: r?.nomEn ?? SANS_RANG.nomEn,
         embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={118} height={118} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
         corps: <MembresDuRang cle={f.cle} env={env} />,
       }

@@ -8,6 +8,8 @@ import { cle } from './missives'
 export type Rang = {
   cle: string
   nom: string
+  /** The English name, in italics under the title of the rank's members note. */
+  nomEn: string
   /** 1 = top of the tree; ranks of the same level are siblings. */
   niveau: number
   couleur: string
@@ -30,17 +32,18 @@ export type Rang = {
 }
 
 export const RANGS: Rang[] = [
-  { cle: 'patriarche', nom: 'Patriarches', niveau: 1, couleur: '#8a1c12', alias: ['Patriarche'], icone: '/rangs/patriarche.webp', disposition: 'cote-a-cote', citation: "Les Patriarches ne marchent pas devant : ils portent sur leurs épaules ce que la caravane ne saurait porter seule." },
-  { cle: 'maitre-des-routes', nom: 'Maître des routes', niveau: 2, couleur: '#1f3a5f', lignes: ['Maître', 'des routes'], icone: '/rangs/maitre-des-routes.webp', citation: "Le Maître des routes marche devant et la caravane le suit : toute route mène quelque part, lui sait laquelle ramène Khajiit sous Jone et Jode." },
-  { cle: 'voix-du-commerce', nom: 'Voix du commerce', niveau: 2, couleur: '#9a7420', lignes: ['Voix', 'du commerce'], icone: '/rangs/voix-du-commerce.webp', citation: "Une pièce bien comptée vaut dix pièces promises. La Voix du commerce compte pour toute la caravane." },
-  { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', niveau: 2, couleur: '#2f5b3a', lignes: ['Voix', 'de la sécurité'], icone: '/rangs/voix-de-la-securite.webp', citation: "Khajiit dort tranquille sous Jone et Jode, car d'autres yeux veillent dans le noir." },
-  { cle: 'marchand-de-lune', nom: 'Marchand de lune', niveau: 3, couleur: '#5a2d6b', alias: ['Marchands de lune', 'Marchande de lune'], icone: '/rangs/marchand-de-lune.webp', citation: "Khajiit a des marchandises, si tu as de l'or. Le reste, les lunes le règlent." },
-  { cle: 'petites-lunes', nom: 'Petites lunes', niveau: 4, couleur: '#5d6a86', alias: ['Petite lune'], icone: '/rangs/petites-lunes.webp', citation: "Les petites lunes grandissent à chaque route parcourue ; un jour, elles éclaireront le chemin des autres." },
+  { cle: 'patriarche', nom: 'Patriarches', nomEn: 'Patriarchs', niveau: 1, couleur: '#8a1c12', alias: ['Patriarche'], icone: '/rangs/patriarche.webp', disposition: 'cote-a-cote', citation: "Les Patriarches ne marchent pas devant : ils portent sur leurs épaules ce que la caravane ne saurait porter seule." },
+  { cle: 'maitre-des-routes', nom: 'Maître des routes', nomEn: 'Master of Roads', niveau: 2, couleur: '#1f3a5f', lignes: ['Maître', 'des routes'], icone: '/rangs/maitre-des-routes.webp', citation: "Le Maître des routes marche devant et la caravane le suit : toute route mène quelque part, lui sait laquelle ramène Khajiit sous Jone et Jode." },
+  { cle: 'voix-du-commerce', nom: 'Voix du commerce', nomEn: 'Voice of Trade', niveau: 2, couleur: '#9a7420', lignes: ['Voix', 'du commerce'], icone: '/rangs/voix-du-commerce.webp', citation: "Une pièce bien comptée vaut dix pièces promises. La Voix du commerce compte pour toute la caravane." },
+  { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', nomEn: 'Voice of Security', niveau: 2, couleur: '#2f5b3a', lignes: ['Voix', 'de la sécurité'], icone: '/rangs/voix-de-la-securite.webp', citation: "Khajiit dort tranquille sous Jone et Jode, car d'autres yeux veillent dans le noir." },
+  { cle: 'marchand-de-lune', nom: 'Marchand de lune', nomEn: 'Moon Merchant', niveau: 3, couleur: '#5a2d6b', alias: ['Marchands de lune', 'Marchande de lune'], icone: '/rangs/marchand-de-lune.webp', citation: "Khajiit a des marchandises, si tu as de l'or. Le reste, les lunes le règlent." },
+  { cle: 'petites-lunes', nom: 'Petites lunes', nomEn: 'Little Moons', niveau: 4, couleur: '#5d6a86', alias: ['Petite lune'], icone: '/rangs/petites-lunes.webp', citation: "Les petites lunes grandissent à chaque route parcourue ; un jour, elles éclaireront le chemin des autres." },
 ]
 
 export const SANS_RANG = {
   cle: 'sans-rang',
   nom: 'Sans rang',
+  nomEn: 'Unranked',
   citation: "Nul nom au registre, mais les mêmes lunes au-dessus de la tête : qui marche avec la caravane est de la caravane.",
 }
 

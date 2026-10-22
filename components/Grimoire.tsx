@@ -96,7 +96,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     const exLibris: PageExLibris[] = relie ? [{ type: 'exlibris', id: 'ex-libris', partie: 'sommaire', titre: 'Ex-libris', court: 'Ex-libris', icone: 'quill' }] : []
     // One page per craft of the workshop, after the recipes' contents.
     const metiers: PageMetier[] = metiersDe(registre.donnees?.recettes ?? []).map((m) => ({
-      type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, court: m.nom, icone: m.icone,
+      type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, titreEn: m.en, court: m.nom, icone: m.icone,
     }))
     if (!vues.length && !exLibris.length && !metiers.length) return livreServeur
     const p = livreServeur.pages

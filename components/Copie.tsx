@@ -3,7 +3,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
 import type { Livre, Page, PageChapitre, PageNote } from '@/lib/types'
 import { prix, romain } from '@/lib/format'
-import { CitationFin, EnTete, Frontispice, type Ctx } from './Pages'
+import { chapitreDe, CitationFin, EnTete, Frontispice, surtitreDe, type Ctx } from './Pages'
 import { Fleuron, GlypheArtisan } from './Ornements'
 import { DosCouverture, FaceCouverture } from './Couverture'
 
@@ -58,20 +58,21 @@ export default function Copie({ livre }: { livre: Livre }) {
       <section className="feuille" style={teinte(livre, 'sommaire')}>
         <header className="en-tete">
           <div className="surtitre">Registre de la Caravane</div>
-          <h2 className="titre-page">Sommaire</h2>
+          <h2 className="titre-page">{sommaire?.titre ?? 'Sommaire'}</h2>
+          {sommaire?.titreEn && <div className="sous-titre">{sommaire.titreEn}</div>}
           <Fleuron />
         </header>
         <SommaireCopie livre={livre} />
         {sommaire?.type === 'sommaire' && <CitationFin texte={sommaire.citation} />}
       </section>
 
-      {chapitres.map((page, n) => (
-        <ChapitreCopie key={page.id} page={page} n={n + 1} livre={livre} />
+      {chapitres.map((page) => (
+        <ChapitreCopie key={page.id} page={page} livre={livre} />
       ))}
 
       {notes.map((page) => (
         <section key={page.id} id={page.id} className="feuille" style={teinte(livre, page.partie)}>
-          <EnTete surtitre="Pense-bête" titre={page.titre} icone={livre.icones[page.icone]}>
+          <EnTete surtitre={surtitreDe(livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={livre.icones[page.icone]}>
             {page.resume && <p className="intro">{page.resume}</p>}
             {page.auteur && <p className="signature">Consigné par {page.auteur}</p>}
             {page.citation && (
@@ -105,6 +106,10 @@ const teinte = (livre: Livre, partie: Page['partie']) => ({ '--teinte': livre.pa
 
 /** Contents of the copy: chapters and memos link to their pages; unwritten books are only named. */
 function SommaireCopie({ livre }: { livre: Livre }) {
+  const numero = (p: Page) => {
+    const n = chapitreDe(livre.pages, p)
+    return n ? <span className="renvoi">{romain(n).toUpperCase()}.</span> : null
+  }
   return (
     <nav className="table-matieres copie-sommaire">
       {livre.parties
@@ -129,7 +134,7 @@ function SommaireCopie({ livre }: { livre: Livre }) {
                   {pages.map((p, i) => (
                     <li key={p.id}>
                       <a href={`#${p.id}`}>
-                        {p.type === 'chapitre' && <span className="renvoi">{romain(i + 1).toUpperCase()}.</span>}
+                        {numero(p)}
                         <span className="entree">{p.titre}</span>
                         <span className="points" />
                         {p.type === 'chapitre' && (
@@ -149,12 +154,12 @@ function SommaireCopie({ livre }: { livre: Livre }) {
   )
 }
 
-function ChapitreCopie({ page, n, livre }: { page: PageChapitre; n: number; livre: Livre }) {
+function ChapitreCopie({ page, livre }: { page: PageChapitre; livre: Livre }) {
   const prixConnus = page.articles.flatMap((a) => [a.min, a.max]).filter((v): v is number => v !== null)
   return (
     <section id={page.id} className="feuille" style={teinte(livre, page.partie)}>
       <EnTete
-        surtitre={`Livre des Marchandises · Chapitre ${romain(n).toUpperCase()}`}
+        surtitre={surtitreDe(livre, page)}
         titre={page.titre}
         sousTitre={page.titreEn}
         icone={livre.icones[page.icone]}

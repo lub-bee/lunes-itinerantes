@@ -1,5 +1,6 @@
 ---
 titre: L'ombre de la Caravane
+titre_en: The Caravan's Shadow
 court: L'ombre
 resume: La caravane vit de sa réputation. Ce que Khajiit fait dans l'ombre ne doit jamais l'entacher.
 icone: double-face-mask

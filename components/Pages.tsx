@@ -87,6 +87,25 @@ function Folio({ n }: { n: number }) {
   return <div className="folio">{romain(n)}</div>
 }
 
+/**
+ * A page's chapter in its part: its rank among the part's pages that have a side tab, in the book's order
+ * (so crafts and missives renumber themselves as they come and go). None for the front matter (ex-libris,
+ * Sommaire) and for closed missives (opened from the list, no side tab).
+ */
+export function chapitreDe(pages: Page[], page: Page): number | null {
+  const sansOnglet = (p: Page) => p.partie === 'sommaire' || (p.type === 'missive' && p.close)
+  if (sansOnglet(page)) return null
+  const n = pages.filter((p) => p.partie === page.partie && !sansOnglet(p)).findIndex((p) => p.id === page.id)
+  return n < 0 ? null : n + 1
+}
+
+/** The surtitle of every page of a part: « Livre des Marchandises · Chapitre II », or the part's book alone. */
+export function surtitreDe(livre: Livre, page: Page): string {
+  const livreDe = livre.parties.find((p) => p.id === page.partie)?.titre ?? ''
+  const n = chapitreDe(livre.pages, page)
+  return n ? `${livreDe} · Chapitre ${romain(n).toUpperCase()}` : livreDe
+}
+
 const teinte = (ctx: Ctx, page: Page) => ({ '--teinte': ctx.livre.parties.find((p) => p.id === page.partie)?.couleur } as CSSProperties)
 
 /* ───────────────────────────── Left pages ───────────────────────────── */
@@ -102,7 +121,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return <TeteChapitre page={page} ctx={ctx} compact={compact} />
       case 'note':
         return (
-          <EnTete surtitre="Pense-bête" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             {page.resume && <p className="intro lettrine">{page.resume}</p>}
             {page.auteur && <p className="signature">Consigné par {page.auteur}</p>}
             {page.citation && (
@@ -115,14 +134,14 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         )
       case 'missives':
         return (
-          <EnTete surtitre="Livre des Missives" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheMissives page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'missive': {
         return (
           <EnTete
-            surtitre={`Missive n° ${page.numero}`}
+            surtitre={surtitreDe(ctx.livre, page)}
             titre={page.titre}
             icone={ctx.livre.icones[page.icone]}
             compact={compact}
@@ -133,33 +152,34 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       }
       case 'coffre':
         return (
-          <EnTete surtitre="Livre des Missives" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheCoffre page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'atelier':
         return (
-          <EnTete surtitre="L'Atelier" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'caravane':
         return (
-          <EnTete surtitre="La Caravane" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             {!compact && <p className="intro lettrine">{page.intro}</p>}
           </EnTete>
         )
       case 'metier':
         return (
-          <EnTete surtitre="L'Atelier · Recettes" titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheMetier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'avenir':
         return (
           <EnTete
-            surtitre={ctx.livre.parties.find((p) => p.id === page.partie)?.titre ?? ''}
+            surtitre={surtitreDe(ctx.livre, page)}
             titre={page.titre}
+            sousTitre={page.titreEn}
             icone={ctx.livre.icones[page.icone]}
             compact={compact}
           >
@@ -232,10 +252,9 @@ export function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
 }
 
 function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; compact: boolean }) {
-  const surtitre = `Livre des Marchandises · Chapitre ${romain(ctx.livre.pages.filter((p) => p.type === 'chapitre').indexOf(page) + 1).toUpperCase()}`
   const prixConnus = page.articles.flatMap((a) => [a.min, a.max]).filter((v): v is number => v !== null)
   return (
-    <EnTete surtitre={surtitre} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+    <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
       <label className="recherche-locale">
         <Plume className="plume" />
@@ -353,9 +372,11 @@ export function PageUnique({ page, ctx }: { page: Page; ctx: Ctx }) {
 
 function TableDesMatieres({ ctx }: { ctx: Ctx }) {
   const { parties, pages } = ctx.livre
+  const sommaireEn = pages.find((p) => p.type === 'sommaire')?.titreEn
   return (
     <nav className="table-matieres" aria-label="Table des matières">
       <h3 className="titre-table">Table des matières</h3>
+      {sommaireEn && <div className="sous-titre sous-titre-table">{sommaireEn}</div>}
       {parties
         .filter((p) => p.id !== 'sommaire')
         .map((partie) => (

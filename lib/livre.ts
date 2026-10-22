@@ -13,12 +13,13 @@ import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } fr
 
 const CONTENU = path.join(process.cwd(), 'content')
 
+/** The parts of the grimoire; `titre` (« Livre de/des … ») is also the surtitle of every page of the part. */
 export const PARTIES: Partie[] = [
   { id: 'sommaire', titre: 'Sommaire', court: 'Sommaire', couleur: '#8a6a1f', icone: 'open-book' },
   { id: 'marchandises', titre: 'Livre des Marchandises', court: 'Marchandises', couleur: '#8a1c12', icone: 'coins' },
-  { id: 'atelier', titre: "L'Atelier", court: 'Atelier', couleur: '#2f5b3a', icone: 'cauldron' },
-  { id: 'missives', titre: 'Missives en cours', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
-  { id: 'caravane', titre: 'La Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
+  { id: 'atelier', titre: "Livre de l'Atelier", court: 'Atelier', couleur: '#2f5b3a', icone: 'cauldron' },
+  { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
+  { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
 ]
 
 type DefChapitre = { id: string; titre: string; titreEn: string; court: string; icone?: string; intro: string }
@@ -148,6 +149,7 @@ async function lireNotes(): Promise<PageNote[]> {
         id: `note-${slug(f.replace(/\.md$/, '').replace(/^\d+-/, ''))}`,
         partie: 'caravane' as const,
         titre,
+        titreEn: meta.titre_en || '',
         court: meta.court || titre,
         icone: meta.icone || 'scroll-unfurled',
         resume: meta.resume || '',
@@ -188,28 +190,28 @@ export async function chargerLivre(): Promise<Livre> {
   }
 
   const pages: Page[] = [
-    { type: 'sommaire', id: 'sommaire', partie: 'sommaire', titre: 'Sommaire', court: 'Sommaire', icone: 'open-book',
+    { type: 'sommaire', id: 'sommaire', partie: 'sommaire', titre: 'Sommaire', titreEn: 'Contents', court: 'Sommaire', icone: 'open-book',
       citation: "Un marchand sans registre est un marchand qui oublie ; un marchand qui oublie est un marchand ruiné." },
     ...chapitres,
     {
-      type: 'atelier', vue: 'recettes', id: 'recettes', partie: 'atelier', titre: 'Sommaire des recettes', court: 'Sommaire', icone: 'cauldron',
+      type: 'atelier', vue: 'recettes', id: 'recettes', partie: 'atelier', titre: 'Sommaire des recettes', titreEn: 'Recipe Index', court: 'Sommaire', icone: 'cauldron',
       intro: 'Les recettes des artisans, rangées par métier : ce qu’il faut pour une fournée, et ce que coûtent ses matières. Chacun peut en consigner une nouvelle ou corriger une quantité.',
     },
     {
-      type: 'atelier', vue: 'matieres', id: 'matieres', partie: 'atelier', titre: 'Matières premières', court: 'Matières', icone: 'wheat',
+      type: 'atelier', vue: 'matieres', id: 'matieres', partie: 'atelier', titre: 'Matières premières', titreEn: 'Raw Materials', court: 'Matières', icone: 'wheat',
       intro: 'Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre : le prix qu’on en paie d’ordinaire, et celui auquel on achète sans hésiter.',
     },
     {
-      type: 'missives', id: 'missives', partie: 'missives', titre: 'Missives', court: 'Missives', icone: 'wax-seal',
+      type: 'missives', id: 'missives', partie: 'missives', titre: 'Missives', titreEn: 'Commissions', court: 'Missives', icone: 'wax-seal',
       intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
       citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
     },
     {
-      type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', court: 'Le coffre', icone: 'open-chest',
+      type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', titreEn: 'The Missive Chest', court: 'Le coffre', icone: 'open-chest',
       intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
     },
     {
-      type: 'caravane', id: 'caravane', partie: 'caravane', titre: 'La Caravane', court: 'Caravane', icone: 'lynx-head',
+      type: 'caravane', id: 'caravane', partie: 'caravane', titre: 'La Caravane', titreEn: 'The Caravan', court: 'Caravane', icone: 'lynx-head',
       intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rang que chacun tient sur la route. Touche un sceau pour lire les noms de ceux qui le portent.',
       citation: "Une caravane n'est forte que de ceux qui marchent avec elle.",
     },
