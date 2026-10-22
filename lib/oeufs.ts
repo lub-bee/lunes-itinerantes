@@ -38,14 +38,6 @@ export const EMBLEME = {
   note: 'Les lunes veillent sur celui qui sait regarder.',
 }
 
-/* ── The midnight hour (the reader's own clock) ── */
-
-export const MINUIT = {
-  heure: 0,
-  /** Replaces the title page's usual saying. */
-  citation: '« Sous les lunes, Khajiit fait ses meilleures affaires. »',
-}
-
 /* ── Names tried on the ex-libris (before the registre is asked; nothing is signed) ── */
 
 export const NOMS_SPECIAUX: { noms: string[]; refus: string }[] = [

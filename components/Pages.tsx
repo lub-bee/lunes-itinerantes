@@ -6,8 +6,7 @@ import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
-import { divinite, MINUIT, poemesDe, PRESENCE } from '@/lib/oeufs'
-import { useMinuit } from './Oeufs'
+import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
 import { DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
@@ -254,14 +253,13 @@ export function EnTete({
 
 export function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
   // The midnight hour (an egg): the title page turns night-blue and says something else.
-  const minuit = useMinuit()
   return (
     <div className={`frontispice ${compact ? 'compact' : ''}`}>
       <Embleme taille={160} className="frontispice-embleme" />
       <div className="frontispice-sur">Grimoire de la</div>
       <h2 className="frontispice-titre">Caravane des Lunes Itinérantes</h2>
       <Fleuron />
-      <p className="citation">{minuit ? MINUIT.citation : '« Il n’existe rien qu’un bon Khajiit ne saurait vendre. »'}</p>
+      <p className="citation">« Il n’existe rien qu’un bon Khajiit ne saurait vendre. »</p>
       {!compact && (
         <p className="frontispice-texte">
           Registre de la Caravane des Lunes Itinérantes. Qu&apos;on le consulte avant chaque vente, et que jamais d&apos;yeux non

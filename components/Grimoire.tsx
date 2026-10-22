@@ -16,7 +16,7 @@ import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Co
 import { useRegistre } from './Registre'
 import { idMissive, metiersDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
-import { DUREES_OEUFS, EffetsOeufs, ivresse, useMinuit, type Oeuf } from './Oeufs'
+import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
 type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
@@ -492,7 +492,6 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   /* ── Easter eggs (lib/oeufs.ts) ─────────────────────────── */
 
   const [oeuf, setOeuf] = useState<Oeuf | null>(null)
-  const minuit = useMinuit()
   useEffect(() => {
     if (!oeuf) return
     const t = setTimeout(() => setOeuf(null), DUREES_OEUFS[oeuf.genre])
@@ -649,7 +648,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   return (
     <div
-      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''} ${minuit ? 'minuit' : ''}`}
+      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''}`}
       style={{ '--gaufrage': GAUFRAGE.intensite, '--gaufrage-registres': GAUFRAGE.registres, '--gaufrage-exlibris': GAUFRAGE.exLibris } as CSSProperties}
     >
       <header className="entete">

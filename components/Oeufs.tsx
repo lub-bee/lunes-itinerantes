@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
-import { MINUIT } from '@/lib/oeufs'
 
 /*
  * What the easter eggs show over the book (triggers and texts: lib/oeufs.ts). Everything here is
@@ -14,33 +13,6 @@ export type Oeuf = { genre: 'skooma' | 'sucre' | 'genou' | 'fus' | 'lunes'; n: n
 
 /** How long each egg stays (ms), before it is taken away. */
 export const DUREES_OEUFS: Record<Oeuf['genre'], number> = { skooma: 11000, sucre: 6500, genou: 6500, fus: 2600, lunes: 7000 }
-
-/**
- * `?minuit` in the URL forces the midnight hour, for testing. Read when the module loads, because the
- * grimoire rewrites the URL (page hash) before effects run; kept for the tab in sessionStorage.
- */
-const MINUIT_FORCE = (() => {
-  if (typeof window === 'undefined') return false
-  try {
-    if (new URLSearchParams(window.location.search).has('minuit')) sessionStorage.setItem('minuit', '1')
-    return sessionStorage.getItem('minuit') === '1'
-  } catch {
-    return new URLSearchParams(window.location.search).has('minuit')
-  }
-})()
-
-/** The reader's clock reads the midnight hour (checked every minute). */
-export function useMinuit(): boolean {
-  const [minuit, setMinuit] = useState(false)
-  useEffect(() => {
-    const force = MINUIT_FORCE
-    const voir = () => setMinuit(force || new Date().getHours() === MINUIT.heure)
-    voir()
-    const t = setInterval(voir, 60_000)
-    return () => clearInterval(t)
-  }, [])
-  return minuit
-}
 
 /** How long the skooma sways the book (ms); its note is written once the book stands still again. */
 const DUREE_IVRESSE = 5600
