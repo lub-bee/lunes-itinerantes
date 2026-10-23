@@ -401,8 +401,14 @@ checks; for the page to hide a restricted action, `/api/marchand` must then look
   chest, the oldest served first. A recipe loop is shown in character and refused when a recipe is written.
 - **Stock**: the ledger replayed in time order; a *relevé* sets the counted quantity, other movements
   add their signed quantity. Each relevé records the expected quantity and the gap in its note.
-- **Value of an item** (weighs contributions): catalogue *prix de prod*, else its recipe's ingredients ÷
-  yield, else the material's *Prix courant*, else 0. Computed at read time.
+- **Value of an item** (weighs contributions): catalogue *prix de prod*, else its usual recipe's
+  ingredients ÷ yield, else the material's *Prix courant*, else 0. Computed at read time.
+- **Several recipes per product**: each is a *variante* (1, 2, 3…). The **recette d'usage** (the one
+  marked `Usage`, else variant 1) drives the displayed cost, the value above, the recipe tree and the
+  missives' needs. A missive may choose another recipe for any item of its tree (`Recettes`), which
+  recomputes its needs for everyone; the choice is kept with the missive.
+- **Raw materials that also have a recipe** (e.g. Rubis): bought by default — valued and costed at their
+  *Prix courant*, not exploded in the needs; a missive may choose to make them (« par la recette N »).
 - **Contribution**: a deposit earns quantity × value; a craft earns outputs − inputs (never below 0);
   counts and deliveries earn nothing. Share of the merit = member's value ÷ the missive's total.
 - **Closing**: the reward is split in whole septims: the *part commune* (default 20 %, set at closing
@@ -419,8 +425,8 @@ is `ONGLETS` at the top of `commandes.gs`.
 |---|---|---|
 | **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member) |
 | **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims per unit — older header `Valeur`), `Bonne affaire`, `Note` |
-| **Recettes** | one ingredient of one product | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note` |
-| **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture` |
+| **Recettes** | one ingredient of one recipe | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note`, `Variante` (1, 2, 3… — a product may have several recipes; empty = 1), `Usage` (`oui` on the rows of the product's *recette d'usage*; none marked = variant 1) |
+| **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture`, `Recettes` (the recipes chosen for this missive, same on each of its rows: `Potion de vigueur=2; Rubis=acheter`; empty = the usual ones) |
 | **Mouvements** (created by the script, append-only) | one movement | `Horodatage`, `N° action`, `N° missive`, `Membre`, `Type`, `Objet`, `Quantité`, `Note` |
 | **Catalogues** (the price list published as CSV; read, and appended to by `vente` only) | one article | the owner's headers, found by the names of *Accepted column names* above (`Chapitre`, `Article`, `Article (EN)`, `Prix de prod`, `Prix mini`, `Prix idéal`, `Artisan`, `Note`); the script never adds or renames a column there and fills only the columns that exist |
 
@@ -446,8 +452,10 @@ refused by the script itself (`already closed`), under the lock.
 | `missive` | `{ missive: { numero, horodatage, titre, commanditaire, echeance, membre, lignes: [{ produit, quantite }] } }` | One Missives row per line, Statut `en cours` |
 | `releve`, `depot`, `fabrication` (`livraison` kept) | `{ mouvements: [{ horodatage, action, missive, membre, objet, quantite, note }] }` | Mouvements rows, Type set from the action |
 | `cloture` | `{ cloture: { numero, action, horodatage, membre, statut, recompense, partCommune, note, livraisons: [{ objet, quantite, note }], partage: [{ membre, montant, note }] } }` | The missive's rows closed (Statut `livrée`/`inachevée`, Récompense, Part commune, Close le/par, Note de clôture); its `livraison` rows; one `partage` row per member |
-| `recette` | `{ recette: { produit, ancienProduit?, en, rendement, artisan, note, ingredients: [{ ingredient, quantite }], nouvellesRessources?: [nom] } }` | The product's rows replaced (no ingredient = recipe removed); from v3f, the ingredients named in `nouvellesRessources` (known nowhere: not a raw material, not a recipe's or the catalogue's product) are added to Ressources with empty prices, answer `ressourcesAjoutees`. With an older script the grimoire adds them itself, one `ressource` write each |
+| `recette` | `{ recette: { produit, variante, usage, ancienProduit?, ancienneVariante?, en, rendement, artisan, note, ingredients: [{ ingredient, quantite }], nouvellesRessources?: [nom] } }` | From v3g, ONE recipe (variant) of the product: its rows replaced, the other variants untouched (no ingredient = that variant removed; numbers never shift); moved from `ancienProduit`/`ancienneVariante`, the old rows go. The grimoire numbers it: an edit keeps its number, a new recipe of a product that already has some takes the next one. Before v3g the script replaced every row of the product, so the grimoire refuses (in character) any write that would touch a second variant; from v3f, the ingredients named in `nouvellesRessources` (known nowhere: not a raw material, not a recipe's or the catalogue's product) are added to Ressources with empty prices, answer `ressourcesAjoutees`. With an older script the grimoire adds them itself, one `ressource` write each |
 | `ressource` | `{ ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }` | The row updated, or added |
+| `usage` (v3g) | `{ usage: { produit, variante } }` | `Usage` = `oui` on that variant's rows, emptied on the product's other rows |
+| `choix` (v3g) | `{ choix: { numero, recettes } }` | The missive's `Recettes` cell on each of its rows (`recettes`: the whole list as text, built by the grimoire) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
@@ -465,6 +473,13 @@ that server's copy.
   `ressemblance` in `lib/recherche.ts`) and offers to open the existing one; each ingredient row offers
   the items already known (raw materials, products, earlier ingredients), so the same item is not
   written under two spellings. An ingredient known nowhere joins the raw materials, prices empty.
+- One line per product, with « N recettes » when it has several. Its slip shows every recipe one
+  under the other (ingredients, materials' cost per unit), marks the usual one and the cheapest, and
+  offers « en faire la recette d'usage », « Corriger la recette n° N » and « Ajouter une variante ».
+  Writing a recipe under an existing product's name makes it that product's next variant (never an
+  overwrite). A raw material that also has a recipe says « se fabrique aussi » and opens its recipes.
+- On a missive's page, each item of « Ce qu'il faut réunir » that has several recipes (or is a raw
+  material with one) gets a selector « par la recette N » / « acheté »: the needs recompute at once.
 - A recipe's slip says whether the caravan sells its product (« Au catalogue de la caravane », its
   floor and ceiling, a link to its chapter) or offers « le mettre en vente »: a slip with the chapter
   (proposed from the craft, `chapitre` in `lib/metiers.ts`), the names, the cost (the recipe's value:

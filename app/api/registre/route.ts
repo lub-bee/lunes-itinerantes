@@ -12,6 +12,10 @@ import {
   livres,
   PART_COMMUNE_DEFAUT,
   indexRecettes,
+  choixEnTexte,
+  estMatiere,
+  recetteUsage,
+  variantesDe,
   partager,
   rejouer,
   texteCycle,
@@ -110,14 +114,17 @@ function liste(v: unknown, max: number, quoi: string): Record<string, unknown>[]
 function nomsConnus(lu: Lu, articles: { fr: string; en: string }[]): Map<string, string> {
   const res = new Map<string, string>()
   const ajouter = (n: string) => n && !res.has(cle(n)) && res.set(cle(n), n)
+  // The raw materials' own spelling wins over an ingredient's (« lys bleu » → « Lys Bleu »), and an
+  // English name of the catalogue or of a raw material leads to its French name.
   articles.forEach((a) => ajouter(a.fr))
+  lu.ressources.forEach((r) => ajouter(r.nom))
   lu.recettes.forEach((r) => {
     ajouter(r.produit)
     r.ingredients.forEach((i) => ajouter(i.nom))
   })
-  lu.ressources.forEach((r) => ajouter(r.nom))
   rejouer(lu.mouvements).stock.forEach((s) => ajouter(s.nom))
   articles.forEach((a) => a.en && !res.has(cle(a.en)) && res.set(cle(a.en), a.fr))
+  lu.ressources.forEach((r) => r.en && !res.has(cle(r.en)) && res.set(cle(r.en), r.nom))
   return res
 }
 
@@ -281,9 +288,24 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
         const q = nombreOuVide(i?.quantite, 100000, `Quantité de ${canon}`) || non(`Quantité de ${canon} : un nombre plus grand que zéro est attendu.`)
         return [{ ingredient: canon, quantite: q }]
       })
-      const autres = lu.recettes.filter((r) => cle(r.produit) !== cle(produit) && (!ancien || cle(r.produit) !== cle(ancien)))
-      const nouvelle: Recette = { produit, en: mot(b.en, 120), rendement, artisan: mot(b.artisan, 40), note: mot(b.note, 200), ingredients: ingredients.map((i) => ({ nom: i.ingredient, quantite: i.quantite })) }
-      const cycle = trouverCycle(produit, indexRecettes([...autres, nouvelle]))
+      // One recipe (variant) of a product is written at a time. Editing keeps its number; a new recipe of a
+      // product that already has some becomes its next variant (never overwrites one); moved to another
+      // product's name, it becomes that product's next variant.
+      const ancienneVariante = ancien ? Math.max(1, Math.round(Number(b.ancienneVariante) || 1)) : 0
+      const editee = ancien ? lu.recettes.find((r) => cle(r.produit) === cle(ancien) && r.variante === ancienneVariante) : undefined
+      const deplacee = Boolean(editee) && cle(ancien) !== cle(produit)
+      const soeurs = variantesDe(lu.recettes, produit).filter((r) => r !== editee)
+      const variante = editee && !deplacee ? editee.variante : soeurs.length ? Math.max(...soeurs.map((r) => r.variante)) + 1 : 1
+      const usage = Boolean(editee && !deplacee && editee.usage)
+      if (!ingredients.length && !editee) non('Une recette sans matière ne se consigne pas.')
+      // A script before v3g replaces every row of the product: it would erase the other recipes.
+      if (!lu.variantes && (variante !== 1 || soeurs.length > 0 || (deplacee && variantesDe(lu.recettes, ancien).length > 1)))
+        non('Le scribe du registre ne sait pas encore tenir plusieurs recettes pour un même ouvrage : qu’on recopie le dernier script du grimoire dans la feuille, puis qu’on réessaie.')
+      const autres = lu.recettes.filter((r) => r !== editee)
+      const nouvelle: Recette = { produit, en: mot(b.en, 120), variante, usage, rendement, artisan: mot(b.artisan, 40), note: mot(b.note, 200), ingredients: ingredients.map((i) => ({ nom: i.ingredient, quantite: i.quantite })) }
+      const index = indexRecettes(autres, lu.ressources)
+      index.set(cle(produit), nouvelle)
+      const cycle = trouverCycle(produit, index)
       if (cycle) non(texteCycle(cycle))
       // Ingredients known nowhere (not a raw material, not a product of a recipe or of the catalogue)
       // join the raw materials, their prices left to fill.
@@ -295,10 +317,12 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       const nouvellesRessources = ingredients.map((i) => i.ingredient).filter((n) => !connus.has(cle(n)))
       return {
         action,
-        charge: { recette: { produit, ancienProduit: ancien || undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources } },
+        charge: {
+          recette: { produit, variante, usage, ancienProduit: editee ? ancien : undefined, ancienneVariante: editee ? ancienneVariante : undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources },
+        },
         message: ingredients.length
-          ? `La recette de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} rejoin${nouvellesRessources.length > 1 ? 'nent' : 't'} les matières premières, prix à inscrire.` : ''}`
-          : `La recette de ${produit} est effacée du registre.`,
+          ? `La recette${variante > 1 || soeurs.length ? ` n° ${variante}` : ''} de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} rejoin${nouvellesRessources.length > 1 ? 'nent' : 't'} les matières premières, prix à inscrire.` : ''}`
+          : `La recette${ancienneVariante > 1 || soeurs.length ? ` n° ${ancienneVariante}` : ''} de ${produit} est effacée du registre.`,
         nouvellesRessources,
       }
     }
@@ -316,6 +340,39 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
         note: mot(b.note, 200),
       }
       return { action, charge: { ressource }, message: `La ressource ${nom} est inscrite au registre.` }
+    }
+
+    case 'usage': {
+      // Which recipe of a product is its usual one (drives costs, values and the missives' needs).
+      const vs = variantesDe(lu.recettes, mot(b.produit, 120))
+      if (!vs.length) non('Nulle recette n’est consignée pour cet ouvrage.')
+      const v = vs.find((r) => r.variante === Math.round(Number(b.variante)))
+      if (!v) non('Cette recette est introuvable dans le registre.')
+      return { action, charge: { usage: { produit: v!.produit, variante: v!.variante } }, message: `La recette n° ${v!.variante} devient la recette d’usage de ${v!.produit}.` }
+    }
+
+    case 'choix': {
+      // A missive's recipe for one of its items (« usage » = back to the usual recipe; 0 / « acheter » = buy).
+      const m = missiveOuverte()
+      const nom = mot(b.nom, 120) || non('L’ouvrage manque.')
+      const vs = variantesDe(lu.recettes, nom)
+      if (!vs.length) non('Nulle recette n’est consignée pour cet ouvrage.')
+      const matiere = estMatiere(lu.ressources, nom)
+      const voulu = String(b.variante ?? '')
+      const variante = voulu === 'usage' ? null : voulu === 'acheter' || voulu === '0' ? 0 : Math.round(Number(voulu))
+      if (variante === 0 && !matiere) non('Seule une matière première s’achète : cet ouvrage se façonne.')
+      if (variante !== null && variante !== 0 && !vs.some((r) => r.variante === variante)) non('Cette recette est introuvable dans le registre.')
+      // The default needs no line: the usual recipe, or buying a raw material.
+      const parDefaut = variante === null || (matiere ? variante === 0 : variante === recetteUsage(vs)!.variante)
+      const choix = [...m.choix.filter((c) => cle(c.nom) !== cle(nom)), ...(parDefaut ? [] : [{ nom: vs[0].produit, variante: variante! }])]
+      return {
+        action,
+        charge: { choix: { numero: m.numero, recettes: choixEnTexte(choix) } },
+        message:
+          variante === 0 || (variante === null && matiere)
+            ? `Pour cette missive, ${vs[0].produit} s’achète.`
+            : `Pour cette missive, ${vs[0].produit} se façonne par la recette n° ${variante ?? recetteUsage(vs)!.variante}.`,
+      }
     }
 
     case 'vente': {
@@ -337,7 +394,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix']
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)

@@ -5,7 +5,7 @@ import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives } f
 import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
-import { arbre, cle, coutMatieres, enStock, estClose, type Recette, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
+import { arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { Icone, Plume } from './Ornements'
 
@@ -16,8 +16,9 @@ import { Icone, Plume } from './Ornements'
  */
 
 export type Fiche =
-  | { genre: 'recette'; nom: string }
-  | { genre: 'edition-recette'; nom: string; artisan?: string }
+  | { genre: 'recette'; nom: string; variante?: number }
+  /** `variante`: the recipe edited (else the usual one); `nouvelle`: a new recipe (variant) of that product. */
+  | { genre: 'edition-recette'; nom: string; artisan?: string; variante?: number; nouvelle?: boolean }
   | { genre: 'ressource'; nom: string }
   | { genre: 'missive' }
   | { genre: 'releve'; numero?: string }
@@ -288,6 +289,49 @@ export function Coche({ titre = 'réuni' }: { titre?: string }) {
   )
 }
 
+/**
+ * « par la recette N »: for an item with several recipes (or a raw material that also has one), the
+ * recipe this missive uses, or buying it; changed at once for everyone (stored with the missive).
+ */
+function ChoixRecette({ nom, e, reg, ouverte }: { nom: string; e: EtatMissive; reg: CtxRegistre; ouverte: boolean }) {
+  const d = reg.r.donnees
+  if (!d) return null
+  const vs = variantesDe(d.recettes, nom)
+  const matiere = estMatiere(d.ressources, nom)
+  if (!(vs.length > 1 || (matiere && vs.length > 0))) return null
+  const usage = recetteUsage(vs)!
+  const voulu = e.missive.choix.find((c) => cle(c.nom) === cle(nom))?.variante
+  const actuel = voulu ?? (matiere ? 0 : usage.variante)
+  const mot = (v: number) => (v === 0 ? 'acheté' : `par la recette ${v}${v === usage.variante && vs.length > 1 ? ' (d’usage)' : ''}`)
+  if (!ouverte || reg.r.marchand?.droits?.choix === false) return <em className="besoins-recette">{mot(actuel)}</em>
+  const changer = (v: number) => {
+    const parDefaut = matiere ? v === 0 : v === usage.variante
+    reg.r.agir('choix', { missive: e.missive.numero, nom: vs[0].produit, variante: v === 0 ? 'acheter' : String(v) }, (dd) => ({
+      ...dd,
+      missives: dd.missives.map((m) =>
+        m.numero !== e.missive.numero ? m : { ...m, choix: [...m.choix.filter((c) => cle(c.nom) !== cle(nom)), ...(parDefaut ? [] : [{ nom: vs[0].produit, variante: v }])] },
+      ),
+    }))
+  }
+  return (
+    <select
+      className="besoins-recette"
+      value={actuel}
+      aria-label={`Recette de ${nom} pour cette missive`}
+      onClick={(ev) => ev.stopPropagation()}
+      onKeyDown={(ev) => ev.stopPropagation()}
+      onChange={(ev) => changer(Number(ev.target.value))}
+    >
+      {matiere && <option value={0}>acheté</option>}
+      {vs.map((v) => (
+        <option key={v.variante} value={v.variante}>
+          {mot(v.variante)}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 function LigneBesoinVue({ b, e, reg, ouverte, icones }: { b: LigneBesoin; e: EtatMissive; reg: CtxRegistre; ouverte: boolean; icones: Record<string, string> }) {
   const droits = reg.r.marchand?.droits
   // Progress of the row: what the chest holds (and, for a requested good, what was delivered).
@@ -332,6 +376,7 @@ function LigneBesoinVue({ b, e, reg, ouverte, icones }: { b: LigneBesoin; e: Eta
             </button>
           )}
         </span>
+        <ChoixRecette nom={b.nom} e={e} reg={reg} ouverte={ouverte} />
         {b.niveau !== 'fini' && <AFaconner b={b} />}
         <Jauge avance={avance} />
       </span>
@@ -599,7 +644,13 @@ function ChampRecette({ recherche }: { recherche?: RechercheLocale }) {
 }
 
 /** A recipe matches the page's search and the global one by its French or English name, or its craft. */
-const recetteCherchee = (x: Recette, requetes: string[]) => requetes.every((q) => nomsCorrespondent([x.produit, x.en, metierDe(x.artisan).nom], q))
+const recetteCherchee = (x: Recette & { toutes?: Recette[] }, requetes: string[]) =>
+  requetes.every((q) => (x.toutes ?? [x]).some((v) => nomsCorrespondent([v.produit, v.en, metierDe(v.artisan).nom], q)))
+
+/** « 2 recettes » after a product that has several. */
+function MentionVariantes({ n }: { n: number }) {
+  return n > 1 ? <em className="mention-variantes">{n} recettes</em> : null
+}
 
 export function GaucheAtelier({ page, reg, icones, compact, recherche }: { page: PageAtelier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
   const r = reg?.r
@@ -631,10 +682,12 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
   if (!r?.donnees?.relie || !reg) return null
   const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const ressources = [...r.donnees.ressources].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+  // Raw materials that also have a recipe (bought by default; a missive may craft them).
+  const fabricables = new Set(r.donnees.recettes.map((x) => cle(x.produit)))
   const tab = interactif ? 0 : -1
   if (page.vue === 'recettes' && requetes.some(Boolean)) {
     // Searching: every recipe whose French or English name answers, with its craft.
-    const trouvees = recettes.filter((x) => recetteCherchee(x, requetes))
+    const trouvees = produitsDe(recettes).filter((x) => recetteCherchee(x, requetes)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
     return (
       <div className="atelier-droite">
         <h3 className="titre-section">Recettes trouvées</h3>
@@ -644,7 +697,9 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
               <li key={x.produit}>
                 <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
                   <span className="noms">
-                    <span className="entree">{x.produit}</span>
+                    <span className="entree">
+                      {x.produit} <MentionVariantes n={x.nbRecettes} />
+                    </span>
                     {x.en && <span className="nom-en">{x.en}</span>}
                   </span>
                   <span className="points" />
@@ -677,7 +732,7 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
                   <span className="entree">{m.nom}</span>
                   <span className="points" />
                   <span className="renvoi">
-                    {m.recettes.length} recette{m.recettes.length > 1 ? 's' : ''}
+                    {m.recettes.length} ouvrage{m.recettes.length > 1 ? 's' : ''}
                   </span>
                 </button>
               </li>
@@ -712,15 +767,18 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
               role="button"
               tabIndex={tab}
               className="ligne matiere"
-              onClick={() => reg.ouvrir({ genre: 'ressource', nom: x.nom })}
+              onClick={() => reg.ouvrir(fabricables.has(cle(x.nom)) ? { genre: 'recette', nom: x.nom } : { genre: 'ressource', nom: x.nom })}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return
                 e.preventDefault()
-                reg.ouvrir({ genre: 'ressource', nom: x.nom })
+                reg.ouvrir(fabricables.has(cle(x.nom)) ? { genre: 'recette', nom: x.nom } : { genre: 'ressource', nom: x.nom })
               }}
             >
               <span className="noms">
-                <span className="nom-fr">{x.nom}</span>
+                <span className="nom-fr">
+                  {x.nom}
+                  {fabricables.has(cle(x.nom)) && <em className="mention-variantes"> se fabrique aussi</em>}
+                </span>
                 {x.en && <span className="nom-en">{x.en}</span>}
               </span>
               <span className="points-conduite" aria-hidden />
@@ -739,10 +797,15 @@ export const auCoffre = (reg: CtxRegistre, nom: string) => (reg.r.donnees ? enSt
 
 /* ───────────────────────── One craft of the workshop ───────────────────────── */
 
-/** Recipes grouped by craft (« Artisan »), known crafts by name, « Sans métier » last. */
+/** One entry per product: its usual recipe, and how many it has. */
+export function produitsDe(recettes: Recette[]): (Recette & { nbRecettes: number; toutes: Recette[] })[] {
+  return [...parProduit(recettes).values()].map((vs) => ({ ...recetteUsage(vs)!, nbRecettes: vs.length, toutes: vs }))
+}
+
+/** Products grouped by craft (« Artisan » of the usual recipe), known crafts by name, « Sans métier » last. */
 export function metiersDe(recettes: Recette[]) {
   const par = new Map<string, ReturnType<typeof metierDe> & { recettes: Recette[] }>()
-  for (const r of recettes) {
+  for (const r of produitsDe(recettes)) {
     const m = metierDe(r.artisan)
     const g = par.get(m.cle) ?? { ...m, recettes: [] }
     g.recettes.push(r)
@@ -775,7 +838,7 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
   if (!r?.donnees?.relie || !reg) return null
   const c = r.calcul
   const k = metierDe(page.metier).cle
-  const toutes = r.donnees.recettes.filter((x) => metierDe(x.artisan).cle === k)
+  const toutes = produitsDe(r.donnees.recettes).filter((x) => metierDe(x.artisan).cle === k)
   const recettes = toutes.filter((x) => recetteCherchee(x, requetes)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const tab = interactif ? 0 : -1
   return (
@@ -788,13 +851,17 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
             <li key={x.produit}>
               <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
                 <span className="noms">
-                  <span className="entree">{x.produit}</span>
+                  <span className="entree">
+                    {x.produit} <MentionVariantes n={x.nbRecettes} />
+                  </span>
                   {(x.en || anglais(x.produit)) && <span className="nom-en">{x.en || anglais(x.produit)}</span>}
                 </span>
                 <span className="points" />
                 <span className="renvoi">
                   {c && (() => {
-                    const cout = coutMatieres(arbre(x.produit, x.rendement, c.recettes), r.donnees!.ressources).cout
+                    // The usual recipe's cost (a raw material that also has a recipe: its recipe here).
+                    const index = new Map(c.recettes).set(cle(x.produit), x)
+                    const cout = coutMatieres(arbre(x.produit, x.rendement, index), r.donnees!.ressources).cout
                     return cout ? <b>{prix(cout)} septims</b> : null
                   })()}
                 </span>

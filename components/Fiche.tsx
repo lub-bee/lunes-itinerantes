@@ -16,9 +16,11 @@ import {
   indexRecettes,
   PART_COMMUNE_DEFAUT,
   partager,
+  recetteUsage,
   rejouer,
   texteCycle,
   trouverCycle,
+  variantesDe,
   type ActionRegistre,
   type DonneesRegistre,
   type Mouvement,
@@ -27,6 +29,7 @@ import {
   type ArticleVente,
   type Ressource,
 } from '@/lib/missives'
+import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
 import { Icone } from './Ornements'
 
@@ -176,9 +179,17 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
   const missive = 'numero' in f && f.numero ? env.reg.r.calcul?.etats.find((e) => e.missive.numero === f.numero) : undefined
   switch (f.genre) {
     case 'recette':
-      return { surtitre: 'Recette', titre: f.nom, corps: <VueRecette nom={f.nom} env={env} /> }
+      return { surtitre: 'Recette', titre: f.nom, corps: <VueRecette nom={f.nom} variante={f.variante} env={env} /> }
     case 'edition-recette':
-      return { surtitre: f.nom ? 'Corriger la recette' : 'Consigner une recette', titre: f.nom || 'Nouvelle recette', corps: <Signe env={env} action="recette"><FormRecette nom={f.nom} artisanPropose={f.artisan} env={env} /></Signe> }
+      return {
+        surtitre: f.nouvelle ? 'Ajouter une variante' : f.nom ? 'Corriger la recette' : 'Consigner une recette',
+        titre: f.nom || 'Nouvelle recette',
+        corps: (
+          <Signe env={env} action="recette">
+            <FormRecette nom={f.nom} variante={f.variante} nouvelle={f.nouvelle} artisanPropose={f.artisan} env={env} />
+          </Signe>
+        ),
+      }
     case 'vente':
       return { surtitre: 'Livre des Marchandises', titre: 'Mettre en vente', corps: <Signe env={env} action="vente"><FormVente nom={f.nom} env={env} /></Signe> }
     case 'ressource':
@@ -568,25 +579,48 @@ function Branche({ n, profondeur, env }: { n: Noeud; profondeur: number; env: En
   )
 }
 
-function VueRecette({ nom, env }: { nom: string; env: Env }) {
+/** The usual recipes with one of them put in place (to see a variant's tree and cost). */
+function indexAvec(c: NonNullable<EtatRegistre['calcul']>, r: Recette | undefined): Map<string, Recette> {
+  if (!r) return c.recettes
+  const m = new Map(c.recettes)
+  m.set(cle(r.produit), r)
+  return m
+}
+
+function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: number; env: Env }) {
   const c = env.reg.r.calcul
   const d = env.reg.r.donnees
-  const recette = c?.recettes.get(cle(nom))
-  const ressource = d?.ressources.find((r) => cle(r.nom) === cle(nom))
+  const vs = d ? variantesDe(d.recettes, nom) : []
+  const usage = recetteUsage(vs)
+  // The recipe shown (its tree and cost): the one asked for, else the usual one.
+  const recette = vs.find((v) => v.variante === voulue) ?? usage
+  const ressource = d?.ressources.find((r) => cle(r.nom) === cle(nom) || (r.en && cle(r.en) === cle(nom)))
   const article = env.articles.find((a) => cle(a.fr) === cle(nom) || (a.en && cle(a.en) === cle(nom)))
   const [combien, setCombien] = useState(String(recette?.rendement ?? 1))
-  useEffect(() => setCombien(String(recette?.rendement ?? 1)), [recette?.rendement, nom])
+  useEffect(() => setCombien(String(recette?.rendement ?? 1)), [recette?.rendement, recette?.variante, nom])
   if (!c || !d?.relie) return <p className="registre-ferme">Le livre des recettes n&apos;est pas encore relié au grimoire.</p>
   const valeur = c.valeur(nom)
   const droits = env.reg.r.marchand?.droits
   const n = Math.max(1, Math.min(99999, Math.round(entier(combien)) || 1))
-  const cycle = recette ? trouverCycle(nom, c.recettes) : null
+  const index = indexAvec(c, recette)
+  const cycle = recette ? trouverCycle(nom, index) : null
+  const plusieurs = vs.length > 1
   return (
     <div className="vue-recette">
       {(article?.en || recette?.en || ressource?.en) && <p className="fiche-en">{article?.en || recette?.en || ressource?.en}</p>}
+      {ressource && (
+        <p className="fiche-note">
+          Matière première{ressource.origine && <> ({ressource.origine})</>}, que la caravane se procure sans jamais la revendre.
+          {ressource.prix !== null && <> Prix courant : <strong>{prix(ressource.prix)}</strong> septims l&apos;unité.</>}
+          {ressource.bonneAffaire !== null && <> Bonne affaire à <strong>{prix(ressource.bonneAffaire)}</strong> ou moins : qu&apos;on achète sans hésiter.</>}
+          {ressource.note && <em> {ressource.note}</em>}
+          {recette && <> Elle <strong>se fabrique aussi</strong> : d&apos;ordinaire la caravane l&apos;achète, mais une missive peut choisir de la façonner.</>}
+        </p>
+      )}
       {recette ? (
         <>
           <p className="fiche-note">
+            {plusieurs && <>Recette n° {recette.variante}{recette === usage ? ' (d’usage)' : ''} · </>}
             Une fournée donne <strong>{quantite(recette.rendement)}</strong> {recette.produit}
             {recette.artisan && <> · {metierDe(recette.artisan).nom}</>}
             {valeur > 0 && <> · valeur {prix(Math.round(valeur * 100) / 100)} septims l&apos;unité</>}
@@ -602,32 +636,37 @@ function VueRecette({ nom, env }: { nom: string; env: Env }) {
           ) : (
             <>
               <ul className="branches racine">
-                {arbre(nom, n, c.recettes).enfants.map((e, i) => (
+                {arbre(nom, n, index).enfants.map((e, i) => (
                   <Branche key={`${e.nom}-${i}`} n={e} profondeur={0} env={env} />
                 ))}
               </ul>
-              <CoutMatieres nom={nom} n={n} rendement={recette.rendement} env={env} />
+              <CoutMatieres nom={nom} n={n} rendement={recette.rendement} index={index} env={env} />
             </>
           )}
         </>
-      ) : ressource ? (
-        <p className="fiche-note">
-          Matière première{ressource.origine && <> ({ressource.origine})</>}, que la caravane se procure sans jamais la revendre.
-          {ressource.prix !== null && <> Prix courant : <strong>{prix(ressource.prix)}</strong> septims l&apos;unité.</>}
-          {ressource.bonneAffaire !== null && <> Bonne affaire à <strong>{prix(ressource.bonneAffaire)}</strong> ou moins : qu&apos;on achète sans hésiter.</>}
-          {ressource.note && <em> {ressource.note}</em>}
-        </p>
-      ) : (
+      ) : !ressource ? (
         <p className="fiche-note">
           Nulle recette n&apos;est consignée pour cet ouvrage. Qu&apos;un artisan en écrive une, et la caravane saura ce qu&apos;il faut réunir.
         </p>
-      )}
+      ) : null}
+      {(plusieurs || (ressource && vs.length > 0)) && <LesRecettes vs={vs} usage={usage} montree={recette} env={env} />}
       {recette && <AuCatalogue recette={recette} env={env} />}
       <div className="fiche-actions">
-        {droits?.recette !== false && !ressource && (
-          <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? nom })}>
-            {recette ? 'Corriger la recette' : 'Consigner la recette'}
-          </button>
+        {droits?.recette !== false && (
+          <>
+            {recette && (
+              <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: recette.produit, variante: recette.variante })}>
+                {plusieurs ? `Corriger la recette n° ${recette.variante}` : 'Corriger la recette'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="lien-encre"
+              onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}
+            >
+              {vs.length ? 'Ajouter une variante' : 'Consigner la recette'}
+            </button>
+          </>
         )}
         {droits?.ressource !== false && ressource && (
           <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'ressource', nom: ressource.nom })}>
@@ -635,6 +674,53 @@ function VueRecette({ nom, env }: { nom: string; env: Env }) {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Every recipe of a product, one under the other: its ingredients and what its materials cost per
+ * unit; the usual one and the cheapest marked; any may become the usual one.
+ */
+function LesRecettes({ vs, usage, montree, env }: { vs: Recette[]; usage?: Recette; montree?: Recette; env: Env }) {
+  const c = env.reg.r.calcul!
+  const ressources = env.reg.r.donnees?.ressources ?? []
+  const couts = vs.map((v) => {
+    const k = coutMatieres(arbre(v.produit, v.rendement, indexAvec(c, v)), ressources)
+    return { v, unite: k.cout / Math.max(1, v.rendement), complet: !k.sansPrix.length }
+  })
+  const connus = couts.filter((x) => x.unite > 0)
+  const moinsChere = connus.length > 1 ? connus.reduce((a, b) => (b.unite < a.unite ? b : a)).v : undefined
+  const peutChoisir = env.reg.r.marchand?.droits?.usage !== false
+  const choisir = (v: Recette) =>
+    env.reg.r.agir('usage', { produit: v.produit, variante: v.variante }, (d) => ({
+      ...d,
+      recettes: d.recettes.map((x) => (cle(x.produit) === cle(v.produit) ? { ...x, usage: x.variante === v.variante } : x)),
+    }))
+  return (
+    <div className="les-recettes">
+      <p className="fiche-sous-titre">{vs.length > 1 ? `Les ${vs.length} recettes` : 'Sa recette'}</p>
+      {couts.map(({ v, unite, complet }) => (
+        <div key={v.variante} className={`une-recette ${v === montree ? 'montree' : ''}`}>
+          <p className="une-recette-tete">
+            <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'recette', nom: v.produit, variante: v.variante })}>
+              Recette n° {v.variante}
+            </button>
+            {v === usage && <em className="marque-usage">d&apos;usage</em>}
+            {v === moinsChere && <em className="marque-chere">la moins chère</em>}
+            <span className="une-recette-cout">{unite > 0 ? `${prix(Math.round(unite * 100) / 100)} septims l’unité${complet ? '' : ' (prix incomplets)'}` : 'prix inconnu'}</span>
+          </p>
+          <p className="une-recette-ingredients">
+            {v.ingredients.map((i) => `${quantite(i.quantite)} ${i.nom}`).join(' · ')}
+            {v.rendement > 1 && <em> → {quantite(v.rendement)}</em>}
+          </p>
+          {v !== usage && peutChoisir && (
+            <button type="button" className="lien-encre une-recette-usage" onClick={() => choisir(v)}>
+              en faire la recette d&apos;usage
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -693,7 +779,7 @@ function chapitreDeArticle(article: Article, env: Env): string | undefined {
  */
 function FormVente({ nom, env }: { nom: string; env: Env }) {
   const c = env.reg.r.calcul
-  const recette = c?.recettes.get(cle(nom))
+  const recette = c?.recettes.get(cle(nom)) ?? recetteUsage(variantesDe(env.reg.r.donnees?.recettes ?? [], nom))
   const cout = recette && c ? Math.round(c.valeur(recette.produit) * 100) / 100 : 0
   const [chapitre, setChapitre] = useState(() => {
     const voulu = metierDe(recette?.artisan ?? '').chapitre
@@ -779,12 +865,10 @@ function FormVente({ nom, env }: { nom: string; env: Env }) {
 }
 
 /** What the raw materials of one craft (and of « Pour N ») cost at their « prix courant ». */
-function CoutMatieres({ nom, n, rendement, env }: { nom: string; n: number; rendement: number; env: Env }) {
-  const c = env.reg.r.calcul
+function CoutMatieres({ nom, n, rendement, index, env }: { nom: string; n: number; rendement: number; index: Map<string, Recette>; env: Env }) {
   const ressources = env.reg.r.donnees?.ressources ?? []
-  if (!c) return null
-  const une = coutMatieres(arbre(nom, rendement, c.recettes), ressources)
-  const toutes = coutMatieres(arbre(nom, n, c.recettes), ressources)
+  const une = coutMatieres(arbre(nom, rendement, index), ressources)
+  const toutes = coutMatieres(arbre(nom, n, index), ressources)
   if (!une.cout && !une.sansPrix.length) return null
   return (
     <div className="fiche-cout">
@@ -803,14 +887,18 @@ function CoutMatieres({ nom, n, rendement, env }: { nom: string; n: number; rend
 
 /* ───────────────────────── Recipe and resource forms ───────────────────────── */
 
-function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose?: string; env: Env }) {
-  const c = env.reg.r.calcul
-  const ancienne = nom ? c?.recettes.get(cle(nom)) : undefined
+function FormRecette({ nom, variante, nouvelle: ajout, artisanPropose, env }: { nom: string; variante?: number; nouvelle?: boolean; artisanPropose?: string; env: Env }) {
+  // One recipe (variant) is edited at a time: the one asked for, else the usual one; « ajouter une
+  // variante » starts a blank recipe for the same product.
+  const toutes = env.reg.r.donnees?.recettes ?? []
+  const vsNom = nom ? variantesDe(toutes, nom) : []
+  const ancienne = ajout ? undefined : (vsNom.find((v) => v.variante === variante) ?? recetteUsage(vsNom))
+  const modele = ancienne ?? recetteUsage(vsNom)
   const noms = useNoms(env)
   const [produit, setProduit] = useState(ancienne?.produit ?? nom)
   const [rendement, setRendement] = useState(String(ancienne?.rendement ?? 1))
-  const [artisan, setArtisan] = useState(ancienne?.artisan ?? artisanPropose ?? '')
-  const [en, setEn] = useState(ancienne?.en ?? '')
+  const [artisan, setArtisan] = useState(ancienne?.artisan ?? modele?.artisan ?? artisanPropose ?? '')
+  const [en, setEn] = useState(ancienne?.en ?? modele?.en ?? '')
   const enCatalogue = env.articles.find((a) => cle(a.fr) === cle(produit))?.en ?? ''
   const metiers = [...new Set([...Object.values(METIERS).map((m) => m.nom), ...(env.reg.r.donnees?.recettes ?? []).map((r) => metierDe(r.artisan).nom)])].filter((m) => m !== SANS_METIER.nom).sort((a, b) => a.localeCompare(b, 'fr'))
   const [note, setNote] = useState(ancienne?.note ?? '')
@@ -839,28 +927,40 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
   const estConnu = (t: string) => connus.some((c) => cle(c.nom) === cle(t) || (c.en && cle(c.en) === cle(t)))
   const proposer = (t: string) => (estConnu(t) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
   // While naming a new recipe (or renaming one): the recipes already written under a close name.
-  const autresRecettes = (d?.recettes ?? []).filter((r) => !ancienne || cle(r.produit) !== cle(ancienne.produit))
+  const autresRecettes = (d?.recettes ?? []).filter((r) => r !== ancienne)
   const doublons = [produit, en]
     .filter((t) => t.trim())
     .flatMap((t) => proches(t, autresRecettes, (r) => [r.produit, r.en], 3))
     .filter((r, i, l) => l.findIndex((x) => x.produit === r.produit) === i)
     .slice(0, 3)
   const memeNom = doublons.some((r) => [produit, en].some((t) => t.trim() && (cle(t) === cle(r.produit) || (r.en && cle(t) === cle(r.en)))))
+  // The number this recipe will carry: its own when edited under the same name; else the product's next
+  // free number (a recipe written under an existing product's name becomes one of its variants).
+  const soeurs = variantesDe(toutes, produit.trim()).filter((r) => r !== ancienne)
+  const memeProduit = Boolean(ancienne) && cle(ancienne!.produit) === cle(produit.trim())
+  const numero = memeProduit ? ancienne!.variante : soeurs.length ? Math.max(...soeurs.map((r) => r.variante)) + 1 : 1
+  const variante_ = !memeProduit && soeurs.length > 0
 
   const ecrire = (ingredients: Ligne[]) => {
     const p = produit.trim()
     if (!p) return setMessage({ ok: false, texte: 'Le nom de l’ouvrage manque.' })
     const ings = remplies(ingredients).map((l) => ({ nom: l.objet.trim(), quantite: entier(l.qte) }))
     if (ings.some((i) => !(i.quantite > 0))) return setMessage({ ok: false, texte: 'Chaque matière attend une quantité plus grande que zéro.' })
-    const nouvelle: Recette = { produit: p, en: en.trim(), rendement: Math.max(1, Math.round(entier(rendement)) || 1), artisan, note, ingredients: ings }
-    const autres = env.reg.r.donnees?.recettes.filter((r) => cle(r.produit) !== cle(p) && (!ancienne || cle(r.produit) !== cle(ancienne.produit))) ?? []
-    const cycle = ings.length ? trouverCycle(p, indexRecettes([...autres, nouvelle])) : null
+    if (!ings.length && !ancienne) return setMessage({ ok: false, texte: 'Une recette sans matière ne se consigne pas.' })
+    const usage = Boolean(memeProduit && ancienne!.usage)
+    const nouvelle: Recette = { produit: p, en: en.trim(), variante: numero, usage, rendement: Math.max(1, Math.round(entier(rendement)) || 1), artisan, note, ingredients: ings }
+    const autres = toutes.filter((r) => r !== ancienne)
+    const index = indexRecettes(autres, d?.ressources ?? [])
+    index.set(cle(p), nouvelle)
+    const cycle = ings.length ? trouverCycle(p, index) : null
     if (cycle) return setMessage({ ok: false, texte: texteCycle(cycle) })
+    const meme = (r: Recette, x?: Recette) => Boolean(x) && cle(r.produit) === cle(x!.produit) && r.variante === x!.variante
     confier(
       'recette',
       {
         produit: p,
-        ancienProduit: ancienne && cle(ancienne.produit) !== cle(p) ? ancienne.produit : undefined,
+        ancienProduit: ancienne?.produit,
+        ancienneVariante: ancienne?.variante,
         en: en.trim(),
         rendement: nouvelle.rendement,
         artisan,
@@ -875,10 +975,10 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
         return {
           ...dd,
           ressources: [...dd.ressources, ...nouvelles],
-          recettes: ings.length ? [...dd.recettes.filter((r) => cle(r.produit) !== cle(p) && (!ancienne || cle(r.produit) !== cle(ancienne.produit))), nouvelle] : dd.recettes.filter((r) => cle(r.produit) !== cle(p)),
+          recettes: [...dd.recettes.filter((r) => !meme(r, ancienne) && !meme(r, nouvelle)), ...(ings.length ? [nouvelle] : [])],
         }
       },
-      () => env.changer({ genre: 'recette', nom: p }),
+      () => env.changer({ genre: 'recette', nom: p, variante: ings.length ? numero : undefined }),
     )
   }
   return (
@@ -902,15 +1002,17 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
       </label>
       {doublons.length > 0 && (
         <div className={`fiche-propositions doublons ${memeNom ? 'meme' : ''}`} role="status">
-          <span>{memeNom ? 'Cette recette est déjà consignée :' : 'Déjà au registre, peut-être :'}</span>
+          <span>{memeNom ? 'Cet ouvrage a déjà sa recette :' : 'Déjà au registre, peut-être :'}</span>
           {doublons.map((r) => (
             <button key={r.produit} type="button" className="lien-encre" onClick={() => env.changer({ genre: 'recette', nom: r.produit })}>
               ouvrir {r.produit}
               {r.en && <em> · {r.en}</em>}
             </button>
           ))}
+          {variante_ && <span className="variante-annonce">ou consigner celle-ci comme sa recette n° {numero} (une variante).</span>}
         </div>
       )}
+      {variante_ && !doublons.length && <p className="fiche-note">Celle-ci sera la recette n° {numero} de {produit.trim()} (une variante).</p>}
       <div className="fiche-deux">
         <label className="fiche-champ">
           <span>Rendement</span>
@@ -939,10 +1041,10 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
               ecrire([])
             }}
           >
-            {effacer ? 'Vraiment ? Au feu !' : 'Effacer la recette'}
+            {effacer ? 'Vraiment ? Au feu !' : soeurs.length && memeProduit ? `Effacer la recette n° ${ancienne!.variante}` : 'Effacer la recette'}
           </button>
         )}
-        <Sceller icones={env.icones}>Consigner la recette</Sceller>
+        <Sceller icones={env.icones}>{variante_ ? 'Consigner la variante' : 'Consigner la recette'}</Sceller>
       </div>
     </form>
   )
@@ -1149,13 +1251,15 @@ function FormDepot({ env, numero, objet, qte }: { env: Env; numero: string; obje
 
 function FormFabrication({ env, numero, produit: impose }: { env: Env; numero: string; produit?: string }) {
   const e = useMissive(env, numero)
-  const c = env.reg.r.calcul
-  const recettes = useMemo(() => [...(env.reg.r.donnees?.recettes ?? [])].sort((a, b) => a.produit.localeCompare(b.produit, 'fr')), [env.reg.r.donnees])
+  // The missive's recipes (its own choices, else each product's usual one; a raw material can be crafted too).
+  const choix = e?.missive.choix
+  const index = useMemo(() => indexRecettes(env.reg.r.donnees?.recettes ?? [], [], (choix ?? []).filter((x) => x.variante > 0)), [env.reg.r.donnees, choix])
+  const recettes = useMemo(() => [...index.values()].sort((a, b) => a.produit.localeCompare(b.produit, 'fr')), [index])
   const conseil = impose
     ? e?.besoins.find((b) => cle(b.nom) === cle(impose))
     : (e?.besoins.find((b) => b.fournees > 0 && b.niveau === 'intermediaire') ?? e?.besoins.find((b) => b.fournees > 0))
-  const [produit, setProduit] = useState(c?.recettes.get(cle(impose ?? ''))?.produit ?? conseil?.nom ?? recettes[0]?.produit ?? '')
-  const recette = c?.recettes.get(cle(produit))
+  const [produit, setProduit] = useState(index.get(cle(impose ?? ''))?.produit ?? conseil?.nom ?? recettes[0]?.produit ?? '')
+  const recette = index.get(cle(produit))
   const [fournees, setFournees] = useState(String(conseil && cle(conseil.nom) === cle(produit) && conseil.fournees ? conseil.fournees : 1))
   const nf = Math.max(0, Math.round(entier(fournees)) || 0)
   const [sortie, setSortie] = useState('')
@@ -1169,7 +1273,7 @@ function FormFabrication({ env, numero, produit: impose }: { env: Env; numero: s
     setSortie(String(nf * recette.rendement))
     setEntrees(Object.fromEntries(recette.ingredients.map((i) => [i.nom, String(Math.round(i.quantite * nf * 1000) / 1000)])))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [produit, nf, recette?.rendement])
+  }, [produit, nf, recette?.rendement, recette?.variante])
 
   return (
     <form

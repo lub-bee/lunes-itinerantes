@@ -34,15 +34,18 @@
  *                                                                            → the missive's Missives rows closed,
  *                                                                              its 'livraison' rows (goods leaving the
  *                                                                              chest) and one 'partage' row per member
- *      'recette'     { recette: { produit, ancienProduit?, en, rendement, artisan, note,
- *                                 ingredients: [{ ingredient, quantite }],
- *                                 nouvellesRessources?: [nom] } }             → the product's Recettes rows replaced
- *                                                                              (no ingredient = recipe removed); the
+ *      'recette'     { recette: { produit, variante, usage, ancienProduit?, ancienneVariante?, en, rendement,
+ *                                 artisan, note, ingredients: [{ ingredient, quantite }],
+ *                                 nouvellesRessources?: [nom] } }             → that VARIANT's Recettes rows replaced,
+ *                                                                              the product's other variants kept (v3g)
+ *                                                                              (no ingredient = variant removed); the
  *                                                                              ingredients known nowhere added to
  *                                                                              Ressources, prices empty (v3f;
  *                                                                              answer: ressourcesAjoutees)
  *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }
  *                                                                            → the Ressources row updated, or added
+ *      'usage'       { usage: { produit, variante } }                    → « Usage » on that variant's rows only (v3g)
+ *      'choix'       { choix: { numero, recettes } }                     → the missive's « Recettes » cell (v3g)
  *      'vente'       { article: { chapitre, fr, en, prod, min, max, artisan, note } }
  *                                                                            → one row added to the Catalogues tab
  *                                                                              (only its existing columns are filled;
@@ -99,7 +102,12 @@ var ONGLETS = {
   },
   recettes: {
     nom: 'Recettes',
-    colonnes: [['Produit', 'produit'], ['Produit EN', 'produitEn'], ['Ingrédient', 'ingredient'], ['Quantité', 'quantite'], ['Rendement', 'rendement'], ['Artisan', 'artisan'], ['Note', 'note']],
+    // A product may have several recipes: « Variante » 1, 2, 3… (empty = 1); « Usage » (oui) marks the
+    // usual one on its rows (none marked: variant 1).
+    colonnes: [
+      ['Produit', 'produit'], ['Produit EN', 'produitEn'], ['Ingrédient', 'ingredient'], ['Quantité', 'quantite'], ['Rendement', 'rendement'],
+      ['Artisan', 'artisan'], ['Note', 'note'], ['Variante', 'variante'], ['Usage', 'usage'],
+    ],
   },
   missives: {
     nom: 'Missives',
@@ -108,6 +116,8 @@ var ONGLETS = {
       ['Échéance', 'echeance'], ['Statut', 'statut'], ['Produit', 'produit'], ['Quantité', 'quantite'],
       ['Écrite par', 'ecritePar'], ['Récompense', 'recompense'], ['Part commune (%)', 'partCommune'],
       ['Close le', 'closeLe'], ['Close par', 'closePar'], ['Note de clôture', 'noteCloture'],
+      // The recipes chosen for this missive (same on every row of it): « Potion de vigueur=2; Rubis=acheter ».
+      ['Recettes', 'recettes'],
     ],
   },
   /**
@@ -602,22 +612,41 @@ var ECRITURES = {
     };
   },
 
-  /** Replaces a product's recipe rows (the tab rewritten in one call; no ingredient = recipe removed). */
+  /**
+   * Writes ONE recipe of a product (its variant): that variant's rows are replaced, the product's other
+   * variants are left alone (no ingredient = that variant removed; numbers are never shifted). Moved
+   * from another name (`ancienProduit`, `ancienneVariante`), the old variant's rows go.
+   */
   recette: function (corps) {
     var r = corps.recette;
     if (!r || !r.produit) return { ok: false, erreur: 'no product' };
+    var variante = Number(r.variante) || 1;
+    var ancienne = { produit: cleEntete(r.ancienProduit || r.produit), variante: Number(r.ancienneVariante) || variante };
     var o = ouvrir(ONGLETS.recettes);
     var p = o.p;
     var lignes = o.lignes;
-    var gardees = lignes.filter(function (l) { return !correspond(p, l, 'produit', [r.produit, r.ancienProduit]); });
+    var varianteDe = function (v) { return Number(v) || 1; };
+    var estVisee = function (produit, v) {
+      var k = cleEntete(produit);
+      v = varianteDe(v);
+      return (k === ancienne.produit && v === ancienne.variante) || (k === cleEntete(r.produit) && v === variante);
+    };
+    var cellule = function (l, champ) { return p.cols[champ] ? l[p.cols[champ] - 1] : ''; };
+    var gardees = lignes.filter(function (l) { return !estVisee(cellule(l, 'produit'), cellule(l, 'variante')); });
+    // The usual recipe is one per product: marking this one clears the others' mark.
+    if (r.usage && p.cols.usage) {
+      gardees.forEach(function (l) { if (cleEntete(cellule(l, 'produit')) === cleEntete(r.produit)) l[p.cols.usage - 1] = ''; });
+    }
     var objets = (r.ingredients || []).map(function (ing) {
-      return { produit: r.produit, produitEn: r.en || '', ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1, artisan: r.artisan || '', note: r.note || '' };
+      return {
+        produit: r.produit, produitEn: r.en || '', ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1,
+        artisan: r.artisan || '', note: r.note || '', variante: variante, usage: r.usage ? 'oui' : '',
+      };
     });
     var nouvelles = objets.map(function (x) { return enLigne(p, x); });
     var toutes = gardees.concat(nouvelles);
     if (lignes.length) p.feuille.getRange(2, 1, lignes.length, p.largeur).clearContent();
     if (toutes.length) p.feuille.getRange(2, 1, toutes.length, p.largeur).setValues(toutes);
-    var anciens = [r.produit, r.ancienProduit].filter(function (x) { return x; }).map(cleEntete);
     // Ingredients known nowhere (the grimoire names them) join the raw materials, prices empty.
     var ajoutees = [];
     var demandees = r.nouvellesRessources || [];
@@ -636,12 +665,64 @@ var ECRITURES = {
       ajouter(ONGLETS.ressources, ajoutees, res.p);
     }
     return {
-      ok: true, produit: r.produit, lignes: nouvelles.length,
+      ok: true, produit: r.produit, variante: variante, lignes: nouvelles.length,
       ressourcesAjoutees: ajoutees.map(function (x) { return x.nom; }),
       maj: function (o) {
-        o.recettes = o.recettes.filter(function (x) { return anciens.indexOf(cleEntete(x.produit)) < 0; });
+        o.recettes = o.recettes.filter(function (x) { return !estVisee(x.produit, x.variante); });
+        if (r.usage) o.recettes.forEach(function (x) { if (cleEntete(x.produit) === cleEntete(r.produit)) x.usage = ''; });
         objets.forEach(function (x) { o.recettes.push(complet(ONGLETS.recettes, x)); });
         ajoutees.forEach(function (x) { o.ressources.push(complet(ONGLETS.ressources, x)); });
+      },
+    };
+  },
+
+  /** A product's usual recipe: « Usage » set on that variant's rows, cleared on the others (one call). */
+  usage: function (corps) {
+    var u = corps.usage;
+    if (!u || !u.produit) return { ok: false, erreur: 'no product' };
+    var variante = Number(u.variante) || 1;
+    var o = ouvrir(ONGLETS.recettes);
+    var p = o.p;
+    var lignes = o.lignes;
+    var k = cleEntete(u.produit);
+    var trouvee = false;
+    lignes.forEach(function (l) {
+      if (cleEntete(l[p.cols.produit - 1]) !== k) return;
+      var v = Number(l[p.cols.variante - 1]) || 1;
+      l[p.cols.usage - 1] = v === variante ? 'oui' : '';
+      if (v === variante) trouvee = true;
+    });
+    if (!trouvee) return { ok: false, erreur: 'unknown recipe ' + u.produit + ' ' + variante };
+    p.feuille.getRange(2, 1, lignes.length, p.largeur).setValues(lignes);
+    return {
+      ok: true, produit: u.produit, variante: variante,
+      maj: function (o) {
+        o.recettes.forEach(function (x) {
+          if (cleEntete(x.produit) === k) x.usage = (Number(x.variante) || 1) === variante ? 'oui' : '';
+        });
+      },
+    };
+  },
+
+  /** A missive's recipe choices (« Recettes » on every row of it), in one call. */
+  choix: function (corps) {
+    var c = corps.choix;
+    if (!c || !c.numero) return { ok: false, erreur: 'no missive' };
+    var o = ouvrir(ONGLETS.missives);
+    var p = o.p;
+    var lignes = o.lignes;
+    var touchees = 0;
+    lignes.forEach(function (l, i) {
+      if (!correspond(p, l, 'numero', [c.numero])) return;
+      lignes[i] = enLigne(p, { recettes: c.recettes || '' }, l);
+      touchees++;
+    });
+    if (!touchees) return { ok: false, erreur: 'unknown missive ' + c.numero };
+    p.feuille.getRange(2, 1, lignes.length, p.largeur).setValues(lignes);
+    return {
+      ok: true, numero: c.numero,
+      maj: function (o) {
+        o.missives.forEach(function (x) { if (cleEntete(x.numero) === cleEntete(c.numero)) x.recettes = c.recettes || ''; });
       },
     };
   },

@@ -151,7 +151,7 @@ export function useRegistre(articles: Article[]) {
   const calcul = useMemo(() => {
     if (!donnees) return null
     const valeur = evaluateur(articles, donnees.recettes, donnees.ressources)
-    return { valeur, recettes: indexRecettes(donnees.recettes), etats: calculerMissives(donnees, valeur) }
+    return { valeur, recettes: indexRecettes(donnees.recettes, donnees.ressources), etats: calculerMissives(donnees, valeur) }
   }, [donnees, articles])
 
   return { hierarchie, marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }

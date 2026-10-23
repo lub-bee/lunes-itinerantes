@@ -26,7 +26,17 @@ export type Ressource = { nom: string; en: string; origine: string; prix: number
 export type Ingredient = { nom: string; quantite: number }
 /** `rendement`: units of the product made by one craft. */
 /** `en`: the product's English name (Recettes « Produit EN », for products not in the catalogue). */
-export type Recette = { produit: string; en: string; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
+/**
+ * One recipe of a product. A product may have several (`variante` 1, 2, 3…, kept as written: deleting
+ * one renumbers nothing); `usage` marks the « recette d'usage » (else variant 1, else the lowest), the
+ * one that drives costs, values, trees and the missives' needs unless a missive chooses another.
+ */
+export type Recette = { produit: string; en: string; variante: number; usage: boolean; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
+/**
+ * A missive's choice for one item: make it by recipe `variante`, or 0 = buy it (raw materials that
+ * also have a recipe are bought unless the missive says otherwise).
+ */
+export type ChoixRecette = { nom: string; variante: number }
 export type LigneMissive = { produit: string; quantite: number }
 /**
  * A catalogue row written by the grimoire (« mettre en vente ») that the published CSV does not show yet
@@ -47,6 +57,8 @@ export type Missive = {
   partCommune: number | null
   closeLe: string
   closePar: string
+  /** Recipes chosen for this missive (Missives « Recettes »: « Potion de vigueur=2; Rubis=acheter »). */
+  choix: ChoixRecette[]
   /** Optional word written when closing (e.g. why it could not be completed). */
   noteCloture: string
 }
@@ -89,12 +101,61 @@ export type DonneesRegistre = {
 /** Actions a member can take; each one goes through the permission hook (lib/droits.ts). */
 /** `cloture`: deliver the missive (success) or give it up (inachevée); both close it and share the reward. */
 /** `vente`: a recipe's product put up for sale (a row added to the Catalogues tab). */
-export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente'
+/** `usage`: a product's usual recipe chosen; `choix`: a missive's recipe for one of its items. */
+export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix'
 
 /* ───────────────────────── Lookups ───────────────────────── */
 
-export function indexRecettes(recettes: Recette[]): Map<string, Recette> {
-  return new Map(recettes.map((r) => [cle(r.produit), r]))
+/** Every recipe of each product (key `cle(produit)`), in variant order. */
+export function parProduit(recettes: Recette[]): Map<string, Recette[]> {
+  const m = new Map<string, Recette[]>()
+  for (const r of recettes) {
+    const k = cle(r.produit)
+    m.set(k, [...(m.get(k) ?? []), r])
+  }
+  for (const vs of m.values()) vs.sort((a, b) => a.variante - b.variante)
+  return m
+}
+
+/** The usual recipe among a product's recipes: the one marked, else variant 1, else the lowest. */
+export const recetteUsage = (vs: Recette[]): Recette | undefined => vs.find((v) => v.usage) ?? vs.find((v) => v.variante === 1) ?? vs[0]
+
+/** A product's recipes (by name). */
+export const variantesDe = (recettes: Recette[], nom: string) => recettes.filter((r) => cle(r.produit) === cle(nom)).sort((a, b) => a.variante - b.variante)
+
+/** Whether an item is a raw material (bought by default even when it has a recipe). */
+export const estMatiere = (ressources: Ressource[], nom: string) => ressources.some((r) => cle(r.nom) === cle(nom) || (r.en && cle(r.en) === cle(nom)))
+
+/**
+ * The recipe used for each product: the usual one; a raw material is bought (no recipe) unless a
+ * missive's choice says to make it; `choix` (a missive's) picks a variant, or 0 = buy.
+ */
+export function indexRecettes(recettes: Recette[], ressources: Ressource[] = [], choix: ChoixRecette[] = []): Map<string, Recette> {
+  const voulu = new Map(choix.map((c) => [cle(c.nom), c.variante]))
+  const res = new Map<string, Recette>()
+  for (const [k, vs] of parProduit(recettes)) {
+    const c = voulu.get(k)
+    if (c === 0) continue
+    const r = (c !== undefined && vs.find((v) => v.variante === c)) || (c === undefined && estMatiere(ressources, vs[0].produit) ? undefined : recetteUsage(vs))
+    if (r) res.set(k, r)
+  }
+  return res
+}
+
+/** A missive's choices as written in the sheet: « Potion de vigueur=2; Rubis=acheter ». */
+export const choixEnTexte = (choix: ChoixRecette[]) => choix.map((c) => `${c.nom}=${c.variante === 0 ? 'acheter' : c.variante}`).join('; ')
+
+export function choixLus(t: string): ChoixRecette[] {
+  const res: ChoixRecette[] = []
+  for (const morceau of String(t ?? '').split(/[;\n]/)) {
+    const i = morceau.lastIndexOf('=')
+    if (i < 0) continue
+    const nom = morceau.slice(0, i).trim()
+    const v = morceau.slice(i + 1).trim()
+    const variante = /^(acheter|achat|achete|buy)$/i.test(v) ? 0 : Math.round(Number(v))
+    if (nom && Number.isFinite(variante) && variante >= 0 && !res.some((c) => cle(c.nom) === cle(nom))) res.push({ nom, variante })
+  }
+  return res
 }
 
 /** Raised when recipes loop (A needs B needs A); `chemin` names the loop. */
@@ -121,7 +182,8 @@ export function evaluateur(articles: ArticleValeur[], recettes: Recette[], resso
     if (!catalogue.has(cle(a.fr))) catalogue.set(cle(a.fr), a.prod)
     if (a.en && !catalogue.has(cle(a.en))) catalogue.set(cle(a.en), a.prod)
   }
-  const recs = indexRecettes(recettes)
+  // The usual recipes; a raw material that also has one is valued at its price (bought by default).
+  const recs = indexRecettes(recettes, ressources)
   const res = new Map<string, number>()
   for (const r of ressources) if (r.prix !== null) res.set(cle(r.nom), r.prix)
   const memo = new Map<string, number>()
@@ -236,7 +298,7 @@ export const enStock = (stock: Stock, nom: string) => stock.get(cle(nom))?.qte ?
 
 export type Niveau = 'fini' | 'intermediaire' | 'brut'
 /** `rendement`: units per craft when the item has a recipe (null: no recipe); `fournees`: crafts needed for what is missing. */
-export type LigneBesoin = { nom: string; niveau: Niveau; besoin: number; auCoffre: number; manque: number; fournees: number; rendement: number | null }
+export type LigneBesoin = { nom: string; niveau: Niveau; besoin: number; auCoffre: number; manque: number; fournees: number; rendement: number | null; variante: number | null }
 
 /** Delivered quantity per requested product (livraison rows of that missive). */
 export function livres(numero: string, mouvements: Mouvement[]): Map<string, number> {
@@ -262,7 +324,7 @@ export function besoins(lignes: LigneMissive[], recettes: Map<string, Recette>, 
     if (chemin.includes(k)) throw new Cycle([...noms.slice(chemin.indexOf(k)), nom])
     const r = recettes.get(k)
     const niveau: Niveau = finis.has(k) ? 'fini' : r && r.ingredients.length ? 'intermediaire' : 'brut'
-    const ligne = res.get(k) ?? { nom: r?.produit ?? nom, niveau, besoin: 0, auCoffre: 0, manque: 0, fournees: 0, rendement: r && r.ingredients.length ? r.rendement : null }
+    const ligne = res.get(k) ?? { nom: r?.produit ?? nom, niveau, besoin: 0, auCoffre: 0, manque: 0, fournees: 0, rendement: r && r.ingredients.length ? r.rendement : null, variante: r && r.ingredients.length ? r.variante : null }
     res.set(k, ligne)
     ligne.besoin += qte
     const pris = Math.min(Math.max(0, reserve.get(k) ?? 0), qte)
@@ -391,7 +453,6 @@ export type EtatMissive = {
  * missive is shown as it stood when it was closed: the ledger up to its closing, the whole chest.
  */
 export function calculerMissives(d: DonneesRegistre, valeur: (nom: string) => number): EtatMissive[] {
-  const recettes = indexRecettes(d.recettes)
   const { stock } = rejouer(d.mouvements)
   const reserve = new Map([...stock].map(([k, s]) => [k, s.qte]))
   const ordonnees = [...d.missives].sort((a, b) => a.horodatage.localeCompare(b.horodatage))
@@ -407,6 +468,8 @@ export function calculerMissives(d: DonneesRegistre, valeur: (nom: string) => nu
     const coffre = close ? new Map([...rejouer(avantCloture).stock].map(([k, s]) => [k, s.qte])) : reserve
     let bs: LigneBesoin[] = []
     let cycle: string[] | null = null
+    // The usual recipes, but this missive's own choices first.
+    const recettes = indexRecettes(d.recettes, d.ressources, m.choix)
     try {
       bs = besoins(lignes.map((l) => ({ produit: l.produit, quantite: l.reste })), recettes, coffre)
     } catch (e) {
@@ -442,6 +505,8 @@ const nombre = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null
 }
 const texte = (v: unknown) => String(v ?? '').trim()
+/** A marker cell (« Usage »): oui, x, 1, vrai… */
+const marque = (v: unknown) => ['oui', 'x', '1', 'vrai', 'true', 'yes', 'usage'].includes(cle(texte(v)))
 const date = (v: unknown) => {
   const t = texte(v)
   if (!t) return ''
@@ -488,12 +553,15 @@ export function lireOnglets(o: Onglets) {
     const produit = texte(r.produit)
     const nom = texte(r.ingredient)
     if (!produit) continue
-    let rec = recettes.find((x) => cle(x.produit) === cle(produit))
+    // Empty « Variante » (or an older sheet without the column) = 1.
+    const variante = Math.max(1, Math.round(nombre(r.variante) ?? 1))
+    let rec = recettes.find((x) => cle(x.produit) === cle(produit) && x.variante === variante)
     if (!rec) {
-      rec = { produit, en: '', rendement: Math.max(1, Math.round(nombre(r.rendement) ?? 1)), artisan: texte(r.artisan), note: texte(r.note), ingredients: [] }
+      rec = { produit, en: '', variante, usage: false, rendement: Math.max(1, Math.round(nombre(r.rendement) ?? 1)), artisan: texte(r.artisan), note: texte(r.note), ingredients: [] }
       recettes.push(rec)
     }
     if (!rec.en) rec.en = texte(r.produitEn)
+    if (marque(r.usage)) rec.usage = true
     const q = nombre(r.quantite)
     if (nom && q !== null && q > 0) rec.ingredients.push({ nom, quantite: q })
   }
@@ -518,9 +586,11 @@ export function lireOnglets(o: Onglets) {
         closeLe: date(r.closeLe),
         closePar: texte(r.closePar),
         noteCloture: texte(r.noteCloture),
+        choix: [],
       }
       missives.push(m)
     }
+    if (!m.choix.length && texte(r.recettes)) m.choix = choixLus(texte(r.recettes))
     const produit = texte(r.produit)
     const q = nombre(r.quantite)
     if (produit && q !== null && q > 0) m.lignes.push({ produit, quantite: q })
@@ -553,5 +623,8 @@ export function lireOnglets(o: Onglets) {
     }))
     .filter((a) => a.fr)
 
-  return { membres, ressources, recettes, missives, mouvements, catalogue }
+  // A script that knows recipe variants (v3g) reads the « Variante » column (even empty): every row has the key.
+  const variantes = !(o.recettes ?? []).length || 'variante' in (o.recettes ?? [])[0]
+
+  return { membres, ressources, recettes, missives, mouvements, catalogue, variantes }
 }

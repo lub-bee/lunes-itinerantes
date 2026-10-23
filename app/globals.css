@@ -3087,3 +3087,18 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .fiche-catalogue .fiche-note { margin: 0 0 4px; }
 .fiche-catalogue.en-attente { opacity: 0.65; }
 .fiche-form select { width: 100%; padding: 3px 4px; border: 0; border-bottom: 1px solid rgba(90, 64, 41, 0.5); background: transparent; font: inherit; font-size: 17px; color: var(--encre); }
+
+/* ─── Several recipes per product: the « recette d'usage », the cheapest, a missive's choice ─── */
+.mention-variantes { font-size: 0.8em; font-style: italic; font-family: var(--f-texte); color: var(--encre-pale); white-space: nowrap; }
+.les-recettes { margin: 10px 0 4px; }
+.une-recette { padding: 6px 4px; border-bottom: 1px dotted rgba(110, 80, 45, 0.3); }
+.une-recette.montree { background: rgba(201, 162, 78, 0.12); }
+.une-recette-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; }
+.une-recette-cout { margin-left: auto; font-size: 15px; color: var(--encre-douce); }
+.marque-usage, .marque-chere { font-size: 13.5px; color: var(--encre-rouge); }
+.marque-chere { color: #2f5b3a; }
+.une-recette-ingredients { margin: 2px 0 0; font-size: 15px; line-height: 1.4; color: var(--encre-douce); }
+.une-recette-usage { margin-top: 2px; font-size: 14px; }
+.variante-annonce { flex-basis: 100%; font-style: italic; color: var(--encre-douce); }
+.besoins-recette { display: block; margin: 1px 0 2px; max-width: 100%; padding: 0 2px; border: 0; border-bottom: 1px dotted rgba(90, 64, 41, 0.5); background: transparent; font: inherit; font-style: italic; font-size: 13.5px; color: var(--encre-douce); cursor: pointer; }
+em.besoins-recette { border: 0; cursor: default; }

@@ -16,7 +16,7 @@ import { CleRefermer, Verrou } from './Fer'
 import { ICONE_COPIE } from '@/lib/copie'
 import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Commande'
 import { useRegistre } from './Registre'
-import { idMissive, metiersDe, type CtxRegistre, type Fiche } from './Missives'
+import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 
@@ -498,8 +498,9 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       if (p.type === 'metier') {
         // Recipes, by their French or English name (or their craft).
         const k = metierDe(p.metier).cle
-        const recettes = (registre.donnees?.recettes ?? [])
-          .filter((r) => metierDe(r.artisan).cle === k && recetteCorrespond(r, requete))
+        // One entry per product, found by any of its recipes' names.
+        const recettes = produitsDe(registre.donnees?.recettes ?? [])
+          .filter((r) => metierDe(r.artisan).cle === k && r.toutes.some((v) => recetteCorrespond(v, requete)))
           .sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
         return recettes.length ? [{ i, page: p, total: recettes.length, articles: [], recettes }] : []
       }
