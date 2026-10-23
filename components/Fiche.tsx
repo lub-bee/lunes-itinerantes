@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
+import { proches } from '@/lib/recherche'
 import { METIERS, metierDe, SANS_METIER } from '@/lib/metiers'
 import { estImage, RANGS, SANS_RANG } from '@/lib/rangs'
 import { divinite, poemesDe } from '@/lib/oeufs'
@@ -23,6 +24,7 @@ import {
   type Mouvement,
   type Noeud,
   type Recette,
+  type ArticleVente,
   type Ressource,
 } from '@/lib/missives'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
@@ -44,6 +46,7 @@ export function FicheVolante({
   fiche,
   reg,
   articles,
+  chapitres = [],
   icones,
   mobile,
   sansAnimation = false,
@@ -52,6 +55,8 @@ export function FicheVolante({
   fiche: Fiche
   reg: CtxRegistre
   articles: Article[]
+  /** The catalogue's chapters (for putting a product up for sale). */
+  chapitres?: Chapitre[]
   icones: Record<string, string>
   mobile: boolean
   sansAnimation?: boolean
@@ -130,7 +135,7 @@ export function FicheVolante({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { surtitre, titre, sousTitre, corps, embleme } = contenu(vue, { reg, articles, icones, changer: setVue, fermer: partir })
+  const { surtitre, titre, sousTitre, corps, embleme } = contenu(vue, { reg, articles, chapitres, icones, changer: setVue, fermer: partir })
 
   return (
     <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
@@ -163,7 +168,9 @@ export function FicheVolante({
   )
 }
 
-type Env = { reg: CtxRegistre; articles: Article[]; icones: Record<string, string>; changer: (f: Fiche) => void; fermer: () => void }
+/** A catalogue chapter and the ids of its articles. */
+type Chapitre = { id: string; titre: string; ids: string[] }
+type Env = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; changer: (f: Fiche) => void; fermer: () => void }
 
 function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTitre?: string; corps: ReactNode; embleme?: ReactNode } {
   const missive = 'numero' in f && f.numero ? env.reg.r.calcul?.etats.find((e) => e.missive.numero === f.numero) : undefined
@@ -172,6 +179,8 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       return { surtitre: 'Recette', titre: f.nom, corps: <VueRecette nom={f.nom} env={env} /> }
     case 'edition-recette':
       return { surtitre: f.nom ? 'Corriger la recette' : 'Consigner une recette', titre: f.nom || 'Nouvelle recette', corps: <Signe env={env} action="recette"><FormRecette nom={f.nom} artisanPropose={f.artisan} env={env} /></Signe> }
+    case 'vente':
+      return { surtitre: 'Livre des Marchandises', titre: 'Mettre en vente', corps: <Signe env={env} action="vente"><FormVente nom={f.nom} env={env} /></Signe> }
     case 'ressource':
       return { surtitre: f.nom ? 'Corriger la matière' : 'Inscrire une matière', titre: f.nom || 'Nouvelle matière', corps: <Signe env={env} action="ressource"><FormRessource nom={f.nom} env={env} /></Signe> }
     case 'missive':
@@ -453,6 +462,25 @@ function Suggestions({ id, noms }: { id: string; noms: string[] }) {
 
 type Ligne = { objet: string; qte: string }
 
+/** An item the registre or the catalogue already knows, by its names. */
+type Connu = { nom: string; en: string }
+
+/** Known names offered under a field while typing (picked with a touch; the field keeps the focus). */
+function Propositions({ connus, choisir, titre = 'Déjà connu :' }: { connus: Connu[]; choisir: (nom: string) => void; titre?: string }) {
+  if (!connus.length) return null
+  return (
+    <div className="fiche-propositions">
+      <span>{titre}</span>
+      {connus.map((c) => (
+        <button key={c.nom} type="button" className="lien-encre" onMouseDown={(e) => e.preventDefault()} onClick={() => choisir(c.nom)}>
+          {c.nom}
+          {c.en && <em> · {c.en}</em>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /** Rows "name · quantity" with a quill to strike a row out and a line to add one. */
 function Lignes({
   lignes,
@@ -460,24 +488,40 @@ function Lignes({
   liste,
   mot = 'Quantité',
   aide,
+  proposer,
 }: {
   lignes: Ligne[]
   setLignes: (l: Ligne[]) => void
   liste: string
   mot?: string
   aide?: (l: Ligne) => ReactNode
+  /** Known names close to what is typed in a row (instead of the browser's list): the same item never under two spellings. */
+  proposer?: (tape: string) => Connu[]
 }) {
   const regler = (i: number, p: Partial<Ligne>) => setLignes(lignes.map((l, k) => (k === i ? { ...l, ...p } : l)))
+  const [active, setActive] = useState<number | null>(null)
   return (
     <div className="fiche-lignes">
       {lignes.map((l, i) => (
         <div key={i} className="fiche-ligne">
-          <input type="text" list={liste} value={l.objet} onChange={(e) => regler(i, { objet: e.target.value })} placeholder="Objet" aria-label="Objet" maxLength={120} />
+          <input
+            type="text"
+            list={proposer ? undefined : liste}
+            value={l.objet}
+            onChange={(e) => regler(i, { objet: e.target.value })}
+            onFocus={() => setActive(i)}
+            onBlur={() => setActive((a) => (a === i ? null : a))}
+            placeholder="Objet"
+            aria-label="Objet"
+            maxLength={120}
+            autoComplete="off"
+          />
           <input type="text" inputMode="numeric" className="fiche-qte" value={l.qte} onChange={(e) => regler(i, { qte: e.target.value.replace(/[^\d.,]/g, '').slice(0, 9) })} placeholder="Qté" aria-label={mot} />
           <button type="button" className="fiche-rayer" aria-label="Rayer la ligne" title="Rayer la ligne" onClick={() => setLignes(lignes.length > 1 ? lignes.filter((_, k) => k !== i) : [{ objet: '', qte: '' }])}>
             ✕
           </button>
           {aide && <p className="fiche-aide">{aide(l)}</p>}
+          {proposer && active === i && <Propositions connus={proposer(l.objet)} choisir={(n) => regler(i, { objet: n })} />}
         </div>
       ))}
       <button type="button" className="lien-encre fiche-ajouter" onClick={() => setLignes([...lignes, { objet: '', qte: '' }])}>
@@ -529,7 +573,7 @@ function VueRecette({ nom, env }: { nom: string; env: Env }) {
   const d = env.reg.r.donnees
   const recette = c?.recettes.get(cle(nom))
   const ressource = d?.ressources.find((r) => cle(r.nom) === cle(nom))
-  const article = env.articles.find((a) => cle(a.fr) === cle(nom))
+  const article = env.articles.find((a) => cle(a.fr) === cle(nom) || (a.en && cle(a.en) === cle(nom)))
   const [combien, setCombien] = useState(String(recette?.rendement ?? 1))
   useEffect(() => setCombien(String(recette?.rendement ?? 1)), [recette?.rendement, nom])
   if (!c || !d?.relie) return <p className="registre-ferme">Le livre des recettes n&apos;est pas encore relié au grimoire.</p>
@@ -578,6 +622,7 @@ function VueRecette({ nom, env }: { nom: string; env: Env }) {
           Nulle recette n&apos;est consignée pour cet ouvrage. Qu&apos;un artisan en écrive une, et la caravane saura ce qu&apos;il faut réunir.
         </p>
       )}
+      {recette && <AuCatalogue recette={recette} env={env} />}
       <div className="fiche-actions">
         {droits?.recette !== false && !ressource && (
           <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? nom })}>
@@ -591,6 +636,145 @@ function VueRecette({ nom, env }: { nom: string; env: Env }) {
         )}
       </div>
     </div>
+  )
+}
+
+/** The catalogue article of a recipe's product (by its French or English name), if the caravan sells it. */
+function articleDe(recette: Recette, env: Env): Article | undefined {
+  const noms = [recette.produit, recette.en].filter(Boolean).map(cle)
+  return env.articles.find((a) => noms.includes(cle(a.fr)) || (a.en && noms.includes(cle(a.en))))
+}
+
+/** Whether the caravan sells a recipe's product: where it stands in the catalogue, or the way to put it up for sale. */
+function AuCatalogue({ recette, env }: { recette: Recette; env: Env }) {
+  const article = articleDe(recette, env)
+  const enAttente = env.reg.r.donnees?.catalogue?.some((a) => a.enAttente && cle(a.fr) === cle(article?.fr ?? ''))
+  if (article) {
+    return (
+      <div className={`fiche-catalogue ${enAttente ? 'en-attente' : ''}`}>
+        <p className="fiche-note">
+          <strong>Au catalogue de la caravane.</strong>{' '}
+          {article.min === null && article.max === null ? (
+            <>Prix à négocier.</>
+          ) : (
+            <>
+              Plancher <strong>{prix(article.min)}</strong>, plafond <strong>{prix(article.max)}</strong> septims.
+            </>
+          )}
+        </p>
+        <button type="button" className="lien-encre" onClick={() => env.reg.allerA(chapitreDeArticle(article, env) ?? '')}>
+          voir au catalogue
+        </button>
+      </div>
+    )
+  }
+  if (env.reg.r.marchand?.droits?.vente === false) return null
+  return (
+    <div className="fiche-catalogue">
+      <p className="fiche-note">Cet ouvrage n’est pas encore au catalogue : la caravane ne le vend pas.</p>
+      <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'vente', nom: recette.produit })}>
+        le mettre en vente
+      </button>
+    </div>
+  )
+}
+
+/** The chapter page holding an article (its id), found through the slip's chapters and the sold rows. */
+function chapitreDeArticle(article: Article, env: Env): string | undefined {
+  const vendu = env.reg.r.donnees?.catalogue?.find((a) => cle(a.fr) === cle(article.fr))
+  if (vendu) return vendu.chapitre
+  return env.chapitres.find((c) => c.ids.includes(article.id))?.id
+}
+
+/**
+ * Putting a recipe's product up for sale: a row of the catalogue, its names and craft taken from the
+ * recipe, its cost from the recipe's materials, the floor and ceiling proposed from the chapter's
+ * usual margins (to accept or change).
+ */
+function FormVente({ nom, env }: { nom: string; env: Env }) {
+  const c = env.reg.r.calcul
+  const recette = c?.recettes.get(cle(nom))
+  const cout = recette && c ? Math.round(c.valeur(recette.produit) * 100) / 100 : 0
+  const [chapitre, setChapitre] = useState(() => {
+    const voulu = metierDe(recette?.artisan ?? '').chapitre
+    return env.chapitres.some((x) => x.id === voulu) ? voulu : (env.chapitres.find((x) => x.id === 'divers')?.id ?? env.chapitres[0]?.id ?? '')
+  })
+  const ecrit = (v: number | null) => (v === null || !v ? '' : String(v).replace('.', ','))
+  const [v, setV] = useState({ fr: recette?.produit ?? nom, en: recette?.en ?? '', prod: ecrit(cout || null), min: '', max: '', note: '' })
+  // The chapter's usual margins: median floor / cost and ceiling / cost of its articles.
+  const marges = useMemo(() => {
+    const ids = new Set(env.chapitres.find((x) => x.id === chapitre)?.ids ?? [])
+    const dans = env.articles.filter((a) => ids.has(a.id) && a.prod && a.prod > 0)
+    const mediane = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : null)
+    return {
+      min: mediane(dans.flatMap((a) => (a.min ? [a.min / a.prod!] : []))) ?? 1.5,
+      max: mediane(dans.flatMap((a) => (a.max ? [a.max / a.prod!] : []))) ?? 2,
+    }
+  }, [env.articles, env.chapitres, chapitre])
+  const base = entier(v.prod)
+  const proposes = base > 0 ? { min: Math.ceil(base * marges.min), max: Math.ceil(base * marges.max) } : null
+  const { message, setMessage, confier } = useEnvoi(env)
+  const champ = (k: keyof typeof v, mot: string, extra: Record<string, unknown> = {}) => (
+    <label className="fiche-champ">
+      <span>{mot}</span>
+      <input type="text" value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} maxLength={120} {...extra} />
+    </label>
+  )
+  if (!recette) return <p className="fiche-note">Nulle recette n&apos;est consignée pour cet ouvrage.</p>
+  return (
+    <form
+      className="fiche-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const fr = v.fr.trim()
+        if (!fr) return setMessage({ ok: false, texte: 'Le nom de l’ouvrage manque.' })
+        if (!chapitre) return setMessage({ ok: false, texte: 'Choisis le chapitre du catalogue.' })
+        const lu = (s: string) => (s.trim() ? entier(s) : null)
+        const prod = lu(v.prod)
+        const min = lu(v.min)
+        const max = lu(v.max)
+        if ([prod, min, max].some((x) => x !== null && !(x >= 0))) return setMessage({ ok: false, texte: 'Un prix est illisible : un nombre de septims est attendu.' })
+        if (min !== null && max !== null && min > max) return setMessage({ ok: false, texte: 'Le plancher ne peut dépasser le plafond.' })
+        const article: ArticleVente = { chapitre, fr, en: v.en.trim(), prod, min, max, artisan: recette.artisan, note: v.note.trim(), enAttente: true }
+        confier(
+          'vente',
+          { ...article, enAttente: undefined },
+          (d) => ({ ...d, catalogue: [...(d.catalogue ?? []).filter((a) => cle(a.fr) !== cle(fr)), article] }),
+          () => env.changer({ genre: 'recette', nom: recette.produit }),
+        )
+      }}
+    >
+      <p className="fiche-note">
+        L’ouvrage rejoint le catalogue de la caravane : chacun pourra le vendre et l’inscrire au bon de commande.
+      </p>
+      <label className="fiche-champ">
+        <span>Chapitre</span>
+        <select value={chapitre} onChange={(e) => setChapitre(e.target.value)}>
+          {env.chapitres.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.titre}
+            </option>
+          ))}
+        </select>
+      </label>
+      {champ('fr', 'Ouvrage', { required: true })}
+      {champ('en', 'Nom anglais', { placeholder: 'facultatif' })}
+      {champ('prod', 'Coût', { inputMode: 'decimal', placeholder: 'septims l’unité', title: 'Ce que l’ouvrage coûte à l’atelier (ses matières, d’après la recette)' })}
+      <div className="fiche-deux">
+        {champ('min', 'Plancher', { inputMode: 'decimal', placeholder: proposes ? `p. ex. ${proposes.min}` : 'à négocier' })}
+        {champ('max', 'Plafond', { inputMode: 'decimal', placeholder: proposes ? `p. ex. ${proposes.max}` : 'à négocier' })}
+      </div>
+      {proposes && !v.min && !v.max && (
+        <button type="button" className="lien-encre fiche-ajouter" onClick={() => setV({ ...v, min: String(proposes.min), max: String(proposes.max) })}>
+          prendre les marges d’usage du chapitre
+        </button>
+      )}
+      {champ('note', 'Note', { placeholder: 'facultative' })}
+      <Message m={message} />
+      <div className="fiche-pied">
+        <Sceller icones={env.icones}>Mettre en vente</Sceller>
+      </div>
+    </form>
   )
 }
 
@@ -633,6 +817,35 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
   const [lignes, setLignes] = useState<Ligne[]>(ancienne?.ingredients.length ? ancienne.ingredients.map((i) => ({ objet: i.nom, qte: String(i.quantite) })) : [{ objet: '', qte: '' }])
   const [effacer, setEffacer] = useState(false)
   const { message, setMessage, confier } = useEnvoi(env)
+  const d = env.reg.r.donnees
+
+  // Items the registre knows, FR and EN: raw materials, products (recipes, catalogue), ingredients.
+  const { connus, ressourcesEtProduits } = useMemo(() => {
+    const m = new Map<string, Connu>()
+    const ajouter = (nom: string, en = '') => {
+      if (!nom) return
+      const k = cle(nom)
+      const c = m.get(k)
+      if (!c) m.set(k, { nom, en })
+      else if (!c.en && en) c.en = en
+    }
+    d?.ressources.forEach((r) => ajouter(r.nom, r.en))
+    d?.recettes.forEach((r) => ajouter(r.produit, r.en))
+    env.articles.forEach((a) => ajouter(a.fr, a.en))
+    const ressourcesEtProduits = new Set([...m.values()].flatMap((c) => [cle(c.nom), c.en ? cle(c.en) : '']).filter(Boolean))
+    d?.recettes.forEach((r) => r.ingredients.forEach((i) => ajouter(i.nom)))
+    return { connus: [...m.values()], ressourcesEtProduits }
+  }, [d, env.articles])
+  const estConnu = (t: string) => connus.some((c) => cle(c.nom) === cle(t) || (c.en && cle(c.en) === cle(t)))
+  const proposer = (t: string) => (estConnu(t) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
+  // While naming a new recipe (or renaming one): the recipes already written under a close name.
+  const autresRecettes = (d?.recettes ?? []).filter((r) => !ancienne || cle(r.produit) !== cle(ancienne.produit))
+  const doublons = [produit, en]
+    .filter((t) => t.trim())
+    .flatMap((t) => proches(t, autresRecettes, (r) => [r.produit, r.en], 3))
+    .filter((r, i, l) => l.findIndex((x) => x.produit === r.produit) === i)
+    .slice(0, 3)
+  const memeNom = doublons.some((r) => [produit, en].some((t) => t.trim() && (cle(t) === cle(r.produit) || (r.en && cle(t) === cle(r.en)))))
 
   const ecrire = (ingredients: Ligne[]) => {
     const p = produit.trim()
@@ -654,7 +867,17 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
         note,
         ingredients: ings.map((i) => ({ nom: i.nom, quantite: String(i.quantite) })),
       },
-      (d) => ({ ...d, recettes: ings.length ? [...d.recettes.filter((r) => cle(r.produit) !== cle(p) && (!ancienne || cle(r.produit) !== cle(ancienne.produit))), nouvelle] : d.recettes.filter((r) => cle(r.produit) !== cle(p)) }),
+      (dd) => {
+        // Ingredients known nowhere join the raw materials at once (prices to fill), as the registre will do.
+        const nouvelles: Ressource[] = ings
+          .filter((i) => !ressourcesEtProduits.has(cle(i.nom)) && cle(i.nom) !== cle(p) && !dd.ressources.some((r) => cle(r.nom) === cle(i.nom)))
+          .map((i) => ({ nom: i.nom, en: '', origine: '', prix: null, bonneAffaire: null, note: '' }))
+        return {
+          ...dd,
+          ressources: [...dd.ressources, ...nouvelles],
+          recettes: ings.length ? [...dd.recettes.filter((r) => cle(r.produit) !== cle(p) && (!ancienne || cle(r.produit) !== cle(ancienne.produit))), nouvelle] : dd.recettes.filter((r) => cle(r.produit) !== cle(p)),
+        }
+      },
       () => env.changer({ genre: 'recette', nom: p }),
     )
   }
@@ -671,12 +894,23 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
       <Suggestions id="fiche-metiers" noms={metiers} />
       <label className="fiche-champ">
         <span>Ouvrage</span>
-        <input type="text" list="fiche-produits" value={produit} onChange={(e) => setProduit(e.target.value)} maxLength={120} required placeholder="Bière, Potion de soin…" />
+        <input type="text" value={produit} onChange={(e) => setProduit(e.target.value)} maxLength={120} required placeholder="Bière, Potion de soin…" autoComplete="off" />
       </label>
       <label className="fiche-champ">
         <span>Nom anglais</span>
         <input type="text" value={en} onChange={(e) => setEn(e.target.value)} maxLength={120} placeholder={enCatalogue ? `${enCatalogue} (au catalogue)` : 'facultatif'} />
       </label>
+      {doublons.length > 0 && (
+        <div className={`fiche-propositions doublons ${memeNom ? 'meme' : ''}`} role="status">
+          <span>{memeNom ? 'Cette recette est déjà consignée :' : 'Déjà au registre, peut-être :'}</span>
+          {doublons.map((r) => (
+            <button key={r.produit} type="button" className="lien-encre" onClick={() => env.changer({ genre: 'recette', nom: r.produit })}>
+              ouvrir {r.produit}
+              {r.en && <em> · {r.en}</em>}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="fiche-deux">
         <label className="fiche-champ">
           <span>Rendement</span>
@@ -688,7 +922,7 @@ function FormRecette({ nom, artisanPropose, env }: { nom: string; artisanPropose
         </label>
       </div>
       <p className="fiche-sous-titre">Pour une fournée</p>
-      <Lignes lignes={lignes} setLignes={setLignes} liste="fiche-tous" />
+      <Lignes lignes={lignes} setLignes={setLignes} liste="fiche-tous" proposer={proposer} />
       <label className="fiche-champ">
         <span>Note</span>
         <input type="text" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="facultative" />

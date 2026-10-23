@@ -3076,3 +3076,14 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 @media (max-width: 860px) {
   .credits { min-height: 0; padding: 14px 0 0; }
 }
+
+/* ─── The workshop: names already known, offered while typing; a recipe and the catalogue ─── */
+.fiche-propositions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin: 2px 0 8px; font-size: 15px; }
+.fiche-propositions > span { font-style: italic; color: var(--encre-pale); }
+.fiche-propositions .lien-encre { font-size: 15px; }
+.fiche-propositions em { color: var(--encre-pale); }
+.fiche-propositions.doublons.meme > span { color: var(--encre-rouge); }
+.fiche-catalogue { margin: 12px 0 4px; padding-top: 8px; border-top: 1px dotted rgba(110, 80, 45, 0.35); text-align: center; }
+.fiche-catalogue .fiche-note { margin: 0 0 4px; }
+.fiche-catalogue.en-attente { opacity: 0.65; }
+.fiche-form select { width: 100%; padding: 3px 4px; border: 0; border-bottom: 1px solid rgba(90, 64, 41, 0.5); background: transparent; font: inherit; font-size: 17px; color: var(--encre); }

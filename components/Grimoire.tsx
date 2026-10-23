@@ -6,7 +6,9 @@ import { ATTENTE_RECHERCHE_MS, divinite as divin, EMBLEME, oeufDeRecherche } fro
 import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
 import { GAUFRAGE } from '@/lib/gaufrage'
-import { articleCorrespond, compterDans, jetons, plages } from '@/lib/recherche'
+import { articleCorrespond, artisanDe, compterDans, jetons, nomsCorrespondent, plages, slug } from '@/lib/recherche'
+import { metierDe } from '@/lib/metiers'
+import { cle, type Recette } from '@/lib/missives'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
@@ -20,7 +22,7 @@ import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
 type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
-type Resultat = { i: number; page: Page; total: number; articles: Article[] }
+type Resultat = { i: number; page: Page; total: number; articles: Article[]; recettes?: Recette[] }
 type Geste = {
   id: number
   x0: number
@@ -78,6 +80,9 @@ function Surligne({ texte, requete }: { texte: string; requete: string }) {
 
 const COURT_MAX = 18
 
+/** A recipe matches a query by its French or English name, or its craft. */
+const recetteCorrespond = (r: Recette, requete: string) => nomsCorrespondent([r.produit, r.en, metierDe(r.artisan).nom], requete)
+
 export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const { parties, icones } = livreServeur
   const articles = useMemo(() => livreServeur.pages.flatMap((p) => (p.type === 'chapitre' ? (p as PageChapitre).articles : [])), [livreServeur])
@@ -113,8 +118,18 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     const metiers: PageMetier[] = metiersDe(registre.donnees?.recettes ?? []).map((m) => ({
       type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, titreEn: m.en, court: m.nom, icone: m.icone,
     }))
-    if (!vues.length && !exLibris.length && !metiers.length) return livreServeur
-    const p = livreServeur.pages
+    // Articles just put up for sale (« vente »): in their chapter at once, before the published CSV shows them.
+    const vendus: Article[] = (registre.donnees?.catalogue ?? []).map((a) => ({ id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note }))
+    if (!vues.length && !exLibris.length && !metiers.length && !vendus.length) return livreServeur
+    const chapitres = new Set(livreServeur.pages.flatMap((x) => (x.type === 'chapitre' ? [x.id] : [])))
+    const chapitreDe = (k: string) => (chapitres.has(k) ? k : chapitres.has('divers') ? 'divers' : [...chapitres].pop())
+    const p = vendus.length
+      ? livreServeur.pages.map((x) => {
+          if (x.type !== 'chapitre') return x
+          const ici = vendus.filter((a, k) => chapitreDe(registre.donnees!.catalogue![k].chapitre) === x.id && !x.articles.some((b) => cle(b.fr) === cle(a.fr)))
+          return ici.length ? { ...x, articles: [...x.articles, ...ici] } : x
+        })
+      : livreServeur.pages
     const apresRecettes = p.findIndex((x) => x.id === 'recettes') + 1
     const apresMissives = p.findIndex((x) => x.type === 'missives') + 1
     return {
@@ -123,6 +138,9 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     }
   }, [livreServeur, registre.calcul, registre.donnees, relie, divinite])
   const { pages } = livre
+  // Every article the book shows (the CSV's and those just put up for sale), and the chapters, for the slips.
+  const articlesLivre = useMemo(() => pages.flatMap((p) => (p.type === 'chapitre' ? p.articles : [])), [pages])
+  const chapitres = useMemo(() => pages.flatMap((p) => (p.type === 'chapitre' ? [{ id: p.id, titre: p.titre, ids: p.articles.map((a) => a.id) }] : [])), [pages])
 
   const [index, setIndex] = useState(0)
   const [tourne, setTourne] = useState<Tourne | null>(null)
@@ -477,9 +495,17 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         const total = compterDans(p.texte, requete)
         return total ? [{ i, page: p, total, articles: [] }] : []
       }
+      if (p.type === 'metier') {
+        // Recipes, by their French or English name (or their craft).
+        const k = metierDe(p.metier).cle
+        const recettes = (registre.donnees?.recettes ?? [])
+          .filter((r) => metierDe(r.artisan).cle === k && recetteCorrespond(r, requete))
+          .sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+        return recettes.length ? [{ i, page: p, total: recettes.length, articles: [], recettes }] : []
+      }
       return []
     })
-  }, [pages, requete])
+  }, [pages, requete, registre.donnees?.recettes])
 
   // Searching turns the pages: stay if the current page holds matches, else open the first one that does.
   useEffect(() => {
@@ -566,8 +592,13 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   }, [aller])
 
   // A slip goes when the page turns.
+  // (A slip asked for on the way, e.g. a recipe chosen in the search index, opens on arrival.)
   const destinationFiche = tourne?.vers ?? index
-  useEffect(() => setFiche(null), [destinationFiche])
+  const ficheApres = useRef<Fiche | null>(null)
+  useEffect(() => {
+    setFiche(ficheApres.current)
+    ficheApres.current = null
+  }, [destinationFiche])
 
   const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, ouvrir: setFiche, allerA: setVersId }), [registre])
 
@@ -753,7 +784,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                       <Icone corps={icones[r.page.icone]} />
                       <span>{r.page.titre}</span>
                       <span className="index-total">
-                        {r.total} {r.page.type === 'note' ? 'mention' : 'article'}
+                        {r.total} {r.page.type === 'note' ? 'mention' : r.page.type === 'metier' ? 'recette' : 'article'}
                         {r.total > 1 ? 's' : ''}
                       </span>
                     </button>
@@ -777,6 +808,28 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                       </button>
                     ))}
                     {r.articles.length > 6 && <div className="index-plus">et {r.articles.length - 6} autres…</div>}
+                    {(r.recettes ?? []).slice(0, 6).map((x) => (
+                      <button
+                        type="button"
+                        key={x.produit}
+                        className="index-article"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          ficheApres.current = { genre: 'recette', nom: x.produit }
+                          if (r.i === destinationFiche) setFiche(ficheApres.current)
+                          aller(r.i)
+                          setIndexOuvert(false)
+                        }}
+                      >
+                        <span>
+                          <Surligne texte={x.produit} requete={requete} />
+                        </span>
+                        <em>
+                          <Surligne texte={x.en} requete={requete} />
+                        </em>
+                      </button>
+                    ))}
+                    {(r.recettes?.length ?? 0) > 6 && <div className="index-plus">et {r.recettes!.length - 6} autres…</div>}
                   </section>
                 ))
               )}
@@ -897,7 +950,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
               <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
             )}
             {etroit === false && fiche && !tourne && (
-              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile={false} sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />
+              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articlesLivre} chapitres={chapitres} icones={icones} mobile={false} sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />
             )}
           </div>
         </div>
@@ -913,7 +966,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       {etroit && (
         <>
           {commande.ouverte && commande.deployee && <FeuilleCommande c={commande} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} />}
-          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articles} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />}
+          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articlesLivre} chapitres={chapitres} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />}
           <BarreCommande c={commande} icones={icones} />
         </>
       )}

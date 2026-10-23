@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { identite, type Identite } from '@/lib/identite'
 import { peut } from '@/lib/droits'
 import { chargerArticles } from '@/lib/livre'
+import chapitres from '@/content/chapitres.json'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 import {
   cle,
@@ -33,8 +34,19 @@ const refus = (message: string, status = 400) => NextResponse.json({ ok: false, 
 
 const VIDE: DonneesRegistre = { relie: false, recettes: [], ressources: [], missives: [], mouvements: [], nbMembres: 0, version: 0 }
 
+/** The Catalogues rows that the published CSV (what the book shows) does not hold yet. */
+async function catalogueEnRetard(lu: Lu) {
+  if (!lu.catalogue.length) return []
+  const vus = new Set<string>()
+  ;(await chargerArticles()).forEach((a) => {
+    vus.add(cle(a.fr))
+    if (a.en) vus.add(cle(a.en))
+  })
+  return lu.catalogue.filter((a) => !vus.has(cle(a.fr)))
+}
+
 /** The page's view: shares paid to members who brought nothing are summed up, not named. */
-function vue(lu: Lu): DonneesRegistre {
+async function vue(lu: Lu): Promise<DonneesRegistre> {
   const contributeurs = new Map<string, Set<string>>()
   for (const m of lu.mouvements) {
     if (m.type !== 'dépôt' && m.type !== 'fabrication') continue
@@ -48,6 +60,7 @@ function vue(lu: Lu): DonneesRegistre {
     ressources: lu.ressources,
     missives: lu.missives,
     mouvements: lu.mouvements.filter((m) => m.type !== 'partage' || contributeurs.get(m.missive)?.has(cle(m.membre))),
+    catalogue: await catalogueEnRetard(lu),
     nbMembres: lu.membres.length,
     version: lu.version,
   }
@@ -57,7 +70,7 @@ export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: true, donnees: VIDE })
   try {
     // `v`: the newest version this reader has seen (its own writes must not vanish).
-    return NextResponse.json({ ok: true, donnees: vue(await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)) })
+    return NextResponse.json({ ok: true, donnees: await vue(await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)) })
   } catch (e) {
     console.error('[registre] read failed', e)
     return refus("Le registre des missives reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
@@ -122,7 +135,8 @@ const signee = (q: number) => (q > 0 ? `+${q}` : String(q))
 
 /* ───────────────────────── Writes ───────────────────────── */
 
-type Ecriture = { action: ActionRegistre; charge: Record<string, unknown>; message: string; numero?: string }
+/** `nouvellesRessources`: ingredients of a recipe known nowhere, to add to the Ressources tab (prices left empty). */
+type Ecriture = { action: ActionRegistre; charge: Record<string, unknown>; message: string; numero?: string; nouvellesRessources?: string[] }
 
 async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: Lu, qui: Identite): Promise<Ecriture> {
   const articles = await chargerArticles()
@@ -271,10 +285,21 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       const nouvelle: Recette = { produit, en: mot(b.en, 120), rendement, artisan: mot(b.artisan, 40), note: mot(b.note, 200), ingredients: ingredients.map((i) => ({ nom: i.ingredient, quantite: i.quantite })) }
       const cycle = trouverCycle(produit, indexRecettes([...autres, nouvelle]))
       if (cycle) non(texteCycle(cycle))
+      // Ingredients known nowhere (not a raw material, not a product of a recipe or of the catalogue)
+      // join the raw materials, their prices left to fill.
+      const connus = new Set<string>()
+      const connaitre = (n: string) => n && connus.add(cle(n))
+      lu.ressources.forEach((r) => (connaitre(r.nom), connaitre(r.en)))
+      ;[...autres, nouvelle].forEach((r) => (connaitre(r.produit), connaitre(r.en)))
+      ;[...articles, ...lu.catalogue].forEach((a) => (connaitre(a.fr), connaitre(a.en)))
+      const nouvellesRessources = ingredients.map((i) => i.ingredient).filter((n) => !connus.has(cle(n)))
       return {
         action,
-        charge: { recette: { produit, ancienProduit: ancien || undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients } },
-        message: ingredients.length ? `La recette de ${produit} est consignée.` : `La recette de ${produit} est effacée du registre.`,
+        charge: { recette: { produit, ancienProduit: ancien || undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources } },
+        message: ingredients.length
+          ? `La recette de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} rejoin${nouvellesRessources.length > 1 ? 'nent' : 't'} les matières premières, prix à inscrire.` : ''}`
+          : `La recette de ${produit} est effacée du registre.`,
+        nouvellesRessources,
       }
     }
 
@@ -292,10 +317,27 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       }
       return { action, charge: { ressource }, message: `La ressource ${nom} est inscrite au registre.` }
     }
+
+    case 'vente': {
+      // A product put up for sale: one row added to the Catalogues tab (the book shows it at once,
+      // the published CSV a few minutes later).
+      const fr = mot(b.fr, 120) || non('Le nom de l’ouvrage manque.')
+      const en = mot(b.en, 120)
+      const deja = [...articles, ...lu.catalogue].find((a) => cle(a.fr) === cle(fr) || (en && a.en && cle(a.en) === cle(en)))
+      if (deja) non(`« ${deja.fr} » est déjà au catalogue de la caravane.`)
+      const chapitre = mot(b.chapitre, 40)
+      if (!(chapitres as { id: string }[]).some((c) => c.id === chapitre)) non('Choisis le chapitre du catalogue où l’inscrire.')
+      const prod = nombreOuVide(b.prod, 1e7, 'Le coût')
+      const min = nombreOuVide(b.min, 1e7, 'Le plancher')
+      const max = nombreOuVide(b.max, 1e7, 'Le plafond')
+      if (min !== null && max !== null && min > max) non('Le plancher ne peut dépasser le plafond.')
+      const article = { chapitre, fr, en, prod, min, max, artisan: mot(b.artisan, 40), note: mot(b.note, 200) }
+      return { action, charge: { article }, message: `${fr} rejoint le catalogue de la caravane : Khajiit a de nouvelles marchandises.` }
+    }
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente']
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)
@@ -331,15 +373,35 @@ export async function POST(req: NextRequest) {
     ecrit = await ecrireRegistre(e.action, e.charge)
   } catch (err) {
     console.error(`[registre] ${action} refused by the script`, err)
+    const s = String(err)
     return refus(
-      String(err).includes('already closed') ? 'Cette missive est déjà close : son registre ne bouge plus.' : "Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard.",
+      s.includes('already closed')
+        ? 'Cette missive est déjà close : son registre ne bouge plus.'
+        : s.includes('unknown action')
+          ? 'Le scribe du registre ne connaît pas encore ce feuillet-là : qu’on recopie le dernier script du grimoire dans la feuille, puis qu’on réessaie.'
+          : s.includes('no catalogue')
+            ? 'Le registre ne trouve pas son onglet Catalogues : rien n’a été inscrit.'
+            : s.includes('already in catalogue')
+              ? 'Cet ouvrage est déjà au catalogue de la caravane.'
+              : "Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard.",
       502,
     )
+  }
+  // An older script (before v3f) does not add a recipe's unknown ingredients itself: one 'ressource'
+  // write each, then (best effort: the recipe is written either way).
+  if (e.nouvellesRessources?.length && !Array.isArray((ecrit as { ressourcesAjoutees?: unknown }).ressourcesAjoutees)) {
+    for (const nom of e.nouvellesRessources) {
+      try {
+        ecrit = await ecrireRegistre('ressource', { ressource: { nom, en: '', origine: '', prix: null, bonneAffaire: null, note: '' } })
+      } catch (err) {
+        console.error(`[registre] could not add the resource ${nom}`, err)
+      }
+    }
   }
   const tEcrire = performance.now() - t1
   // Never read again after a write: the script's answer carries every tab (an older script does not;
   // the page then keeps what it shows and reads later).
-  const donnees = ecrit.lu ? vue(ecrit.lu) : null
+  const donnees = ecrit.lu ? await vue(ecrit.lu) : null
   const script = ecrit.ms ?? null
   console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms (script ${script ?? '?'} ms ${JSON.stringify(ecrit.etapes ?? {})}), tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
   const rep = NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })

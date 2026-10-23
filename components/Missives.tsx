@@ -4,9 +4,10 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives } from '@/lib/types'
 import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix } from '@/lib/format'
+import { nomsCorrespondent } from '@/lib/recherche'
 import { arbre, cle, coutMatieres, enStock, estClose, type Recette, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
-import { Icone } from './Ornements'
+import { Icone, Plume } from './Ornements'
 
 /*
  * The book of Missives: the list of missives, one page per missive (needs, contributions, ledger),
@@ -25,6 +26,7 @@ export type Fiche =
   | { genre: 'livrer' | 'abandonner'; numero: string }
   | { genre: 'mouvement'; lignes: Mouvement[] }
   | { genre: 'rang'; cle: string }
+  | { genre: 'vente'; nom: string }
   | { genre: 'poeme'; divinite: string; n: number }
 
 export type CtxRegistre = {
@@ -574,11 +576,37 @@ export function DroiteCoffre({ reg }: { reg?: CtxRegistre }) {
 
 /* ───────────────────────── The workshop ───────────────────────── */
 
-export function GaucheAtelier({ page, reg, icones, compact }: { page: PageAtelier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
+/** A page's own search field (the recipes: by their French or English name). */
+export type RechercheLocale = { valeur: string; changer?: (v: string) => void; interactif: boolean }
+
+function ChampRecette({ recherche }: { recherche?: RechercheLocale }) {
+  if (!recherche) return null
+  return (
+    <label className="recherche-locale">
+      <Plume className="plume" />
+      <input
+        type="search"
+        value={recherche.interactif ? recherche.valeur : ''}
+        readOnly={!recherche.interactif}
+        tabIndex={recherche.interactif ? 0 : -1}
+        onChange={(e) => recherche.changer?.(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && recherche.changer?.('')}
+        placeholder="Chercher une recette (FR ou EN)…"
+        aria-label="Chercher une recette, en français ou en anglais"
+      />
+    </label>
+  )
+}
+
+/** A recipe matches the page's search and the global one by its French or English name, or its craft. */
+const recetteCherchee = (x: Recette, requetes: string[]) => requetes.every((q) => nomsCorrespondent([x.produit, x.en, metierDe(x.artisan).nom], q))
+
+export function GaucheAtelier({ page, reg, icones, compact, recherche }: { page: PageAtelier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
   const r = reg?.r
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
+      {page.vue === 'recettes' && r?.donnees?.relie && <ChampRecette recherche={recherche} />}
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && (
         <div className="gestes">
@@ -598,12 +626,39 @@ export function GaucheAtelier({ page, reg, icones, compact }: { page: PageAtelie
   )
 }
 
-export function DroiteAtelier({ page, reg, interactif, icones }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean; icones: Record<string, string> }) {
+export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean; icones: Record<string, string>; requetes?: string[] }) {
   const r = reg?.r
   if (!r?.donnees?.relie || !reg) return null
   const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const ressources = [...r.donnees.ressources].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
   const tab = interactif ? 0 : -1
+  if (page.vue === 'recettes' && requetes.some(Boolean)) {
+    // Searching: every recipe whose French or English name answers, with its craft.
+    const trouvees = recettes.filter((x) => recetteCherchee(x, requetes))
+    return (
+      <div className="atelier-droite">
+        <h3 className="titre-section">Recettes trouvées</h3>
+        {trouvees.length ? (
+          <ul className="liste-recettes">
+            {trouvees.map((x) => (
+              <li key={x.produit}>
+                <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
+                  <span className="noms">
+                    <span className="entree">{x.produit}</span>
+                    {x.en && <span className="nom-en">{x.en}</span>}
+                  </span>
+                  <span className="points" />
+                  <span className="renvoi">{metierDe(x.artisan).nom}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="vide-encre">Nulle recette de ce nom, ni en français ni en anglais.</p>
+        )}
+      </div>
+    )
+  }
   if (page.vue === 'recettes') {
     // The recipes' contents: one entry per craft, with its count of recipes.
     const metiers = metiersDe(recettes)
@@ -696,12 +751,13 @@ export function metiersDe(recettes: Recette[]) {
   return [...par.values()].sort((a, b) => (a.cle === SANS_METIER.cle ? 1 : b.cle === SANS_METIER.cle ? -1 : a.nom.localeCompare(b.nom, 'fr')))
 }
 
-export function GaucheMetier({ page, reg, icones, compact }: { page: PageMetier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
+export function GaucheMetier({ page, reg, icones, compact, recherche }: { page: PageMetier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
   const r = reg?.r
   const m = metierDe(page.metier)
   return (
     <>
       {!compact && m.intro && <p className="intro lettrine">{m.intro}</p>}
+      {r?.donnees?.relie && <ChampRecette recherche={recherche} />}
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && r.marchand?.droits?.recette !== false && (
         <div className="gestes">
@@ -714,12 +770,13 @@ export function GaucheMetier({ page, reg, icones, compact }: { page: PageMetier;
   )
 }
 
-export function DroiteMetier({ page, reg, interactif, anglais }: { page: PageMetier; reg?: CtxRegistre; interactif: boolean; anglais: (nom: string) => string }) {
+export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: { page: PageMetier; reg?: CtxRegistre; interactif: boolean; anglais: (nom: string) => string; requetes?: string[] }) {
   const r = reg?.r
   if (!r?.donnees?.relie || !reg) return null
   const c = r.calcul
   const k = metierDe(page.metier).cle
-  const recettes = r.donnees.recettes.filter((x) => metierDe(x.artisan).cle === k).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+  const toutes = r.donnees.recettes.filter((x) => metierDe(x.artisan).cle === k)
+  const recettes = toutes.filter((x) => recetteCherchee(x, requetes)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const tab = interactif ? 0 : -1
   return (
     <div className="atelier-droite">
@@ -732,7 +789,7 @@ export function DroiteMetier({ page, reg, interactif, anglais }: { page: PageMet
               <button type="button" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'recette', nom: x.produit })}>
                 <span className="noms">
                   <span className="entree">{x.produit}</span>
-                  {anglais(x.produit) && <span className="nom-en">{anglais(x.produit)}</span>}
+                  {(x.en || anglais(x.produit)) && <span className="nom-en">{x.en || anglais(x.produit)}</span>}
                 </span>
                 <span className="points" />
                 <span className="renvoi">
@@ -746,7 +803,7 @@ export function DroiteMetier({ page, reg, interactif, anglais }: { page: PageMet
           ))}
         </ul>
       ) : (
-        <p className="vide-encre">Plus aucune recette pour ce métier.</p>
+        <p className="vide-encre">{toutes.length ? 'Nulle recette de ce nom pour ce métier, ni en français ni en anglais.' : 'Plus aucune recette pour ce métier.'}</p>
       )}
     </div>
   )

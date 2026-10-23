@@ -422,6 +422,7 @@ is `ONGLETS` at the top of `commandes.gs`.
 | **Recettes** | one ingredient of one product | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note` |
 | **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture` |
 | **Mouvements** (created by the script, append-only) | one movement | `Horodatage`, `N° action`, `N° missive`, `Membre`, `Type`, `Objet`, `Quantité`, `Note` |
+| **Catalogues** (the price list published as CSV; read, and appended to by `vente` only) | one article | the owner's headers, found by the names of *Accepted column names* above (`Chapitre`, `Article`, `Article (EN)`, `Prix de prod`, `Prix mini`, `Prix idéal`, `Artisan`, `Note`); the script never adds or renames a column there and fills only the columns that exist |
 
 Movement types: `relevé` (Quantité = the counted quantity; Note = `attendu X, écart ±Y`), `dépôt` (+),
 `fabrication` (− each input, + each output, one `N° action` per craft), `livraison` (−, written when a
@@ -441,17 +442,34 @@ refused by the script itself (`already closed`), under the lock.
 | `action` | Body | Effect |
 |---|---|---|
 | *(none)* or `commande` | `{ commande }` | Sealed order, unchanged since v2 (Commandes tab) |
-| `lire` | — | `{ ok, onglets: { membres, ressources, recettes, missives, mouvements } }`, each an array of objects keyed by the field names of `ONGLETS` |
+| `lire` | — | `{ ok, onglets: { membres, ressources, recettes, missives, mouvements, catalogue } }`, each an array of objects keyed by the field names of `ONGLETS` (`catalogue` from v3f) |
 | `missive` | `{ missive: { numero, horodatage, titre, commanditaire, echeance, membre, lignes: [{ produit, quantite }] } }` | One Missives row per line, Statut `en cours` |
 | `releve`, `depot`, `fabrication` (`livraison` kept) | `{ mouvements: [{ horodatage, action, missive, membre, objet, quantite, note }] }` | Mouvements rows, Type set from the action |
 | `cloture` | `{ cloture: { numero, action, horodatage, membre, statut, recompense, partCommune, note, livraisons: [{ objet, quantite, note }], partage: [{ membre, montant, note }] } }` | The missive's rows closed (Statut `livrée`/`inachevée`, Récompense, Part commune, Close le/par, Note de clôture); its `livraison` rows; one `partage` row per member |
-| `recette` | `{ recette: { produit, ancienProduit?, rendement, artisan, note, ingredients: [{ ingredient, quantite }] } }` | The product's rows replaced (no ingredient = recipe removed) |
+| `recette` | `{ recette: { produit, ancienProduit?, en, rendement, artisan, note, ingredients: [{ ingredient, quantite }], nouvellesRessources?: [nom] } }` | The product's rows replaced (no ingredient = recipe removed); from v3f, the ingredients named in `nouvellesRessources` (known nowhere: not a raw material, not a recipe's or the catalogue's product) are added to Ressources with empty prices, answer `ressourcesAjoutees`. With an older script the grimoire adds them itself, one `ressource` write each |
 | `ressource` | `{ ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }` | The row updated, or added |
+| `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
 grimoire's server (`/api/registre`) validates everything, signs with the member's name, recomputes the
 split, then calls the script; reads are cached 45 s (`lib/registre.ts`), and a write's answer refreshes
 that server's copy.
+
+### In the workshop
+
+- Recipes are found by their French or English name (`Produit EN`), in the global search (a *recette*
+  count under each craft, a click opens the recipe's slip) and in the recipes' own search field (the
+  recipes' contents and each craft's page). The English name shows in italics under the French one.
+- Writing a recipe: the product's name is compared, as it is typed, with every recipe already written
+  (French and English names, accents, case and spacing ignored, a letter or two off still caught,
+  `ressemblance` in `lib/recherche.ts`) and offers to open the existing one; each ingredient row offers
+  the items already known (raw materials, products, earlier ingredients), so the same item is not
+  written under two spellings. An ingredient known nowhere joins the raw materials, prices empty.
+- A recipe's slip says whether the caravan sells its product (« Au catalogue de la caravane », its
+  floor and ceiling, a link to its chapter) or offers « le mettre en vente »: a slip with the chapter
+  (proposed from the craft, `chapitre` in `lib/metiers.ts`), the names, the cost (the recipe's value:
+  its materials ÷ its yield) and floor / ceiling (the chapter's usual margins over cost can be taken
+  with one touch).
 
 ### Setting it up (on top of *Setting up the orders sheet*)
 

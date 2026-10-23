@@ -28,6 +28,11 @@ export type Ingredient = { nom: string; quantite: number }
 /** `en`: the product's English name (Recettes « Produit EN », for products not in the catalogue). */
 export type Recette = { produit: string; en: string; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
 export type LigneMissive = { produit: string; quantite: number }
+/**
+ * A catalogue row written by the grimoire (« mettre en vente ») that the published CSV does not show yet
+ * (Google republishes it every few minutes): `chapitre` is a chapter id of content/chapitres.json.
+ */
+export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; enAttente?: boolean }
 export type Missive = {
   numero: string
   horodatage: string
@@ -74,6 +79,8 @@ export type DonneesRegistre = {
   ressources: Ressource[]
   missives: Missive[]
   mouvements: Mouvement[]
+  /** Catalogue rows the sheet holds but the published CSV does not show yet (absent with an older script). */
+  catalogue?: ArticleVente[]
   nbMembres: number
   /** The registre's state number (see lib/registre.ts); 0 with an older script. */
   version: number
@@ -81,7 +88,8 @@ export type DonneesRegistre = {
 
 /** Actions a member can take; each one goes through the permission hook (lib/droits.ts). */
 /** `cloture`: deliver the missive (success) or give it up (inachevée); both close it and share the reward. */
-export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource'
+/** `vente`: a recipe's product put up for sale (a row added to the Catalogues tab). */
+export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente'
 
 /* ───────────────────────── Lookups ───────────────────────── */
 
@@ -459,6 +467,8 @@ export type Onglets = {
   recettes?: Record<string, unknown>[]
   missives?: Record<string, unknown>[]
   mouvements?: Record<string, unknown>[]
+  /** The Catalogues tab (from a v3f script on). */
+  catalogue?: Record<string, unknown>[]
 }
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */
@@ -530,5 +540,18 @@ export function lireOnglets(o: Onglets) {
     }))
     .filter((m) => m.type && m.objet)
 
-  return { membres, ressources, recettes, missives, mouvements }
+  const catalogue: ArticleVente[] = (o.catalogue ?? [])
+    .map((r) => ({
+      chapitre: texte(r.chapitre),
+      fr: texte(r.fr),
+      en: texte(r.en),
+      prod: nombre(r.prod),
+      min: nombre(r.min),
+      max: nombre(r.max),
+      artisan: texte(r.artisan),
+      note: texte(r.note),
+    }))
+    .filter((a) => a.fr)
+
+  return { membres, ressources, recettes, missives, mouvements, catalogue }
 }

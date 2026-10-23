@@ -9,8 +9,8 @@ import { ICONES_METIERS } from './metiers'
 import { ICONES_RANGS } from './rangs'
 import { icones } from './icones'
 import { COLOPHON } from './credits'
-import { ICONES_ARTISANS, normaliser } from './recherche'
-import type { Article, Artisan, Livre, Page, PageChapitre, PageNote, Partie } from './types'
+import { artisanDe, ICONES_ARTISANS, normaliser, slug } from './recherche'
+import type { Article, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
 const CONTENU = path.join(process.cwd(), 'content')
 
@@ -25,9 +25,6 @@ export const PARTIES: Partie[] = [
 
 type DefChapitre = { id: string; titre: string; titreEn: string; court: string; icone?: string; intro: string }
 
-function slug(s: string): string {
-  return normaliser(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
 
 function nombre(s: string | undefined): number | null {
   // Tolerates units and symbols typed in a sheet ("25 septims", "12,5 ¤").
@@ -37,13 +34,6 @@ function nombre(s: string | undefined): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function artisan(s: string | undefined): Artisan {
-  const n = normaliser(s ?? '')
-  if (n.includes('alchim')) return 'alchimiste'
-  if (n.includes('forge')) return 'forgeron'
-  if (n.includes('coutur')) return 'couturier'
-  return 'divers'
-}
 
 async function lireCatalogue(): Promise<string> {
   const url = process.env.CATALOGUE_CSV_URL
@@ -120,7 +110,7 @@ function lireArticles(csv: string): (Article & { chapitre: string })[] {
         prod: nombre(l[i.prod]),
         min: nombre(l[i.min]),
         max: nombre(l[i.max]),
-        artisan: artisan(l[i.artisan]),
+        artisan: artisanDe(l[i.artisan]),
         note: (l[i.note] ?? '').trim(),
       }
     })

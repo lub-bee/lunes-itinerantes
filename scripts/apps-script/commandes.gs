@@ -18,7 +18,7 @@
  *    share of it, pro rata to its « total idéal ».
  *    One row per article in the "Commandes" tab.
  *
- *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements }, version, cache },
+ *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements, catalogue }, version, cache },
  *    each tab an array of objects keyed by the field names of ONGLETS below (missing tabs → []);
  *    served from the script's cache when it holds them (`cache: true`).
  *
@@ -35,10 +35,18 @@
  *                                                                              its 'livraison' rows (goods leaving the
  *                                                                              chest) and one 'partage' row per member
  *      'recette'     { recette: { produit, ancienProduit?, en, rendement, artisan, note,
- *                                 ingredients: [{ ingredient, quantite }] } } → the product's Recettes rows replaced
- *                                                                              (no ingredient = recipe removed)
+ *                                 ingredients: [{ ingredient, quantite }],
+ *                                 nouvellesRessources?: [nom] } }             → the product's Recettes rows replaced
+ *                                                                              (no ingredient = recipe removed); the
+ *                                                                              ingredients known nowhere added to
+ *                                                                              Ressources, prices empty (v3f;
+ *                                                                              answer: ressourcesAjoutees)
  *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }
  *                                                                            → the Ressources row updated, or added
+ *      'vente'       { article: { chapitre, fr, en, prod, min, max, artisan, note } }
+ *                                                                            → one row added to the Catalogues tab
+ *                                                                              (only its existing columns are filled;
+ *                                                                              refused if the name is already there) (v3f)
  *    Answer: { ok: true, ..., onglets, version } (every tab read again after the write, as for 'lire',
  *    so the grimoire needs no second call) or { ok: false, erreur }.
  *
@@ -100,6 +108,25 @@ var ONGLETS = {
       ['Échéance', 'echeance'], ['Statut', 'statut'], ['Produit', 'produit'], ['Quantité', 'quantite'],
       ['Écrite par', 'ecritePar'], ['Récompense', 'recompense'], ['Part commune (%)', 'partCommune'],
       ['Close le', 'closeLe'], ['Close par', 'closePar'], ['Note de clôture', 'noteCloture'],
+    ],
+  },
+  /**
+   * The price list the book shows (published as CSV, read by the grimoire every 5 minutes). Read here
+   * too, so an article put up for sale shows at once; written only by 'vente', which fills the columns
+   * the tab already has (its headers are never touched). Headers as in README « Accepted column names ».
+   */
+  catalogue: {
+    nom: 'Catalogues',
+    lecture: true,
+    colonnes: [
+      ['Chapitre', 'chapitre', ['catégorie', 'categorie', 'rubrique', 'section']],
+      ['Article', 'fr', ['fr', 'articles', 'détail', 'details', 'désignation', 'nom', 'objet', 'produit']],
+      ['Article (EN)', 'en', ['en', 'anglais', 'english', 'nom anglais', 'nom en', 'article anglais', 'détail en', 'désignation en']],
+      ['Prix de prod', 'prod', ['prod', 'prix prod', 'prix de production', 'coût', 'coût de prod', 'coût de production']],
+      ['Prix mini', 'min', ['min', 'mini', 'minimum', 'prix minimum', 'prix min', 'plancher', 'prix plancher']],
+      ['Prix idéal', 'max', ['max', 'maxi', 'idéal', 'prix max', 'prix maxi', 'plafond', 'prix plafond']],
+      ['Artisan', 'artisan', ['métier', 'atelier']],
+      ['Note', 'note', ['notes', 'remarque', 'commentaire']],
     ],
   },
   mouvements: {
@@ -591,11 +618,30 @@ var ECRITURES = {
     if (lignes.length) p.feuille.getRange(2, 1, lignes.length, p.largeur).clearContent();
     if (toutes.length) p.feuille.getRange(2, 1, toutes.length, p.largeur).setValues(toutes);
     var anciens = [r.produit, r.ancienProduit].filter(function (x) { return x; }).map(cleEntete);
+    // Ingredients known nowhere (the grimoire names them) join the raw materials, prices empty.
+    var ajoutees = [];
+    var demandees = r.nouvellesRessources || [];
+    if (demandees.length) {
+      var res = ouvrir(ONGLETS.ressources);
+      var deja = {};
+      res.lignes.forEach(function (l) {
+        ['nom', 'en'].forEach(function (k) { if (res.p.cols[k]) deja[cleEntete(l[res.p.cols[k] - 1])] = true; });
+      });
+      demandees.forEach(function (nom) {
+        var k = cleEntete(nom);
+        if (!k || deja[k]) return;
+        deja[k] = true;
+        ajoutees.push({ nom: nom, en: '', origine: '', prix: '', bonneAffaire: '', note: '' });
+      });
+      ajouter(ONGLETS.ressources, ajoutees, res.p);
+    }
     return {
       ok: true, produit: r.produit, lignes: nouvelles.length,
+      ressourcesAjoutees: ajoutees.map(function (x) { return x.nom; }),
       maj: function (o) {
         o.recettes = o.recettes.filter(function (x) { return anciens.indexOf(cleEntete(x.produit)) < 0; });
         objets.forEach(function (x) { o.recettes.push(complet(ONGLETS.recettes, x)); });
+        ajoutees.forEach(function (x) { o.ressources.push(complet(ONGLETS.ressources, x)); });
       },
     };
   },
@@ -629,6 +675,37 @@ var ECRITURES = {
     ajouter(ONGLETS.ressources, [valeurs], p);
     return { ok: true, nom: r.nom, ajoutee: true, maj: maj };
   },
+
+  /** A product put up for sale: one Catalogues row, in the columns the tab already has. */
+  vente: function (corps) {
+    var a = corps.article;
+    if (!a || !a.fr) return { ok: false, erreur: 'no article' };
+    var def = ONGLETS.catalogue;
+    var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+    if (!feuille || feuille.getLastRow() < 1) return { ok: false, erreur: 'no catalogue tab' };
+    var tout = feuille.getDataRange().getValues();
+    var idx = indexColonnes(tout[0], def);
+    if (idx.fr < 0) return { ok: false, erreur: 'no catalogue article column' };
+    var noms = [a.fr, a.en].filter(function (x) { return x; }).map(cleEntete);
+    for (var r = 1; r < tout.length; r++) {
+      var vus = [idx.fr, idx.en].filter(function (i) { return i >= 0; }).map(function (i) { return cleEntete(tout[r][i]); });
+      if (vus.some(function (v) { return v && noms.indexOf(v) >= 0; })) return { ok: false, erreur: 'already in catalogue' };
+    }
+    var nombre = function (v) { return v === null || v === undefined ? '' : v; };
+    var valeurs = { chapitre: a.chapitre || '', fr: a.fr, en: a.en || '', prod: nombre(a.prod), min: nombre(a.min), max: nombre(a.max), artisan: a.artisan || '', note: a.note || '' };
+    var largeur = Math.max(feuille.getLastColumn(), 1);
+    var ligne = [];
+    for (var c = 0; c < largeur; c++) ligne.push('');
+    Object.keys(valeurs).forEach(function (k) { if (idx[k] >= 0) ligne[idx[k]] = valeurs[k]; });
+    feuille.getRange(tout.length + 1, 1, 1, largeur).setValues([ligne]);
+    return {
+      ok: true, article: a.fr,
+      maj: function (o) {
+        o.catalogue = o.catalogue || [];
+        o.catalogue.push(complet(def, valeurs));
+      },
+    };
+  },
 };
 
 function repondre(objet) {
@@ -647,6 +724,14 @@ function essai() {
     var p = preparer(ONGLETS[k]);
     Logger.log('Tab "' + ONGLETS[k].nom + '" ready, ' + p.feuille.getLastRow() + ' row(s).');
   });
+  // The catalogue is only checked (its headers are the owner's; never changed here).
+  var cat = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ONGLETS.catalogue.nom);
+  if (!cat) {
+    Logger.log('No "' + ONGLETS.catalogue.nom + '" tab: putting a recipe up for sale will be refused.');
+  } else {
+    var ic = indexColonnes(cat.getRange(1, 1, 1, Math.max(cat.getLastColumn(), 1)).getValues()[0], ONGLETS.catalogue);
+    Logger.log('Tab "' + ONGLETS.catalogue.nom + '": ' + Object.keys(ic).map(function (k) { return k + (ic[k] >= 0 ? ' col ' + (ic[k] + 1) : ' missing'); }).join(', '));
+  }
   var l = toutLire();
   Logger.log(Object.keys(l).map(function (k) { return k + ': ' + l[k].length; }).join(', '));
 }

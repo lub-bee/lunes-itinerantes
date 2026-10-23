@@ -43,10 +43,13 @@ const sansFolio = (p: Page) => p.type === 'exlibris' || p.type === 'divinite' ||
 const avantSommaire = (ctx: Ctx) => Math.max(0, ctx.livre.pages.findIndex((p) => p.type === 'sommaire'))
 const folio = (ctx: Ctx) => ctx.index - avantSommaire(ctx)
 
+/** A page's own search field (recipes), kept per page like the chapters' one. */
+const rechercheLocale = (ctx: Ctx) => ({ valeur: ctx.locale, changer: ctx.setLocale, interactif: ctx.interactif })
+
 /** English name of an item: the catalogue's, else the raw material's. */
 function nomAnglais(ctx: Ctx, nom: string): string {
   const k = cle(nom)
-  for (const p of ctx.livre.pages) if (p.type === 'chapitre') for (const a of p.articles) if (cle(a.fr) === k) return a.en
+  for (const p of ctx.livre.pages) if (p.type === 'chapitre') for (const a of p.articles) if (cle(a.fr) === k && a.en) return a.en
   const d = ctx.registre?.r.donnees
   return d?.recettes.find((r) => cle(r.produit) === k)?.en || d?.ressources.find((r) => cle(r.nom) === k)?.en || ''
 }
@@ -189,7 +192,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       case 'atelier':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+            <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} recherche={rechercheLocale(ctx)} />
           </EnTete>
         )
       case 'caravane':
@@ -201,7 +204,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       case 'metier':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GaucheMetier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+            <GaucheMetier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} recherche={rechercheLocale(ctx)} />
           </EnTete>
         )
       case 'avenir':
@@ -392,7 +395,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'coffre':
         return <DroiteCoffre reg={ctx.registre} />
       case 'atelier':
-        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} />
+        return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} requetes={[ctx.requete, ctx.locale]} />
       case 'caravane':
         return (
           <>
@@ -401,7 +404,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
           </>
         )
       case 'metier':
-        return <DroiteMetier page={page} reg={ctx.registre} interactif={ctx.interactif} anglais={(nom) => nomAnglais(ctx, nom)} />
+        return <DroiteMetier page={page} reg={ctx.registre} interactif={ctx.interactif} anglais={(nom) => nomAnglais(ctx, nom)} requetes={[ctx.requete, ctx.locale]} />
       case 'avenir':
         return (
           <div className="attente">
