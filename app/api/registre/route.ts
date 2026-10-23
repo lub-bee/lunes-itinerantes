@@ -321,7 +321,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
           recette: { produit, variante, usage, ancienProduit: editee ? ancien : undefined, ancienneVariante: editee ? ancienneVariante : undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources },
         },
         message: ingredients.length
-          ? `La recette${variante > 1 || soeurs.length ? ` n° ${variante}` : ''} de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} rejoin${nouvellesRessources.length > 1 ? 'nent' : 't'} les matières premières, prix à inscrire.` : ''}`
+          ? `La recette${variante > 1 || soeurs.length ? ` n° ${variante}` : ''} de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} ${nouvellesRessources.length > 1 ? 'rejoignent' : 'rejoint'} les matières premières, prix à inscrire.` : ''}`
           : `La recette${ancienneVariante > 1 || soeurs.length ? ` n° ${ancienneVariante}` : ''} de ${produit} est effacée du registre.`,
         nouvellesRessources,
       }
