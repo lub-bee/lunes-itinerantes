@@ -3131,7 +3131,7 @@ em.besoins-recette { border: 0; cursor: default; }
 }
 .tampon small { font-family: var(--f-texte); font-style: italic; font-size: 11px; letter-spacing: 0; text-transform: none; }
 .tampon.usage { border-color: rgba(142, 31, 20, 0.85); }
-.tampon.petit { margin-left: 8px; padding: 0 5px; border-width: 1.5px; outline: none; font-size: 10.5px; rotate: -3deg; vertical-align: 2px; }
+.tampon.petit { margin-left: 10px; padding: 1px 7px 0; border-width: 1.5px; outline: none; font-size: 12.5px; rotate: -4deg; vertical-align: 1px; }
 /* The leaves of a product with several recipes: tabs on the left, one leaf shown. */
 .feuilles-recette { display: grid; grid-template-columns: 88px minmax(0, 1fr); margin: 8px 0 4px; }
 .onglets-recette { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
