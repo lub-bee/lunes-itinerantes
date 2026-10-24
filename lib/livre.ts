@@ -23,7 +23,8 @@ export const PARTIES: Partie[] = [
   { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
 ]
 
-type DefChapitre = { id: string; titre: string; titreEn: string; court: string; icone?: string; intro: string }
+/** `masque`: a chapter kept in the catalogue (prices, values, the sheet's ids) but not shown in the book (no page, no side tab). */
+type DefChapitre = { id: string; titre: string; titreEn: string; court: string; icone?: string; intro: string; masque?: boolean }
 
 
 function nombre(s: string | undefined): number | null {
@@ -163,7 +164,7 @@ export async function chargerLivre(): Promise<Livre> {
   const defs = JSON.parse(await fs.readFile(path.join(CONTENU, 'chapitres.json'), 'utf8')) as DefChapitre[]
   const articles = lireArticles(await lireCatalogue())
 
-  const chapitres: PageChapitre[] = defs.map((d) => ({
+  const chapitres: PageChapitre[] = defs.filter((d) => !d.masque).map(({ masque: _masque, ...d }) => ({
     type: 'chapitre',
     partie: 'marchandises',
     ...d,
@@ -184,6 +185,11 @@ export async function chargerLivre(): Promise<Livre> {
     { type: 'sommaire', id: 'sommaire', partie: 'sommaire', titre: 'Sommaire', titreEn: 'Contents', court: 'Sommaire', icone: 'open-book',
       citation: "Un marchand sans registre est un marchand qui oublie ; un marchand qui oublie est un marchand ruiné." },
     ...chapitres,
+    // The signed member's own sales (sealed orders), set apart after the chapters.
+    {
+      type: 'ventes', id: 'mes-ventes', partie: 'marchandises', titre: 'Mes ventes', titreEn: 'My Sales', court: 'Mes ventes', icone: 'two-coins',
+      intro: 'Les bons de commande scellés à ton nom, du plus récent au plus ancien : ce que tu as vendu, à quel prix, et ce que la caravane en a tiré.',
+    },
     {
       type: 'atelier', vue: 'recettes', id: 'recettes', partie: 'atelier', titre: 'Sommaire des recettes', titreEn: 'Recipe Index', court: 'Sommaire', icone: 'cauldron',
       intro: 'Les recettes des artisans, rangées par métier : ce qu’il faut pour une fournée, et ce que coûtent ses matières. Chacun peut en consigner une nouvelle ou corriger une quantité.',

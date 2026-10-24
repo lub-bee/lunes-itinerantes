@@ -106,6 +106,9 @@ armes,Épée en fer,Iron Sword,8.2,25,30,forgeron,
 
 ### Chapters — `content/chapitres.json`
 
+A chapter with `"masque": true` stays in the catalogue (its articles keep their prices and values) but
+has no page and no side tab (the « Ingrédients » chapter: raw materials live in the Atelier).
+
 Order of the array = order of the pages and side tabs. Each chapter: `id`, `titre` (FR), `titreEn`,
 `court` (tab label), `icone` (see Icons) and `intro` (in-character paragraph). Add, rename, reorder or split chapters here,
 then update the `chapitre` column of the affected articles.
@@ -456,6 +459,7 @@ refused by the script itself (`already closed`), under the lock.
 | `ressource` | `{ ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }` | The row updated, or added |
 | `usage` (v3g) | `{ usage: { produit, variante } }` | `Usage` = `oui` on that variant's rows, emptied on the product's other rows |
 | `choix` (v3g) | `{ choix: { numero, recettes } }` | The missive's `Recettes` cell on each of its rows (`recettes`: the whole list as text, built by the grimoire) |
+| `lire` (v3h) | — | also `onglets.commandes`: the Commandes tab (`horodatage, numero, vendeur, article, quantite, prixUnitaire, total, prixReel, statut, totalCommande`), so each member sees their own sales (« Mes ventes »: the server keeps only the signed member's orders). A sealed order now drops the cached tabs; the cache key is `registre-v3h` (a new script version never serves an older one's tabs) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
@@ -480,6 +484,19 @@ that server's copy.
   overwrite). A raw material that also has a recipe says « se fabrique aussi » and opens its recipes.
 - On a missive's page, each item of « Ce qu'il faut réunir » that has several recipes (or is a raw
   material with one) gets a selector « par la recette N » / « acheté »: the needs recompute at once.
+- A product with several recipes: its slip shows one leaf per recipe, turned by tabs on the left
+  (« Recette 1 », « Recette 2 »… with each one's cost per unit); each leaf carries an ink stamp
+  « Recette N » (« d'usage » on the usual one). In the lists, a stamp « N variantes », a head
+  (Ouvrage · Coût l'unité) and every recipe's cost per unit (the usual one first: « 12 / 15 »).
+- The raw materials' ledger filters by craft (a material belongs to every craft whose recipes use it)
+  and to « sans prix » (counted, the empty prices marked « à estimer »); a chapter counts its articles
+  with no cost.
+- « + inscrire une marchandise » at the foot of a chapter: an article of the catalogue without a
+  recipe (only the name is needed; the chapter is the page's). A recipe's own « mettre en vente »
+  proposes a chapter only for crafts that make one kind of goods (a smith's armour is not a weapon:
+  the reader chooses).
+- « Mes ventes », a coin-coloured tab set apart after the Marchandises chapters: the sealed orders whose
+  seller is the signed member (from a v3h script).
 - A recipe's slip says whether the caravan sells its product (« Au catalogue de la caravane », its
   floor and ceiling, a link to its chapter) or offers « le mettre en vente »: a slip with the chapter
   (proposed from the craft, `chapitre` in `lib/metiers.ts`), the names, the cost (the recipe's value:

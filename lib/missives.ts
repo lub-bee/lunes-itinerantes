@@ -42,6 +42,9 @@ export type LigneMissive = { produit: string; quantite: number }
  * A catalogue row written by the grimoire (« mettre en vente ») that the published CSV does not show yet
  * (Google republishes it every few minutes): `chapitre` is a chapter id of content/chapitres.json.
  */
+/** One sealed order as the « Commandes » tab holds it (one row per article). */
+export type LigneVente = { article: string; quantite: number; prixUnitaire: number | null; total: number | null; prixReel: number | null; statut: string }
+export type Vente = { numero: string; horodatage: string; vendeur: string; total: number | null; lignes: LigneVente[] }
 export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; enAttente?: boolean }
 export type Missive = {
   numero: string
@@ -93,6 +96,8 @@ export type DonneesRegistre = {
   mouvements: Mouvement[]
   /** Catalogue rows the sheet holds but the published CSV does not show yet (absent with an older script). */
   catalogue?: ArticleVente[]
+  /** The signed member's sealed orders, one per order (null: a script before v3h, which does not read them). */
+  ventes?: Vente[] | null
   nbMembres: number
   /** The registre's state number (see lib/registre.ts); 0 with an older script. */
   version: number
@@ -534,6 +539,8 @@ export type Onglets = {
   mouvements?: Record<string, unknown>[]
   /** The Catalogues tab (from a v3f script on). */
   catalogue?: Record<string, unknown>[]
+  /** The Commandes tab (sealed orders; from a v3h script on). */
+  commandes?: Record<string, unknown>[]
 }
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */
@@ -626,5 +633,20 @@ export function lireOnglets(o: Onglets) {
   // A script that knows recipe variants (v3g) reads the « Variante » column (even empty): every row has the key.
   const variantes = !(o.recettes ?? []).length || 'variante' in (o.recettes ?? [])[0]
 
-  return { membres, ressources, recettes, missives, mouvements, catalogue, variantes }
+  // Sealed orders, grouped by number (null: the script does not read them).
+  let ventes: Vente[] | null = null
+  if (o.commandes) {
+    const par = new Map<string, Vente>()
+    for (const r of o.commandes) {
+      const numero = texte(r.numero)
+      const article = texte(r.article)
+      if (!numero || !article) continue
+      const v = par.get(numero) ?? { numero, horodatage: date(r.horodatage), vendeur: texte(r.vendeur), total: nombre(r.totalCommande), lignes: [] }
+      par.set(numero, v)
+      v.lignes.push({ article, quantite: nombre(r.quantite) ?? 0, prixUnitaire: nombre(r.prixUnitaire), total: nombre(r.total), prixReel: nombre(r.prixReel), statut: texte(r.statut) })
+    }
+    ventes = [...par.values()].sort((a, b) => b.horodatage.localeCompare(a.horodatage))
+  }
+
+  return { membres, ressources, recettes, missives, mouvements, catalogue, variantes, ventes }
 }

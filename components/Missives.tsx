@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, type FormEvent, type ReactNode } from 'react'
-import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives } from '@/lib/types'
+import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives, PageVentes } from '@/lib/types'
 import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
-import { arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
+import { arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { Icone, Plume } from './Ornements'
 
@@ -27,7 +27,8 @@ export type Fiche =
   | { genre: 'livrer' | 'abandonner'; numero: string }
   | { genre: 'mouvement'; lignes: Mouvement[] }
   | { genre: 'rang'; cle: string }
-  | { genre: 'vente'; nom: string }
+  /** `chapitre`: the chapter page it is added from (a merchandise with no recipe yet). */
+  | { genre: 'vente'; nom: string; chapitre?: string }
   | { genre: 'poeme'; divinite: string; n: number }
 
 export type CtxRegistre = {
@@ -649,7 +650,40 @@ const recetteCherchee = (x: Recette & { toutes?: Recette[] }, requetes: string[]
 
 /** « 2 recettes » after a product that has several. */
 function MentionVariantes({ n }: { n: number }) {
-  return n > 1 ? <em className="mention-variantes">{n} recettes</em> : null
+  return n > 1 ? <span className="tampon petit">{n} variantes</span> : null
+}
+
+/**
+ * What a product's materials cost per unit, recipe by recipe: the usual one first, then the others
+ * (« 12 / 15 »), each recipe's own cost visible.
+ */
+function CoutsRecettes({ x, reg }: { x: Recette & { toutes: Recette[] }; reg: CtxRegistre }) {
+  const c = reg.r.calcul
+  const ressources = reg.r.donnees?.ressources ?? []
+  if (!c) return null
+  const ordre = [x, ...x.toutes.filter((v) => v.variante !== x.variante)]
+  const couts = ordre.map((v) => {
+    const index = new Map(c.recettes).set(cle(v.produit), v)
+    return { v, cout: coutMatieres(arbre(v.produit, v.rendement, index), ressources).cout / Math.max(1, v.rendement) }
+  })
+  if (!couts.some((k) => k.cout > 0)) return null
+  return (
+    <b title={couts.map((k) => `recette ${k.v.variante}${k.v === x ? ' (d’usage)' : ''} : ${k.cout > 0 ? prix(Math.round(k.cout * 100) / 100) : '?'} septims l’unité`).join('\n')}>
+      {couts.map((k) => (k.cout > 0 ? prix(Math.round(k.cout * 100) / 100) : '?')).join(' / ')}
+    </b>
+  )
+}
+
+/** The head of a recipe list, as the price ledger's. */
+function EnteteRecettes() {
+  return (
+    <div className="recettes-entete" role="row">
+      <span>Ouvrage</span>
+      <span>
+        Coût <em>l’unité</em>
+      </span>
+    </div>
+  )
 }
 
 export function GaucheAtelier({ page, reg, icones, compact, recherche }: { page: PageAtelier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
@@ -682,8 +716,6 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
   if (!r?.donnees?.relie || !reg) return null
   const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const ressources = [...r.donnees.ressources].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
-  // Raw materials that also have a recipe (bought by default; a missive may craft them).
-  const fabricables = new Set(r.donnees.recettes.map((x) => cle(x.produit)))
   const tab = interactif ? 0 : -1
   if (page.vue === 'recettes' && requetes.some(Boolean)) {
     // Searching: every recipe whose French or English name answers, with its craft.
@@ -691,6 +723,7 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
     return (
       <div className="atelier-droite">
         <h3 className="titre-section">Recettes trouvées</h3>
+        {trouvees.length > 0 && <EnteteRecettes />}
         {trouvees.length ? (
           <ul className="liste-recettes">
             {trouvees.map((x) => (
@@ -703,7 +736,9 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
                     {x.en && <span className="nom-en">{x.en}</span>}
                   </span>
                   <span className="points" />
-                  <span className="renvoi">{metierDe(x.artisan).nom}</span>
+                  <span className="renvoi">
+                    <em>{metierDe(x.artisan).nom}</em> <CoutsRecettes x={x} reg={reg} />
+                  </span>
                 </button>
               </li>
             ))}
@@ -744,10 +779,44 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
       </div>
     )
   }
+  return <RegistreMatieres reg={reg} tab={tab} ressources={ressources} />
+}
+
+/**
+ * The raw materials' buying ledger, filtered by craft (a material belongs to every craft whose recipes
+ * use it, several at once) or to those still without a price, so the registre gets completed.
+ */
+function RegistreMatieres({ reg, tab, ressources }: { reg: CtxRegistre; tab: number; ressources: Ressource[] }) {
+  const d = reg.r.donnees!
+  const [filtre, setFiltre] = useState<string>('')
+  // Raw materials that also have a recipe (bought by default; a missive may craft them).
+  const fabricables = new Set(d.recettes.map((x) => cle(x.produit)))
+  // The crafts of each material: those of the recipes using it.
+  const metiersDe_ = new Map<string, Set<string>>()
+  for (const x of d.recettes) for (const i of x.ingredients) {
+    const k = cle(i.nom)
+    metiersDe_.set(k, (metiersDe_.get(k) ?? new Set()).add(metierDe(x.artisan).nom))
+  }
+  const metiers = [...new Set([...metiersDe_.values()].flatMap((m) => [...m]))].sort((a, b) => a.localeCompare(b, 'fr'))
+  const sansPrix = ressources.filter((x) => x.prix === null)
+  const montrees = ressources.filter((x) => (filtre === 'sans-prix' ? x.prix === null : !filtre || metiersDe_.get(cle(x.nom))?.has(filtre)))
+  const puce = (k: string, mot: ReactNode) => (
+    <button type="button" tabIndex={tab} className={`puce ${filtre === k ? 'active' : ''}`} aria-pressed={filtre === k} onClick={() => setFiltre(filtre === k ? '' : k)}>
+      {mot}
+    </button>
+  )
   return (
     <div className="atelier-droite">
       <h3 className="titre-section">Le registre des matières</h3>
-      <p className="note-encre">Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre. Le prix courant pèse aussi les dépôts des missives.</p>
+      <p className="note-encre">
+        Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre. Le prix courant pèse aussi les dépôts des missives.
+        {sansPrix.length > 0 && <> <strong className="sans-prix-compte">{sansPrix.length} matière{sansPrix.length > 1 ? 's' : ''} sans prix</strong> : qu’on les estime.</>}
+      </p>
+      <div className="puces" role="group" aria-label="Filtrer les matières">
+        {puce('', 'Toutes')}
+        {sansPrix.length > 0 && puce('sans-prix', <>sans prix <em>({sansPrix.length})</em></>)}
+        {metiers.map((m) => puce(m, m))}
+      </div>
       <div className="registre matieres">
         <div className="registre-entete matieres-entete" role="row">
           <span className="col-article">Matière</span>
@@ -761,12 +830,12 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
           </span>
         </div>
         <div className="registre-corps">
-          {ressources.map((x) => (
+          {montrees.map((x) => (
             <div
               key={x.nom}
               role="button"
               tabIndex={tab}
-              className="ligne matiere"
+              className={`ligne matiere ${x.prix === null ? 'sans-prix' : ''}`}
               onClick={() => reg.ouvrir(fabricables.has(cle(x.nom)) ? { genre: 'recette', nom: x.nom } : { genre: 'ressource', nom: x.nom })}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return
@@ -777,15 +846,16 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
               <span className="noms">
                 <span className="nom-fr">
                   {x.nom}
-                  {fabricables.has(cle(x.nom)) && <em className="mention-variantes"> se fabrique aussi</em>}
+                  {fabricables.has(cle(x.nom)) && <span className="tampon petit">se fabrique aussi</span>}
                 </span>
                 {x.en && <span className="nom-en">{x.en}</span>}
               </span>
               <span className="points-conduite" aria-hidden />
-              <span className="prix">{prix(x.prix)}</span>
+              <span className="prix">{x.prix === null ? <em className="a-estimer">à estimer</em> : prix(x.prix)}</span>
               <span className="prix prix-affaire">{prix(x.bonneAffaire)}</span>
             </div>
           ))}
+          {!montrees.length && <p className="vide-encre">Nulle matière ici.</p>}
         </div>
       </div>
     </div>
@@ -845,6 +915,7 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
     <div className="atelier-droite">
       <h3 className="titre-section">Recettes consignées</h3>
       <p className="note-encre">Touche une recette pour voir tout ce qu’elle demande, jusqu’aux matières premières, et ce qu’elles coûtent.</p>
+      {recettes.length > 0 && <EnteteRecettes />}
       {recettes.length ? (
         <ul className="liste-recettes">
           {recettes.map((x) => (
@@ -858,12 +929,7 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
                 </span>
                 <span className="points" />
                 <span className="renvoi">
-                  {c && (() => {
-                    // The usual recipe's cost (a raw material that also has a recipe: its recipe here).
-                    const index = new Map(c.recettes).set(cle(x.produit), x)
-                    const cout = coutMatieres(arbre(x.produit, x.rendement, index), r.donnees!.ressources).cout
-                    return cout ? <b>{prix(cout)} septims</b> : null
-                  })()}
+                  <CoutsRecettes x={x} reg={reg} />
                 </span>
               </button>
             </li>
@@ -872,6 +938,65 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
       ) : (
         <p className="vide-encre">{toutes.length ? 'Nulle recette de ce nom pour ce métier, ni en français ni en anglais.' : 'Plus aucune recette pour ce métier.'}</p>
       )}
+    </div>
+  )
+}
+
+/* ───────────────────────── The signed member's sales ───────────────────────── */
+
+/** Septims an order brought (the prices really agreed when written, else the lines' totals). */
+const montantVente = (v: Vente) => v.lignes.reduce((t, l) => t + (l.prixReel ?? l.total ?? 0), 0)
+
+export function GaucheVentes({ page, reg, compact }: { page: PageVentes; reg?: CtxRegistre; compact: boolean }) {
+  const r = reg?.r
+  const ventes = r?.donnees?.ventes
+  return (
+    <>
+      {!compact && <p className="intro lettrine">{page.intro}</p>}
+      {r && <Ferme r={r} />}
+      {reg && <Signature reg={reg} />}
+      {ventes && ventes.length > 0 && (
+        <p className="missive-resume">
+          {ventes.length} bon{ventes.length > 1 ? 's' : ''} scellé{ventes.length > 1 ? 's' : ''} · {prix(Math.round(ventes.reduce((t, v) => t + montantVente(v), 0)))} septims
+        </p>
+      )}
+    </>
+  )
+}
+
+export function DroiteVentes({ reg }: { reg?: CtxRegistre }) {
+  const r = reg?.r
+  if (!r?.donnees?.relie) return null
+  if (!r.marchand?.identite) return <p className="vide-encre">Signe d’abord l’ex-libris : le registre ne montre à chacun que ses propres ventes.</p>
+  const ventes = r.donnees.ventes
+  if (ventes === null || ventes === undefined)
+    return <p className="vide-encre">Le scribe du registre ne sait pas encore relire les bons scellés : qu’on recopie le dernier script du grimoire dans la feuille.</p>
+  if (!ventes.length) return <p className="vide-encre">Nul bon de commande n’est encore scellé à ton nom. Que la route soit bonne, et la bourse lourde.</p>
+  return (
+    <div className="ventes">
+      {ventes.map((v) => (
+        <section key={v.numero} className="vente">
+          <h4>
+            <span>{v.horodatage ? dateTamrielique(v.horodatage) : v.numero}</span>
+            <em>n° {v.numero}</em>
+          </h4>
+          <ul className="detail-lignes">
+            {v.lignes.map((l, i) => (
+              <li key={i}>
+                <span>
+                  {quantite(l.quantite)} {l.article}
+                  {l.statut && <em className="vente-statut"> · {l.statut}</em>}
+                </span>
+                <span className="points" />
+                <strong>{prix(l.prixReel ?? l.total)}</strong>
+              </li>
+            ))}
+          </ul>
+          <p className="vente-total">
+            Total <strong>{prix(Math.round(montantVente(v) * 100) / 100)}</strong> septims
+          </p>
+        </section>
+      ))}
     </div>
   )
 }

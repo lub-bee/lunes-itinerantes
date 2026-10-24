@@ -191,7 +191,11 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
         ),
       }
     case 'vente':
-      return { surtitre: 'Livre des Marchandises', titre: 'Mettre en vente', corps: <Signe env={env} action="vente"><FormVente nom={f.nom} env={env} /></Signe> }
+      return {
+        surtitre: 'Livre des Marchandises',
+        titre: f.nom ? 'Mettre en vente' : 'Inscrire une marchandise',
+        corps: <Signe env={env} action="vente"><FormVente nom={f.nom} chapitre={f.chapitre} env={env} /></Signe>,
+      }
     case 'ressource':
       return { surtitre: f.nom ? 'Corriger la matière' : 'Inscrire une matière', titre: f.nom || 'Nouvelle matière', corps: <Signe env={env} action="ressource"><FormRessource nom={f.nom} env={env} /></Signe> }
     case 'missive':
@@ -513,6 +517,10 @@ function Lignes({
   const [active, setActive] = useState<number | null>(null)
   return (
     <div className="fiche-lignes">
+      <div className="fiche-ligne fiche-ligne-entete" aria-hidden>
+        <span>Qté</span>
+        <span>Objet</span>
+      </div>
       {lignes.map((l, i) => (
         <div key={i} className="fiche-ligne">
           {/* The quantity before the name, as Skyrim writes it (« 3 Ail »); the tab order follows. */}
@@ -593,19 +601,17 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
   const d = env.reg.r.donnees
   const vs = d ? variantesDe(d.recettes, nom) : []
   const usage = recetteUsage(vs)
-  // The recipe shown (its tree and cost): the one asked for, else the usual one.
-  const recette = vs.find((v) => v.variante === voulue) ?? usage
+  // The leaf shown: the recipe asked for, else the usual one; the tabs on the left turn the leaves.
+  const [choisie, setChoisie] = useState<number | undefined>(voulue)
+  useEffect(() => setChoisie(voulue), [voulue, nom])
+  const recette = vs.find((v) => v.variante === choisie) ?? usage
   const ressource = d?.ressources.find((r) => cle(r.nom) === cle(nom) || (r.en && cle(r.en) === cle(nom)))
   const article = env.articles.find((a) => cle(a.fr) === cle(nom) || (a.en && cle(a.en) === cle(nom)))
-  const [combien, setCombien] = useState(String(recette?.rendement ?? 1))
-  useEffect(() => setCombien(String(recette?.rendement ?? 1)), [recette?.rendement, recette?.variante, nom])
   if (!c || !d?.relie) return <p className="registre-ferme">Le livre des recettes n&apos;est pas encore relié au grimoire.</p>
-  const valeur = c.valeur(nom)
   const droits = env.reg.r.marchand?.droits
-  const n = Math.max(1, Math.min(99999, Math.round(entier(combien)) || 1))
-  const index = indexAvec(c, recette)
-  const cycle = recette ? trouverCycle(nom, index) : null
   const plusieurs = vs.length > 1
+  const couts = coutsParRecette(vs, env)
+  const moinsChere = plusieurs ? moinsChereDe(couts) : undefined
   return (
     <div className="vue-recette">
       {(article?.en || recette?.en || ressource?.en) && <p className="fiche-en">{article?.en || recette?.en || ressource?.en}</p>}
@@ -615,59 +621,43 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
           {ressource.prix !== null && <> Prix courant : <strong>{prix(ressource.prix)}</strong> septims l&apos;unité.</>}
           {ressource.bonneAffaire !== null && <> Bonne affaire à <strong>{prix(ressource.bonneAffaire)}</strong> ou moins : qu&apos;on achète sans hésiter.</>}
           {ressource.note && <em> {ressource.note}</em>}
-          {recette && <> Elle <strong>se fabrique aussi</strong> : d&apos;ordinaire la caravane l&apos;achète, mais une missive peut choisir de la façonner.</>}
+          {recette && <> Elle <strong>se fabrique aussi</strong> : d&apos;ordinaire la caravane l&apos;achète, une missive peut choisir de la façonner.</>}
         </p>
       )}
-      {recette ? (
-        <>
-          <p className="fiche-note">
-            {plusieurs && <>Recette n° {recette.variante}{recette === usage ? ' (d’usage)' : ''} · </>}
-            Une fournée donne <strong>{quantite(recette.rendement)}</strong> {recette.produit}
-            {recette.artisan && <> · {metierDe(recette.artisan).nom}</>}
-            {valeur > 0 && <> · valeur {prix(Math.round(valeur * 100) / 100)} septims l&apos;unité</>}
-          </p>
-          {recette.note && <p className="fiche-note"><em>{recette.note}</em></p>}
-          <label className="fiche-combien">
-            Pour
-            <input type="text" inputMode="numeric" value={combien} onChange={(e) => setCombien(e.target.value.replace(/\D/g, '').slice(0, 5))} aria-label="Quantité à façonner" />
-            {recette.produit}
-          </label>
-          {cycle ? (
-            <p className="message-encre erreur">{texteCycle(cycle)}</p>
-          ) : (
-            <>
-              <ul className="branches racine">
-                {arbre(nom, n, index).enfants.map((e, i) => (
-                  <Branche key={`${e.nom}-${i}`} n={e} profondeur={0} env={env} />
-                ))}
-              </ul>
-              <CoutMatieres nom={nom} n={n} rendement={recette.rendement} index={index} env={env} />
-            </>
-          )}
-        </>
-      ) : !ressource ? (
+      {!recette && !ressource && (
         <p className="fiche-note">
           Nulle recette n&apos;est consignée pour cet ouvrage. Qu&apos;un artisan en écrive une, et la caravane saura ce qu&apos;il faut réunir.
         </p>
-      ) : null}
-      {(plusieurs || (ressource && vs.length > 0)) && <LesRecettes vs={vs} usage={usage} montree={recette} env={env} />}
+      )}
+      {recette &&
+        (plusieurs ? (
+          <div className="feuilles-recette">
+            <div className="onglets-recette" role="tablist" aria-label={`Les recettes de ${recette.produit}`}>
+              {vs.map((v) => (
+                <button
+                  key={v.variante}
+                  type="button"
+                  role="tab"
+                  aria-selected={v === recette}
+                  className={`onglet-recette ${v === recette ? 'actif' : ''}`}
+                  onClick={() => setChoisie(v.variante)}
+                >
+                  <span>Recette {v.variante}</span>
+                  <em>{couts.get(v)! > 0 ? `${prix(arrondi(couts.get(v)!))} s.` : '—'}</em>
+                </button>
+              ))}
+            </div>
+            <FeuilleRecette key={recette.variante} r={recette} usage={recette === usage} plusieurs moinsChere={recette === moinsChere} env={env} />
+          </div>
+        ) : (
+          <FeuilleRecette r={recette} usage plusieurs={false} moinsChere={false} env={env} />
+        ))}
       {recette && <AuCatalogue recette={recette} env={env} />}
       <div className="fiche-actions">
         {droits?.recette !== false && (
-          <>
-            {recette && (
-              <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: recette.produit, variante: recette.variante })}>
-                {plusieurs ? `Corriger la recette n° ${recette.variante}` : 'Corriger la recette'}
-              </button>
-            )}
-            <button
-              type="button"
-              className="lien-encre"
-              onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}
-            >
-              {vs.length ? 'Ajouter une variante' : 'Consigner la recette'}
-            </button>
-          </>
+          <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
+            {vs.length ? 'Ajouter une variante' : 'Consigner la recette'}
+          </button>
         )}
         {droits?.ressource !== false && ressource && (
           <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'ressource', nom: ressource.nom })}>
@@ -679,49 +669,80 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
   )
 }
 
-/**
- * Every recipe of a product, one under the other: its ingredients and what its materials cost per
- * unit; the usual one and the cheapest marked; any may become the usual one.
- */
-function LesRecettes({ vs, usage, montree, env }: { vs: Recette[]; usage?: Recette; montree?: Recette; env: Env }) {
-  const c = env.reg.r.calcul!
+const arrondi = (x: number) => Math.round(x * 100) / 100
+
+/** What each recipe's materials cost per unit made (at their « prix courant »; 0 when unknown). */
+function coutsParRecette(vs: Recette[], env: Env): Map<Recette, number> {
+  const c = env.reg.r.calcul
   const ressources = env.reg.r.donnees?.ressources ?? []
-  const couts = vs.map((v) => {
-    const k = coutMatieres(arbre(v.produit, v.rendement, indexAvec(c, v)), ressources)
-    return { v, unite: k.cout / Math.max(1, v.rendement), complet: !k.sansPrix.length }
-  })
-  const connus = couts.filter((x) => x.unite > 0)
-  const moinsChere = connus.length > 1 ? connus.reduce((a, b) => (b.unite < a.unite ? b : a)).v : undefined
-  const peutChoisir = env.reg.r.marchand?.droits?.usage !== false
-  const choisir = (v: Recette) =>
-    env.reg.r.agir('usage', { produit: v.produit, variante: v.variante }, (d) => ({
+  return new Map(vs.map((v) => [v, c ? coutMatieres(arbre(v.produit, v.rendement, indexAvec(c, v)), ressources).cout / Math.max(1, v.rendement) : 0]))
+}
+
+/** The cheapest recipe, when at least two have a known cost. */
+function moinsChereDe(couts: Map<Recette, number>): Recette | undefined {
+  const connus = [...couts].filter(([, x]) => x > 0)
+  return connus.length > 1 ? connus.reduce((a, b) => (b[1] < a[1] ? b : a))[0] : undefined
+}
+
+/**
+ * One leaf: one recipe only — its yield, its tree for « Pour N », its own cost, its actions — and, when
+ * the product has several, the ink stamp « Recette N » in the corner (« d'usage » on the usual one).
+ */
+function FeuilleRecette({ r, usage, plusieurs, moinsChere, env }: { r: Recette; usage: boolean; plusieurs: boolean; moinsChere: boolean; env: Env }) {
+  const c = env.reg.r.calcul!
+  const droits = env.reg.r.marchand?.droits
+  const [combien, setCombien] = useState(String(r.rendement))
+  const n = Math.max(1, Math.min(99999, Math.round(entier(combien)) || 1))
+  const index = indexAvec(c, r)
+  const cycle = trouverCycle(r.produit, index)
+  const choisir = () =>
+    env.reg.r.agir('usage', { produit: r.produit, variante: r.variante }, (d) => ({
       ...d,
-      recettes: d.recettes.map((x) => (cle(x.produit) === cle(v.produit) ? { ...x, usage: x.variante === v.variante } : x)),
+      recettes: d.recettes.map((x) => (cle(x.produit) === cle(r.produit) ? { ...x, usage: x.variante === r.variante } : x)),
     }))
   return (
-    <div className="les-recettes">
-      <p className="fiche-sous-titre">{vs.length > 1 ? `Les ${vs.length} recettes` : 'Sa recette'}</p>
-      {couts.map(({ v, unite, complet }) => (
-        <div key={v.variante} className={`une-recette ${v === montree ? 'montree' : ''}`}>
-          <p className="une-recette-tete">
-            <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'recette', nom: v.produit, variante: v.variante })}>
-              Recette n° {v.variante}
-            </button>
-            {v === usage && <em className="marque-usage">d&apos;usage</em>}
-            {v === moinsChere && <em className="marque-chere">la moins chère</em>}
-            <span className="une-recette-cout">{unite > 0 ? `${prix(Math.round(unite * 100) / 100)} septims l’unité${complet ? '' : ' (prix incomplets)'}` : 'prix inconnu'}</span>
-          </p>
-          <p className="une-recette-ingredients">
-            {v.ingredients.map((i) => `${quantite(i.quantite)} ${i.nom}`).join(', ')}
-            {v.rendement > 1 && <em> → {quantite(v.rendement)}</em>}
-          </p>
-          {v !== usage && peutChoisir && (
-            <button type="button" className="lien-encre une-recette-usage" onClick={() => choisir(v)}>
+    <div className={`feuille-recette ${plusieurs ? 'avec-tampon' : ''}`} role={plusieurs ? 'tabpanel' : undefined}>
+      <p className="fiche-note">
+        Une fournée donne <strong>{quantite(r.rendement)}</strong> {r.produit}
+        {r.artisan && <> · {metierDe(r.artisan).nom}</>}
+        {moinsChere && <em className="marque-chere"> · la moins chère</em>}
+      </p>
+      {r.note && <p className="fiche-note"><em>{r.note}</em></p>}
+      <label className="fiche-combien">
+        Pour
+        <input type="text" inputMode="numeric" value={combien} onChange={(e) => setCombien(e.target.value.replace(/\D/g, '').slice(0, 5))} aria-label="Quantité à façonner" />
+        {r.produit}
+      </label>
+      {cycle ? (
+        <p className="message-encre erreur">{texteCycle(cycle)}</p>
+      ) : (
+        <>
+          <ul className="branches racine">
+            {arbre(r.produit, n, index).enfants.map((e, i) => (
+              <Branche key={`${e.nom}-${i}`} n={e} profondeur={0} env={env} />
+            ))}
+          </ul>
+          <CoutMatieres nom={r.produit} n={n} rendement={r.rendement} index={index} env={env} />
+        </>
+      )}
+      {droits?.recette !== false && (
+        <div className="feuille-actions">
+          <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: r.produit, variante: r.variante })}>
+            corriger{plusieurs ? ` la recette ${r.variante}` : ' la recette'}
+          </button>
+          {plusieurs && !usage && droits?.usage !== false && (
+            <button type="button" className="lien-encre" onClick={choisir}>
               en faire la recette d&apos;usage
             </button>
           )}
         </div>
-      ))}
+      )}
+      {plusieurs && (
+        <span className={`tampon ${usage ? 'usage' : ''}`} aria-label={`Recette ${r.variante}${usage ? ', d’usage' : ''}`}>
+          Recette {r.variante}
+          {usage && <small>d&apos;usage</small>}
+        </span>
+      )}
     </div>
   )
 }
@@ -750,7 +771,10 @@ function AuCatalogue({ recette, env }: { recette: Recette; env: Env }) {
           )}
         </p>
         <button type="button" className="lien-encre" onClick={() => env.reg.allerA(chapitreDeArticle(article, env) ?? '')}>
-          voir au catalogue
+          voir au catalogue{(() => {
+            const t = env.chapitres.find((c) => c.id === chapitreDeArticle(article, env))?.titre
+            return t ? ` · ${t}` : ''
+          })()}
         </button>
       </div>
     )
@@ -778,14 +802,19 @@ function chapitreDeArticle(article: Article, env: Env): string | undefined {
  * recipe, its cost from the recipe's materials, the floor and ceiling proposed from the chapter's
  * usual margins (to accept or change).
  */
-function FormVente({ nom, env }: { nom: string; env: Env }) {
+function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitre?: string; env: Env }) {
+  // From a recipe (its names, craft and cost), or a merchandise of its own from a chapter page (only the
+  // name is needed; a recipe may come later).
   const c = env.reg.r.calcul
-  const recette = c?.recettes.get(cle(nom)) ?? recetteUsage(variantesDe(env.reg.r.donnees?.recettes ?? [], nom))
+  const recette = nom ? (c?.recettes.get(cle(nom)) ?? recetteUsage(variantesDe(env.reg.r.donnees?.recettes ?? [], nom))) : undefined
   const cout = recette && c ? Math.round(c.valeur(recette.produit) * 100) / 100 : 0
+  // The chapter: the page it comes from, else the one the recipe's craft makes (none when the craft spans
+  // several chapters: the reader chooses).
   const [chapitre, setChapitre] = useState(() => {
-    const voulu = metierDe(recette?.artisan ?? '').chapitre
-    return env.chapitres.some((x) => x.id === voulu) ? voulu : (env.chapitres.find((x) => x.id === 'divers')?.id ?? env.chapitres[0]?.id ?? '')
+    const voulu = chapitreDonne || metierDe(recette?.artisan ?? '').chapitre
+    return env.chapitres.some((x) => x.id === voulu) ? voulu : ''
   })
+  const [artisan, setArtisan] = useState(recette?.artisan ?? '')
   const ecrit = (v: number | null) => (v === null || !v ? '' : String(v).replace('.', ','))
   const [v, setV] = useState({ fr: recette?.produit ?? nom, en: recette?.en ?? '', prod: ecrit(cout || null), min: '', max: '', note: '' })
   // The chapter's usual margins: median floor / cost and ceiling / cost of its articles.
@@ -807,7 +836,14 @@ function FormVente({ nom, env }: { nom: string; env: Env }) {
       <input type="text" value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} maxLength={120} {...extra} />
     </label>
   )
-  if (!recette) return <p className="fiche-note">Nulle recette n&apos;est consignée pour cet ouvrage.</p>
+  // Near names already in the catalogue (a duplicate under another spelling).
+  const catalogue = [...env.articles, ...(env.reg.r.donnees?.catalogue ?? [])]
+  const doublons = [v.fr, v.en]
+    .filter((t) => t.trim())
+    .flatMap((t) => proches(t, catalogue, (a) => [a.fr, a.en], 3))
+    .filter((a, i, l) => l.findIndex((x) => cle(x.fr) === cle(a.fr)) === i)
+    .slice(0, 3)
+  const metiers = [...new Set(Object.values(METIERS).map((m) => m.nom))].sort((a, b) => a.localeCompare(b, 'fr'))
   return (
     <form
       className="fiche-form"
@@ -815,28 +851,31 @@ function FormVente({ nom, env }: { nom: string; env: Env }) {
         e.preventDefault()
         const fr = v.fr.trim()
         if (!fr) return setMessage({ ok: false, texte: 'Le nom de l’ouvrage manque.' })
-        if (!chapitre) return setMessage({ ok: false, texte: 'Choisis le chapitre du catalogue.' })
+        if (!chapitre) return setMessage({ ok: false, texte: 'Choisis le chapitre du catalogue où l’inscrire.' })
+        if (catalogue.some((a) => cle(a.fr) === cle(fr))) return setMessage({ ok: false, texte: `« ${fr} » est déjà au catalogue de la caravane.` })
         const lu = (s: string) => (s.trim() ? entier(s) : null)
         const prod = lu(v.prod)
         const min = lu(v.min)
         const max = lu(v.max)
         if ([prod, min, max].some((x) => x !== null && !(x >= 0))) return setMessage({ ok: false, texte: 'Un prix est illisible : un nombre de septims est attendu.' })
         if (min !== null && max !== null && min > max) return setMessage({ ok: false, texte: 'Le plancher ne peut dépasser le plafond.' })
-        const article: ArticleVente = { chapitre, fr, en: v.en.trim(), prod, min, max, artisan: recette.artisan, note: v.note.trim(), enAttente: true }
+        const article: ArticleVente = { chapitre, fr, en: v.en.trim(), prod, min, max, artisan: artisan.trim(), note: v.note.trim(), enAttente: true }
         confier(
           'vente',
           { ...article, enAttente: undefined },
           (d) => ({ ...d, catalogue: [...(d.catalogue ?? []).filter((a) => cle(a.fr) !== cle(fr)), article] }),
-          () => env.changer({ genre: 'recette', nom: recette.produit }),
+          recette ? () => env.changer({ genre: 'recette', nom: recette.produit }) : undefined,
         )
       }}
     >
       <p className="fiche-note">
-        L’ouvrage rejoint le catalogue de la caravane : chacun pourra le vendre et l’inscrire au bon de commande.
+        {recette ? 'L’ouvrage' : 'La marchandise'} rejoint le catalogue de la caravane : chacun pourra la vendre et l’inscrire au bon de commande.
+        {!recette && ' Seul le nom est requis ; prix et recette pourront venir plus tard.'}
       </p>
       <label className="fiche-champ">
         <span>Chapitre</span>
-        <select value={chapitre} onChange={(e) => setChapitre(e.target.value)}>
+        <select value={chapitre} onChange={(e) => setChapitre(e.target.value)} required>
+          {!chapitre && <option value="">— choisir le chapitre —</option>}
           {env.chapitres.map((x) => (
             <option key={x.id} value={x.id}>
               {x.titre}
@@ -844,9 +883,27 @@ function FormVente({ nom, env }: { nom: string; env: Env }) {
           ))}
         </select>
       </label>
-      {champ('fr', 'Ouvrage', { required: true })}
-      {champ('en', 'Nom anglais', { placeholder: 'facultatif' })}
-      {champ('prod', 'Coût', { inputMode: 'decimal', placeholder: 'septims l’unité', title: 'Ce que l’ouvrage coûte à l’atelier (ses matières, d’après la recette)' })}
+      {champ('fr', recette ? 'Ouvrage' : 'Marchandise', { required: true, autoComplete: 'off' })}
+      {champ('en', 'Nom anglais', { placeholder: 'facultatif', autoComplete: 'off' })}
+      {doublons.length > 0 && (
+        <div className="fiche-propositions doublons" role="status">
+          <span>Déjà au catalogue, peut-être :</span>
+          {doublons.map((a) => (
+            <em key={a.fr}>
+              {a.fr}
+              {a.en && ` · ${a.en}`}
+            </em>
+          ))}
+        </div>
+      )}
+      {!recette && (
+        <label className="fiche-champ">
+          <span>Artisan</span>
+          <input type="text" list="fiche-vente-metiers" value={artisan} onChange={(e) => setArtisan(e.target.value)} maxLength={40} placeholder="facultatif : Alchimiste, Forgeron…" />
+          <Suggestions id="fiche-vente-metiers" noms={metiers} />
+        </label>
+      )}
+      {champ('prod', 'Coût', { inputMode: 'decimal', placeholder: recette ? 'septims l’unité' : 'facultatif', title: 'Ce que l’ouvrage coûte à l’atelier (ses matières, d’après la recette)' })}
       <div className="fiche-deux">
         {champ('min', 'Plancher', { inputMode: 'decimal', placeholder: proposes ? `p. ex. ${proposes.min}` : 'à négocier' })}
         {champ('max', 'Plafond', { inputMode: 'decimal', placeholder: proposes ? `p. ex. ${proposes.max}` : 'à négocier' })}
@@ -859,7 +916,7 @@ function FormVente({ nom, env }: { nom: string; env: Env }) {
       {champ('note', 'Note', { placeholder: 'facultative' })}
       <Message m={message} />
       <div className="fiche-pied">
-        <Sceller icones={env.icones}>Mettre en vente</Sceller>
+        <Sceller icones={env.icones}>{recette ? 'Mettre en vente' : 'Inscrire la marchandise'}</Sceller>
       </div>
     </form>
   )

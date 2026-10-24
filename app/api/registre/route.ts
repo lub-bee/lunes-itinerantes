@@ -50,7 +50,8 @@ async function catalogueEnRetard(lu: Lu) {
 }
 
 /** The page's view: shares paid to members who brought nothing are summed up, not named. */
-async function vue(lu: Lu): Promise<DonneesRegistre> {
+/** `qui`: the signed member, who alone sees their own sales. */
+async function vue(lu: Lu, qui: string | null = null): Promise<DonneesRegistre> {
   const contributeurs = new Map<string, Set<string>>()
   for (const m of lu.mouvements) {
     if (m.type !== 'dépôt' && m.type !== 'fabrication') continue
@@ -65,6 +66,8 @@ async function vue(lu: Lu): Promise<DonneesRegistre> {
     missives: lu.missives,
     mouvements: lu.mouvements.filter((m) => m.type !== 'partage' || contributeurs.get(m.missive)?.has(cle(m.membre))),
     catalogue: await catalogueEnRetard(lu),
+    // A script before v3h does not read the orders: null (the page says so in character).
+    ventes: lu.ventes === null ? null : qui ? lu.ventes.filter((v) => cle(v.vendeur) === cle(qui)) : [],
     nbMembres: lu.membres.length,
     version: lu.version,
   }
@@ -74,7 +77,9 @@ export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: true, donnees: VIDE })
   try {
     // `v`: the newest version this reader has seen (its own writes must not vanish).
-    return NextResponse.json({ ok: true, donnees: await vue(await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)) })
+    const lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
+    const qui = await identite(req.cookies, lu.membres)
+    return NextResponse.json({ ok: true, donnees: await vue(lu, qui?.nom ?? null) })
   } catch (e) {
     console.error('[registre] read failed', e)
     return refus("Le registre des missives reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
@@ -382,8 +387,10 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       const en = mot(b.en, 120)
       const deja = [...articles, ...lu.catalogue].find((a) => cle(a.fr) === cle(fr) || (en && a.en && cle(a.en) === cle(en)))
       if (deja) non(`« ${deja.fr} » est déjà au catalogue de la caravane.`)
-      const chapitre = mot(b.chapitre, 40)
-      if (!(chapitres as { id: string }[]).some((c) => c.id === chapitre)) non('Choisis le chapitre du catalogue où l’inscrire.')
+      // A chapter of the book (a hidden one is refused); none chosen: « Divers ».
+      const visibles = (chapitres as { id: string; masque?: boolean }[]).filter((c) => !c.masque)
+      const chapitre = mot(b.chapitre, 40) || 'divers'
+      if (!visibles.some((c) => c.id === chapitre)) non('Choisis le chapitre du catalogue où l’inscrire.')
       const prod = nombreOuVide(b.prod, 1e7, 'Le coût')
       const min = nombreOuVide(b.min, 1e7, 'Le plancher')
       const max = nombreOuVide(b.max, 1e7, 'Le plafond')
@@ -458,7 +465,7 @@ export async function POST(req: NextRequest) {
   const tEcrire = performance.now() - t1
   // Never read again after a write: the script's answer carries every tab (an older script does not;
   // the page then keeps what it shows and reads later).
-  const donnees = ecrit.lu ? await vue(ecrit.lu) : null
+  const donnees = ecrit.lu ? await vue(ecrit.lu, qui.nom) : null
   const script = ecrit.ms ?? null
   console.log(`[registre] ${action}: read ${tLire.toFixed(0)} ms, write ${tEcrire.toFixed(0)} ms (script ${script ?? '?'} ms ${JSON.stringify(ecrit.etapes ?? {})}), tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
   const rep = NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees })

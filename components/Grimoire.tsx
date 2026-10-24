@@ -875,7 +875,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
             <button
               key={p.id}
               type="button"
-              className={`onglet ${destination === i ? 'actif' : ''} ${resultats.some((r) => r.i === i) ? 'trouve' : ''}`}
+              className={`onglet ${destination === i ? 'actif' : ''} ${resultats.some((r) => r.i === i) ? 'trouve' : ''} ${p.type === 'ventes' ? 'onglet-ventes' : ''}`}
               onClick={() => aller(i)}
               title={p.titre}
             >

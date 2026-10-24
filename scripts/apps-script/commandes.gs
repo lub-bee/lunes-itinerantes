@@ -18,7 +18,7 @@
  *    share of it, pro rata to its « total idéal ».
  *    One row per article in the "Commandes" tab.
  *
- *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements, catalogue }, version, cache },
+ *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements, catalogue, commandes }, version, cache },
  *    each tab an array of objects keyed by the field names of ONGLETS below (missing tabs → []);
  *    served from the script's cache when it holds them (`cache: true`).
  *
@@ -139,6 +139,18 @@ var ONGLETS = {
       ['Note', 'note', ['notes', 'remarque', 'commentaire']],
     ],
   },
+  /**
+   * The sealed orders (written by `sceller`, one row per article), read so a member can see their own
+   * sales (v3h). Never written here: the orders mapping is COLONNES above.
+   */
+  commandes: {
+    nom: ONGLET,
+    lecture: true,
+    colonnes: [
+      ['Horodatage', 'horodatage'], ['N° commande', 'numero'], ['Vendeur', 'vendeur'], ['Article', 'article'], ['Quantité', 'quantite'],
+      ['Prix unitaire', 'prixUnitaire'], ['Total ligne', 'total'], ['Prix réel vendu', 'prixReel'], ['Statut', 'statut'], ['Total commande', 'totalCommande'],
+    ],
+  },
   mouvements: {
     nom: 'Mouvements',
     colonnes: [
@@ -215,6 +227,9 @@ function sceller(c) {
       return COLONNES.map(function (col) { return col[1](c, l); });
     });
     feuille.getRange(feuille.getLastRow() + 1, 1, lignes.length, COLONNES.length).setValues(lignes);
+    // The cached tabs hold the orders too (v3h): the next read takes them from the sheet.
+    viderCache();
+    nouvelleVersion();
     return { ok: true, numero: c.numero, lignes: lignes.length };
   }, false);
 }
@@ -362,7 +377,8 @@ function nouvelleVersion() {
  * replaces it, a hand edit (onEdit) drops it. After importing a CSV (which may not count as an edit),
  * run `viderCache` from the editor, or wait 10 minutes.
  */
-var CACHE = 'registre';
+// The cache key carries the script's version: a new version never serves an older version's tabs.
+var CACHE = 'registre-v3h';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 

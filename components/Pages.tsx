@@ -10,7 +10,7 @@ import { COLOPHON } from '@/lib/credits'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
-import { DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
+import { DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
   livre: Livre
@@ -104,8 +104,9 @@ function Folio({ n }: { n: number }) {
  */
 export function chapitreDe(pages: Page[], page: Page): number | null {
   const sansOnglet = (p: Page) => p.partie === 'sommaire' || (p.type === 'missive' && p.close)
-  if (sansOnglet(page)) return null
-  const n = pages.filter((p) => p.partie === page.partie && !sansOnglet(p)).findIndex((p) => p.id === page.id)
+  // The member's own sales: a tab set apart, not a chapter.
+  if (sansOnglet(page) || page.type === 'ventes') return null
+  const n = pages.filter((p) => p.partie === page.partie && !sansOnglet(p) && p.type !== 'ventes').findIndex((p) => p.id === page.id)
   return n < 0 ? null : n + 1
 }
 
@@ -129,6 +130,12 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return <Frontispice ctx={ctx} compact={compact} />
       case 'divinite':
         return null
+      case 'ventes':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheVentes page={page} reg={ctx.registre} compact={compact} />
+          </EnTete>
+        )
       case 'colophon':
         return (
           <EnTete surtitre={COLOPHON.surtitre} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
@@ -308,6 +315,11 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
           <p className="decompte">
             {page.articles.length} article{page.articles.length > 1 ? 's' : ''} consigné{page.articles.length > 1 ? 's' : ''}
             {prixConnus.length > 0 && <>, de {prix(Math.min(...prixConnus))} à {prix(Math.max(...prixConnus))} septims</>}
+            {(() => {
+              // To help complete the registre: the articles whose cost is still unknown.
+              const n = page.articles.filter((a) => a.prod === null).length
+              return n ? <><br /><span className="sans-prix-compte">{n} sans coût inscrit</span></> : null
+            })()}
           </p>
           <dl className="legende">
             <div><dt>Coût</dt><dd>ce que l&apos;objet coûte à l&apos;atelier</dd></div>
@@ -337,6 +349,8 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
             <ExLibris ctx={ctx} />
           </>
         )
+      case 'ventes':
+        return <DroiteVentes reg={ctx.registre} />
       case 'colophon':
         return (
           <div className="credits">
@@ -634,6 +648,12 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
         ))}
         {filtres.length === 0 && <p className={`vide ${generation > 0 ? 'ecrit' : ''}`}>{VIDES[requetes.join('').length % VIDES.length]}</p>}
       </div>
+      {/* A merchandise of its own (no recipe needed): only its name is required. */}
+      {ctx.interactif && ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
+        <button type="button" className="lien-encre inscrire-marchandise" onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
+          + inscrire une marchandise
+        </button>
+      )}
       <p className="registre-pied">Prix exprimés en septims d&apos;or</p>
     </div>
   )

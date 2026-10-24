@@ -51,10 +51,12 @@ export type PageExLibris = Base & { type: 'exlibris' }
  */
 /** The book's last leaf: colophon and credits (lib/credits.ts). Back matter: no chapter; on it, its own side tab only. */
 export type PageColophon = Base & { type: 'colophon' }
+/** The signed member's sales (sealed orders whose seller is them), in the Marchandises part, after the chapters. */
+export type PageVentes = Base & { type: 'ventes'; intro: string }
 
 export type PageDivinite = Base & { type: 'divinite'; divinite: string }
 export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes
 
 export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string> }
