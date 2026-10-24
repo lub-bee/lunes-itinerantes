@@ -140,6 +140,36 @@ export function FicheVolante({
 
   const { surtitre, titre, sousTitre, corps, embleme } = contenu(vue, { reg, articles, chapitres, icones, changer: setVue, fermer: partir })
 
+  // A product with several recipes: one note per recipe, the others stacked underneath (their edges
+  // showing, each at its own tilt), reached by tabs on the left of the whole note.
+  const pile = (() => {
+    if (vue.genre !== 'recette' || !reg.r.donnees) return null
+    const vs = variantesDe(reg.r.donnees.recettes, vue.nom)
+    if (vs.length < 2) return null
+    const usage = recetteUsage(vs)!
+    const dessus = vs.find((v) => v.variante === vue.variante) ?? usage
+    return { vs, usage, dessus }
+  })()
+  const battre = useRef(false)
+  /** Brings another recipe's note to the top: the top note slides under, the chosen one comes up. */
+  const montrer = async (variante: number) => {
+    if (vue.genre !== 'recette' || battre.current || pile?.dessus.variante === variante) return
+    const el = voile.current
+    if (!el || sansAnimation) return setVue({ ...vue, variante })
+    battre.current = true
+    const sortie = el.animate(
+      [{ transform: 'none', opacity: 1 }, { transform: 'translate(-26px, 14px) rotate(-4deg)', opacity: 0 }],
+      { duration: 190, easing: 'cubic-bezier(.4,0,.8,.6)', fill: 'forwards' },
+    )
+    await sortie.finished.catch(() => {})
+    setVue({ ...vue, variante })
+    requestAnimationFrame(() => {
+      const entree = el.animate([{ transform: 'translate(18px, -10px) rotate(3deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2,.7,.3,1)' })
+      sortie.cancel()
+      entree.finished.finally(() => (battre.current = false)).catch(() => {})
+    })
+  }
+
   return (
     <aside ref={ref} className={`fiche ${mobile ? 'mobile' : ''}`} aria-label={titre} onPointerDown={(e) => e.stopPropagation()}>
       <svg className="fiche-defs" width="0" height="0" aria-hidden focusable="false">
@@ -148,6 +178,30 @@ export function FicheVolante({
           <feDisplacementMap in="SourceGraphic" in2="b" scale="6" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
+      {pile && (
+        <>
+          {pile.vs
+            .filter((v) => v !== pile.dessus)
+            .slice(0, 3)
+            .map((v, i) => (
+              <div key={v.variante} className={`fiche-dessous dessous-${i}`} aria-hidden />
+            ))}
+          <nav className="fiche-onglets" aria-label={`Les recettes de ${pile.dessus.produit}`}>
+            {pile.vs.map((v) => (
+              <button
+                key={v.variante}
+                type="button"
+                className={`fiche-onglet ${v === pile.dessus ? 'actif' : ''}`}
+                aria-pressed={v === pile.dessus}
+                title={`Recette ${v.variante}${v === pile.usage ? ' (d’usage)' : ''}`}
+                onClick={() => montrer(v.variante)}
+              >
+                Recette {v.variante}
+              </button>
+            ))}
+          </nav>
+        </>
+      )}
       <div className="fiche-voile" ref={voile}>
         <div className="fiche-masque">
           <div className="fiche-contenu" ref={papier}>
@@ -162,7 +216,13 @@ export function FicheVolante({
                 Ranger
               </button>
             </header>
-            <div className="fiche-corps">{corps}</div>
+            <div className={`fiche-corps ${pile ? 'avec-tampon' : ''}`}>{corps}</div>
+            {pile && (
+              <span className={`tampon tampon-fiche ${pile.dessus === pile.usage ? 'usage' : ''}`}>
+                Recette {pile.dessus.variante}
+                {pile.dessus === pile.usage && <small>d&apos;usage</small>}
+              </span>
+            )}
           </div>
         </div>
         <div className="fiche-rouleau" ref={rouleau} style={{ height: EPAIS_ROULEAU }} aria-hidden />
@@ -601,10 +661,8 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
   const d = env.reg.r.donnees
   const vs = d ? variantesDe(d.recettes, nom) : []
   const usage = recetteUsage(vs)
-  // The leaf shown: the recipe asked for, else the usual one; the tabs on the left turn the leaves.
-  const [choisie, setChoisie] = useState<number | undefined>(voulue)
-  useEffect(() => setChoisie(voulue), [voulue, nom])
-  const recette = vs.find((v) => v.variante === choisie) ?? usage
+  // The note shown: the recipe asked for, else the usual one (the slip's tabs bring the others up).
+  const recette = vs.find((v) => v.variante === voulue) ?? usage
   const ressource = d?.ressources.find((r) => cle(r.nom) === cle(nom) || (r.en && cle(r.en) === cle(nom)))
   const article = env.articles.find((a) => cle(a.fr) === cle(nom) || (a.en && cle(a.en) === cle(nom)))
   if (!c || !d?.relie) return <p className="registre-ferme">Le livre des recettes n&apos;est pas encore relié au grimoire.</p>
@@ -629,29 +687,7 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
           Nulle recette n&apos;est consignée pour cet ouvrage. Qu&apos;un artisan en écrive une, et la caravane saura ce qu&apos;il faut réunir.
         </p>
       )}
-      {recette &&
-        (plusieurs ? (
-          <div className="feuilles-recette">
-            <div className="onglets-recette" role="tablist" aria-label={`Les recettes de ${recette.produit}`}>
-              {vs.map((v) => (
-                <button
-                  key={v.variante}
-                  type="button"
-                  role="tab"
-                  aria-selected={v === recette}
-                  className={`onglet-recette ${v === recette ? 'actif' : ''}`}
-                  onClick={() => setChoisie(v.variante)}
-                >
-                  <span>Recette {v.variante}</span>
-                  <em>{couts.get(v)! > 0 ? `${prix(arrondi(couts.get(v)!))} s.` : '—'}</em>
-                </button>
-              ))}
-            </div>
-            <FeuilleRecette key={recette.variante} r={recette} usage={recette === usage} plusieurs moinsChere={recette === moinsChere} env={env} />
-          </div>
-        ) : (
-          <FeuilleRecette r={recette} usage plusieurs={false} moinsChere={false} env={env} />
-        ))}
+      {recette && <FeuilleRecette key={recette.variante} r={recette} usage={recette === usage} plusieurs={plusieurs} moinsChere={recette === moinsChere} env={env} />}
       {recette && <AuCatalogue recette={recette} env={env} />}
       <div className="fiche-actions">
         {droits?.recette !== false && (
@@ -701,11 +737,12 @@ function FeuilleRecette({ r, usage, plusieurs, moinsChere, env }: { r: Recette; 
       recettes: d.recettes.map((x) => (cle(x.produit) === cle(r.produit) ? { ...x, usage: x.variante === r.variante } : x)),
     }))
   return (
-    <div className={`feuille-recette ${plusieurs ? 'avec-tampon' : ''}`} role={plusieurs ? 'tabpanel' : undefined}>
+    <div className="feuille-recette">
       <p className="fiche-note">
         Une fournée donne <strong>{quantite(r.rendement)}</strong> {r.produit}
         {r.artisan && <> · {metierDe(r.artisan).nom}</>}
         {moinsChere && <em className="marque-chere"> · la moins chère</em>}
+        {plusieurs && coutsParRecette([r], env).get(r)! > 0 && <> · <strong>{prix(arrondi(coutsParRecette([r], env).get(r)!))}</strong> septims l&apos;unité</>}
       </p>
       {r.note && <p className="fiche-note"><em>{r.note}</em></p>}
       <label className="fiche-combien">
@@ -736,12 +773,6 @@ function FeuilleRecette({ r, usage, plusieurs, moinsChere, env }: { r: Recette; 
             </button>
           )}
         </div>
-      )}
-      {plusieurs && (
-        <span className={`tampon ${usage ? 'usage' : ''}`} aria-label={`Recette ${r.variante}${usage ? ', d’usage' : ''}`}>
-          Recette {r.variante}
-          {usage && <small>d&apos;usage</small>}
-        </span>
       )}
     </div>
   )
