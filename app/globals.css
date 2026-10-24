@@ -1981,7 +1981,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .fiche-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .fiche-sous-titre { margin: 8px 0 0; font-family: var(--f-capitales); font-size: 14px; letter-spacing: 0.08em; color: var(--encre-pale); border-bottom: 1px solid rgba(47, 91, 58, 0.25); }
 .fiche-lignes { display: flex; flex-direction: column; gap: 3px; }
-.fiche-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 70px 20px; column-gap: 8px; align-items: baseline; }
+.fiche-ligne { display: grid; grid-template-columns: 70px minmax(0, 1fr) 20px; column-gap: 8px; align-items: baseline; }
 .fiche-ligne .fiche-qte { text-align: right; font-style: normal; font-variant-numeric: tabular-nums lining-nums; }
 .fiche-rayer { padding: 0; border: 0; background: none; color: var(--encre-pale); font-size: 13px; cursor: pointer; }
 .fiche-rayer:hover, .fiche-rayer:focus-visible { outline: none; color: var(--encre-rouge); }
@@ -2103,6 +2103,8 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 
 /* Slips: plain lines « Bière + 200 », « Blé − 1000 ». */
 .fiche-releve-ligne.fiche-plain { grid-template-columns: minmax(0, 1fr) 18px 84px; }
+/* Quantity before the name (« − 3 Ail »), as recipes read in Skyrim. */
+.fiche-releve-ligne.fiche-plain.qte-avant { grid-template-columns: 18px 84px minmax(0, 1fr); }
 .fiche-signe { text-align: right; font-family: var(--f-capitales); font-size: 18px; color: var(--encre-rouge); }
 .fiche-livre { text-align: right; font-weight: 400; font-size: 17px; font-variant-numeric: tabular-nums lining-nums; }
 .fiche-livre::before { content: '− '; color: var(--encre-rouge); }

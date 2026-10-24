@@ -515,6 +515,8 @@ function Lignes({
     <div className="fiche-lignes">
       {lignes.map((l, i) => (
         <div key={i} className="fiche-ligne">
+          {/* The quantity before the name, as Skyrim writes it (« 3 Ail »); the tab order follows. */}
+          <input type="text" inputMode="numeric" className="fiche-qte" value={l.qte} onChange={(e) => regler(i, { qte: e.target.value.replace(/[^\d.,]/g, '').slice(0, 9) })} placeholder="Qté" aria-label={mot} />
           <input
             type="text"
             list={proposer ? undefined : liste}
@@ -527,7 +529,6 @@ function Lignes({
             maxLength={120}
             autoComplete="off"
           />
-          <input type="text" inputMode="numeric" className="fiche-qte" value={l.qte} onChange={(e) => regler(i, { qte: e.target.value.replace(/[^\d.,]/g, '').slice(0, 9) })} placeholder="Qté" aria-label={mot} />
           <button type="button" className="fiche-rayer" aria-label="Rayer la ligne" title="Rayer la ligne" onClick={() => setLignes(lignes.length > 1 ? lignes.filter((_, k) => k !== i) : [{ objet: '', qte: '' }])}>
             ✕
           </button>
@@ -711,7 +712,7 @@ function LesRecettes({ vs, usage, montree, env }: { vs: Recette[]; usage?: Recet
             <span className="une-recette-cout">{unite > 0 ? `${prix(Math.round(unite * 100) / 100)} septims l’unité${complet ? '' : ' (prix incomplets)'}` : 'prix inconnu'}</span>
           </p>
           <p className="une-recette-ingredients">
-            {v.ingredients.map((i) => `${quantite(i.quantite)} ${i.nom}`).join(' · ')}
+            {v.ingredients.map((i) => `${quantite(i.quantite)} ${i.nom}`).join(', ')}
             {v.rendement > 1 && <em> → {quantite(v.rendement)}</em>}
           </p>
           {v !== usage && peutChoisir && (
@@ -1313,10 +1314,10 @@ function FormFabrication({ env, numero, produit: impose }: { env: Env; numero: s
       {recette ? (
         <>
           <p className="fiche-sous-titre">Mis au coffre</p>
-          <label className="fiche-releve-ligne fiche-plain">
-            <span>{recette.produit}</span>
+          <label className="fiche-releve-ligne fiche-plain qte-avant">
             <span className="fiche-signe">+</span>
             <input type="text" inputMode="numeric" value={sortie} onChange={(ev) => setSortie(ev.target.value.replace(/\D/g, '').slice(0, 7))} aria-label={`Quantité de ${recette.produit} façonnée`} />
+            <span>{recette.produit}</span>
           </label>
           <p className="fiche-sous-titre">Pris dans le coffre</p>
           <div className="fiche-releve">
@@ -1324,10 +1325,10 @@ function FormFabrication({ env, numero, produit: impose }: { env: Env; numero: s
               const dispo = auCoffre(env.reg, i.nom)
               const q = entier(entrees[i.nom] ?? '') || 0
               return (
-                <label key={i.nom} className={`fiche-releve-ligne fiche-plain ${q > dispo ? 'ecart' : ''}`}>
-                  <span>{i.nom}</span>
+                <label key={i.nom} className={`fiche-releve-ligne fiche-plain qte-avant ${q > dispo ? 'ecart' : ''}`}>
                   <span className="fiche-signe">−</span>
                   <input type="text" inputMode="numeric" value={entrees[i.nom] ?? ''} onChange={(ev) => setEntrees({ ...entrees, [i.nom]: ev.target.value.replace(/[^\d.,]/g, '').slice(0, 8) })} aria-label={`Quantité de ${i.nom} prise`} />
+                  <span>{i.nom}</span>
                   {q > dispo && <em className="fiche-ecart">le registre n&apos;en compte que {quantite(dispo)} au coffre</em>}
                 </label>
               )
