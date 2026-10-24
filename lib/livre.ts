@@ -7,6 +7,7 @@ import { ICONES_COMMANDE } from './commande'
 import { ICONES_MISSIVES } from './missives'
 import { ICONES_METIERS } from './metiers'
 import { ICONES_RANGS } from './rangs'
+import { ICONES_ACTIONS } from './actions'
 import { icones } from './icones'
 import { COLOPHON } from './credits'
 import { artisanDe, ICONES_ARTISANS, normaliser, slug } from './recherche'
@@ -65,6 +66,7 @@ export const ALIAS_COLONNES = {
   max: ['max', 'maxi', 'ideal', 'prix ideal', 'prix max', 'prix maxi', 'plafond', 'prix plafond'],
   artisan: ['artisan', 'metier', 'atelier'],
   note: ['note', 'notes', 'remarque', 'commentaire'],
+  lot: ['lot', 'par', 'par lot', 'unites par lot', 'taille du lot', 'contenance'],
 } as const
 
 type Colonne = keyof typeof ALIAS_COLONNES
@@ -113,6 +115,10 @@ function lireArticles(csv: string): (Article & { chapitre: string })[] {
         max: nombre(l[i.max]),
         artisan: artisanDe(l[i.artisan]),
         note: (l[i.note] ?? '').trim(),
+        lot: i.lot < 0 ? null : (() => {
+          const n = Math.round(nombre(l[i.lot]) ?? 0)
+          return n > 1 ? n : null
+        })(),
       }
     })
     .filter((a) => a.fr)
@@ -218,6 +224,6 @@ export async function chargerLivre(): Promise<Livre> {
     { type: 'colophon', id: 'colophon', partie: 'sommaire', titre: COLOPHON.titre, titreEn: COLOPHON.titreEn, court: 'Achevé', icone: 'quill' },
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS)]
   return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
-import { calculerLigne, centimes, LIBELLES_STATUT, lirePrix, poidsLigne, repartirGlobal, statut, type CommandeEnvoyee, type LigneCommande } from '@/lib/commande'
+import { bornesLigne, calculerLigne, centimes, LIBELLES_STATUT, lirePrix, motLot, poidsLigne, repartirGlobal, statut, type CommandeEnvoyee, type LigneCommande } from '@/lib/commande'
 import { Icone } from './Ornements'
 import type { EtatRegistre } from './Registre'
 
@@ -50,7 +50,8 @@ const prixSaisi = (v: number | null) => (v === null ? '' : String(v).replace('.'
 /** Line maths for display; `null` total while the unit price is not readable. */
 export function calculer(l: LigneCommande) {
   const p = lirePrix(l.prix)
-  return p === null ? null : calculerLigne(l.qte, p, l.min, l.max)
+  const b = bornesLigne(l)
+  return p === null ? null : calculerLigne(l.qte, p, b.min, b.max)
 }
 
 export function useCommande(reg: EtatRegistre) {
@@ -137,7 +138,7 @@ export function useCommande(reg: EtatRegistre) {
     setLignes((ls) =>
       ls.some((l) => l.id === a.id)
         ? ls.map((l) => (l.id === a.id ? { ...l, qte: l.rayee ? 1 : l.qte + 1, rayee: false } : l))
-        : [...ls, { id: a.id, fr: a.fr, en: a.en, min: a.min, max: a.max, qte: 1, prix: prixSaisi(a.max), rayee: false }],
+        : [...ls, { id: a.id, fr: a.fr, en: a.en, min: a.min, max: a.max, qte: 1, prix: prixSaisi(a.max), rayee: false, lot: a.lot ?? null }],
     )
     setNouvelle({ id: a.id, n: Date.now() })
     setMessage((m) => (m?.genre === 'erreur' ? m : null))
@@ -146,6 +147,26 @@ export function useCommande(reg: EtatRegistre) {
 
   const regler = useCallback((id: string, patch: Partial<LigneCommande>) => {
     setLignes((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+  }, [])
+
+  /** By the lot or by the piece: quantity and price converted (40 arrows = ½ quiver). */
+  const parPiece = useCallback((id: string, piece: boolean) => {
+    setLignes((ls) =>
+      ls.map((l) => {
+        if (l.id !== id || !l.lot || Boolean(l.piece) === piece) return l
+        const p = lirePrix(l.prix)
+        return piece
+          ? { ...l, piece, qte: Math.min(9999, l.qte * l.lot), prix: p === null ? l.prix : prixSaisi(centimes(p / l.lot)) }
+          : { ...l, piece, qte: Math.max(1, Math.round(l.qte / l.lot)), prix: p === null ? l.prix : prixSaisi(centimes(p * l.lot)) }
+      }),
+    )
+  }, [])
+
+  /** A line typed by hand, outside the catalogue (name, quantity, unit price). */
+  const ajouterLibre = useCallback(() => {
+    const id = `hors-${Date.now().toString(36)}`
+    setLignes((ls) => [...ls, { id, fr: '', en: '', min: null, max: null, qte: 1, prix: '', rayee: false, horsCatalogue: true }])
+    setNouvelle({ id, n: Date.now() })
   }, [])
 
   const ouvrir = useCallback(() => {
@@ -168,6 +189,7 @@ export function useCommande(reg: EtatRegistre) {
     const signe = membre ?? vendeur.trim()
     if (!signe) return setMessage({ genre: 'erreur', texte: 'Qui tient la plume ? Inscris le nom du vendeur.' })
     if (!actives.length) return setMessage({ genre: 'erreur', texte: 'Une commande sans article ne se scelle pas.' })
+    if (actives.some((l) => l.horsCatalogue && !l.fr.trim())) return setMessage({ genre: 'erreur', texte: 'Une ligne hors catalogue attend encore son nom.' })
     const global = lirePrix(prixGlobal)
     if (global === null && actives.some((l) => lirePrix(l.prix) === null)) {
       return setMessage({ genre: 'erreur', texte: 'Un article attend encore son prix. Fixe-le, ou inscris le prix convenu pour l’ensemble.' })
@@ -175,7 +197,17 @@ export function useCommande(reg: EtatRegistre) {
     const envoyee: CommandeEnvoyee = {
       vendeur: signe,
       prixGlobal: global,
-      lignes: actives.map((l) => ({ id: l.id, article: l.fr, articleEn: l.en, quantite: l.qte, prixUnitaire: lirePrix(l.prix) ?? 0, min: l.min, max: l.max })),
+      lignes: actives.map((l) => ({
+        id: l.id,
+        article: l.fr.trim(),
+        articleEn: l.en,
+        quantite: l.qte,
+        prixUnitaire: lirePrix(l.prix) ?? 0,
+        min: l.min,
+        max: l.max,
+        ...(l.lot ? { unite: l.piece ? ('piece' as const) : ('lot' as const) } : {}),
+        ...(l.horsCatalogue ? { horsCatalogue: true } : {}),
+      })),
     }
     setEnvoi(true)
     setMessage(null)
@@ -189,14 +221,16 @@ export function useCommande(reg: EtatRegistre) {
       setLignes([])
       setPrixGlobal('')
       setMessage({ genre: 'ok', texte: `Marché conclu, l'encre sèche dans le registre.${r.numero ? ` (n° ${r.numero})` : ''}` })
+      // The sale now shows in « Mes ventes ».
+      reg.relire()
     } catch {
       setMessage({ genre: 'erreur', texte: "Le coursier n'est pas revenu. Ta commande reste sur la table : réessaie." })
     } finally {
       setEnvoi(false)
     }
-  }, [vendeur, membre, prixGlobal])
+  }, [vendeur, membre, prixGlobal, reg])
 
-  return { prixGlobal, setPrixGlobal, membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, ouvrir, ranger, jeter, sceller }
+  return { prixGlobal, setPrixGlobal, membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, parPiece, ajouterLibre, ouvrir, ranger, jeter, sceller }
 }
 
 export type EtatCommande = ReturnType<typeof useCommande>
@@ -206,7 +240,7 @@ export function partsGlobales(lignes: LigneCommande[], prixGlobal: string): Map<
   const global = lirePrix(prixGlobal)
   if (global === null) return null
   const actives = lignes.filter((l) => !l.rayee)
-  const parts = repartirGlobal(global, actives.map((l) => poidsLigne(l.qte, l.min, l.max, lirePrix(l.prix))))
+  const parts = repartirGlobal(global, actives.map((l) => poidsLigne(l.qte, bornesLigne(l).min, bornesLigne(l).max, lirePrix(l.prix))))
   return new Map(actives.map((l, i) => [l.id, parts[i]]))
 }
 
@@ -220,8 +254,9 @@ export function bilan(lignes: LigneCommande[], prixGlobal = '') {
   const calc = parts
     ? actives.map((l) => {
         const part = parts.get(l.id) ?? 0
-        const c = calculerLigne(l.qte, l.qte ? part / l.qte : 0, l.min, l.max)
-        return { ...c, total: part, totalMini: l.min === null && l.max === null ? part : c.totalMini, totalIdeal: l.min === null && l.max === null ? part : c.totalIdeal }
+        const bl = bornesLigne(l)
+        const c = calculerLigne(l.qte, l.qte ? part / l.qte : 0, bl.min, bl.max)
+        return { ...c, total: part, totalMini: bl.min === null && bl.max === null ? part : c.totalMini, totalIdeal: bl.min === null && bl.max === null ? part : c.totalIdeal }
       })
     : actives.map(calculer).filter((c): c is NonNullable<typeof c> => c !== null)
   const total = parts ? centimes(lirePrix(prixGlobal)!) : centimes(calc.reduce((t, c) => t + c.total, 0))
@@ -534,6 +569,9 @@ export function FeuilleCommande({
               ))}
             </>
           )}
+          <button type="button" className="lien-encre commande-hors" onClick={c.ajouterLibre}>
+            + ligne hors catalogue
+          </button>
         </div>
 
         <footer className="commande-pied">
@@ -604,7 +642,9 @@ export function FeuilleCommande({
 function LigneFeuille({ l, c, icones, nouvelle, part }: { l: LigneCommande; c: EtatCommande; icones: Record<string, string>; nouvelle: number; part?: number }) {
   /** With a lump sum, the line counts for its share of it (its own price becomes optional). */
   const global = part !== undefined
-  const calc = global ? calculerLigne(l.qte, l.qte ? part / l.qte : 0, l.min, l.max) : calculer(l)
+  // Floor and ceiling in the line's own unit (by the piece: the lot's, divided).
+  const bl = bornesLigne(l)
+  const calc = global ? calculerLigne(l.qte, l.qte ? part / l.qte : 0, bl.min, bl.max) : calculer(l)
   const [qte, setQte] = useState(String(l.qte))
   useEffect(() => setQte(String(l.qte)), [l.qte])
   const ref = useRef<HTMLDivElement>(null)
@@ -631,15 +671,39 @@ function LigneFeuille({ l, c, icones, nouvelle, part }: { l: LigneCommande; c: E
 
   const fixerQte = (v: number) => c.regler(l.id, { qte: Math.max(1, Math.min(9999, Math.round(v) || 1)) })
   const sansPrix = lirePrix(l.prix) === null
-  const negocie = l.min === null && l.max === null
-  const bornes = negocie ? 'à négocier' : `plancher ${prix(l.min)} · plafond ${prix(l.max)}`
+  const negocie = bl.min === null && bl.max === null
+  const unite = l.lot ? (l.piece ? ' la pièce' : ` le ${motLot(l.fr)}`) : ''
+  const bornes = l.horsCatalogue ? 'hors catalogue' : negocie ? 'à négocier' : `plancher ${prix(bl.min)} · plafond ${prix(bl.max)}${unite}`
   const sous = !l.rayee && calc?.sousPlancher
 
   return (
     <div ref={ref} className={`commande-ligne ${l.rayee ? 'rayee' : ''} ${sous ? 'sous-plancher' : ''}`}>
-      <div className="commande-ligne-nom" title={`${l.fr} — ${l.en}${negocie ? ' — à négocier' : ` — plancher ${prix(l.min)}, plafond ${prix(l.max)}`}`}>
-        <span className="fr">{l.fr}</span>
+      <div className="commande-ligne-nom" title={l.horsCatalogue ? 'Ligne hors catalogue' : `${l.fr} — ${l.en}${negocie ? ' — à négocier' : ` — plancher ${prix(bl.min)}, plafond ${prix(bl.max)}${unite}`}`}>
+        {l.horsCatalogue ? (
+          <input
+            className="fr commande-libre"
+            type="text"
+            value={l.fr}
+            disabled={l.rayee}
+            maxLength={120}
+            placeholder="Ce qui est vendu"
+            aria-label="Article hors catalogue"
+            onChange={(e) => c.regler(l.id, { fr: e.target.value })}
+          />
+        ) : (
+          <span className="fr">{l.fr}</span>
+        )}
         <span className="repere">{bornes}</span>
+        {l.lot && !l.horsCatalogue ? (
+          <span className="commande-lot" role="group" aria-label="Vendu au lot ou à la pièce">
+            <button type="button" className={!l.piece ? 'actif' : ''} aria-pressed={!l.piece} disabled={l.rayee} onClick={() => c.parPiece(l.id, false)}>
+              au {motLot(l.fr)} ({l.lot})
+            </button>
+            <button type="button" className={l.piece ? 'actif' : ''} aria-pressed={Boolean(l.piece)} disabled={l.rayee} onClick={() => c.parPiece(l.id, true)}>
+              à la pièce
+            </button>
+          </span>
+        ) : null}
       </div>
       <span className="commande-qte">
         <button type="button" aria-label="Un de moins" disabled={l.rayee || l.qte <= 1} onClick={() => fixerQte(l.qte - 1)}>
@@ -684,7 +748,7 @@ function LigneFeuille({ l, c, icones, nouvelle, part }: { l: LigneCommande; c: E
       >
         <Icone corps={icones['quill']} />
       </button>
-      {sous && <p className="commande-alerte">sous le plancher ({prix(l.min)}) — à perte</p>}
+      {sous && <p className="commande-alerte">sous le plancher ({prix(bl.min)}) — à perte</p>}
       {!l.rayee && sansPrix && !global && <p className="commande-alerte douce">à négocier : inscris le prix convenu</p>}
     </div>
   )

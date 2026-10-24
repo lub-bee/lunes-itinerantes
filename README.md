@@ -178,6 +178,7 @@ map one to one.
 | `en` | en, anglais, english, nom anglais, article (EN) | no English name |
 | `artisan` | artisan, métier, atelier | *divers* |
 | `note` | note, notes, remarque, commentaire | none |
+| `lot` | lot, par, par lot, unités par lot, taille du lot, contenance | not sold by lot (e.g. `80` for a quiver of arrows: the order sheet then sells « au carquois » or « à la pièce ») |
 
 So the owner's sheet as it is (`Détail`, `Prix de prod`, `Prix mini`, `Prix idéal`) works: all
 articles go to *Non classés* until a `chapitre` column is added (ids from `chapitres.json`).
@@ -460,6 +461,7 @@ refused by the script itself (`already closed`), under the lock.
 | `usage` (v3g) | `{ usage: { produit, variante } }` | `Usage` = `oui` on that variant's rows, emptied on the product's other rows |
 | `choix` (v3g) | `{ choix: { numero, recettes } }` | The missive's `Recettes` cell on each of its rows (`recettes`: the whole list as text, built by the grimoire) |
 | `lire` (v3h) | — | also `onglets.commandes`: the Commandes tab (`horodatage, numero, vendeur, article, quantite, prixUnitaire, total, prixReel, statut, totalCommande`), so each member sees their own sales (« Mes ventes »: the server keeps only the signed member's orders). A sealed order now drops the cached tabs; the cache key is `registre-v3h` (a new script version never serves an older one's tabs) |
+| `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
@@ -495,6 +497,14 @@ that server's copy.
   recipe (only the name is needed; the chapter is the page's). A recipe's own « mettre en vente »
   proposes a chapter only for crafts that make one kind of goods (a smith's armour is not a weapon:
   the reader chooses).
+- On the order sheet, an article sold by lot (Catalogues `Lot`, e.g. 80 arrows to the quiver) is sold
+  « au carquois » (« au lot » for other goods) or « à la pièce »: by the piece the quantity is in pieces
+  and the unit price, floor and ceiling are the lot's divided by the lot. The Commandes tab records the
+  pieces with an `Unité` (« pièce (carquois de 80) »). « + ligne hors catalogue » writes a line by hand
+  (name, quantity, unit price; no floor nor ceiling; `Hors catalogue` = oui); a lump sum shares itself
+  over it as over any line.
+- « Mes ventes » counts the sales and the caravan's shares still to hand over (« Part à verser »); each
+  sale records its share as « Part versée » (who, when, an optional amount), and can be taken back.
 - « Mes ventes », a coin-coloured tab set apart after the Marchandises chapters: the sealed orders whose
   seller is the signed member (from a v3h script).
 - A recipe's slip says whether the caravan sells its product (« Au catalogue de la caravane », its

@@ -46,6 +46,7 @@
  *                                                                            → the Ressources row updated, or added
  *      'usage'       { usage: { produit, variante } }                    → « Usage » on that variant's rows only (v3g)
  *      'choix'       { choix: { numero, recettes } }                     → the missive's « Recettes » cell (v3g)
+ *      'versement'   { versement: { numero, versee, montant, par, quand } } → the order's « Part versée » cells (v3i)
  *      'vente'       { article: { chapitre, fr, en, prod, min, max, artisan, note } }
  *                                                                            → one row added to the Catalogues tab
  *                                                                              (only its existing columns are filled;
@@ -78,6 +79,10 @@ var COLONNES = [
   ['Total commande', function (c, l) { return c.total; }],
   // The price agreed for the whole order when there was one (lines then share it pro rata), else empty.
   ['Prix global', function (c, l) { return c.prixGlobal ? c.prixGlobal : ''; }],
+  // Sold by the piece of a lot, or by the lot: « pièce (carquois de 80) », « carquois de 80 » (v3i).
+  ['Unité', function (c, l) { return l.unite || ''; }],
+  // A line typed by hand on the order sheet, outside the catalogue (v3i).
+  ['Hors catalogue', function (c, l) { return l.horsCatalogue ? 'oui' : ''; }],
 ];
 
 /**
@@ -137,6 +142,7 @@ var ONGLETS = {
       ['Prix idéal', 'max', ['max', 'maxi', 'idéal', 'prix max', 'prix maxi', 'plafond', 'prix plafond']],
       ['Artisan', 'artisan', ['métier', 'atelier']],
       ['Note', 'note', ['notes', 'remarque', 'commentaire']],
+      ['Lot', 'lot', ['par', 'par lot', 'unités par lot', 'taille du lot', 'contenance']],
     ],
   },
   /**
@@ -149,6 +155,9 @@ var ONGLETS = {
     colonnes: [
       ['Horodatage', 'horodatage'], ['N° commande', 'numero'], ['Vendeur', 'vendeur'], ['Article', 'article'], ['Quantité', 'quantite'],
       ['Prix unitaire', 'prixUnitaire'], ['Total ligne', 'total'], ['Prix réel vendu', 'prixReel'], ['Statut', 'statut'], ['Total commande', 'totalCommande'],
+      ['Unité', 'unite'], ['Hors catalogue', 'horsCatalogue'],
+      // The caravan's share of the sale handed over to its coffer (v3i; written by 'versement' only).
+      ['Part versée', 'versee'], ['Versée le', 'verseeLe'], ['Versée par', 'verseePar'], ['Montant versé', 'montantVerse'],
     ],
   },
   mouvements: {
@@ -378,7 +387,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3h';
+var CACHE = 'registre-v3i';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -771,6 +780,40 @@ var ECRITURES = {
     }
     ajouter(ONGLETS.ressources, [valeurs], p);
     return { ok: true, nom: r.nom, ajoutee: true, maj: maj };
+  },
+
+  /**
+   * The caravan's share of a sealed order handed over (or taken back): « Part versée », « Versée le »,
+   * « Versée par », « Montant versé » on every row of the order. The orders' own columns are made sure
+   * first (so these come after them), then these are added at the end of row 1 if missing.
+   */
+  versement: function (corps) {
+    var v = corps.versement;
+    if (!v || !v.numero) return { ok: false, erreur: 'no order' };
+    onglet();
+    var o = ouvrir(ONGLETS.commandes);
+    var p = o.p;
+    var lignes = o.lignes;
+    var valeurs = v.versee
+      ? { versee: 'oui', verseeLe: new Date(v.quand || Date.now()), verseePar: v.par || '', montantVerse: v.montant === null || v.montant === undefined ? '' : v.montant }
+      : { versee: '', verseeLe: '', verseePar: '', montantVerse: '' };
+    var touchees = 0;
+    lignes.forEach(function (l, i) {
+      if (!correspond(p, l, 'numero', [v.numero])) return;
+      lignes[i] = enLigne(p, valeurs, l);
+      touchees++;
+    });
+    if (!touchees) return { ok: false, erreur: 'unknown order ' + v.numero };
+    p.feuille.getRange(2, 1, lignes.length, p.largeur).setValues(lignes);
+    return {
+      ok: true, numero: v.numero,
+      maj: function (o) {
+        (o.commandes || []).forEach(function (x) {
+          if (cleEntete(x.numero) !== cleEntete(v.numero)) return;
+          Object.keys(valeurs).forEach(function (k) { x[k] = valeurs[k]; });
+        });
+      },
+    };
   },
 
   /** A product put up for sale: one Catalogues row, in the columns the tab already has. */

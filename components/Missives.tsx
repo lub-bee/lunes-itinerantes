@@ -5,9 +5,10 @@ import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives, Pa
 import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
+import { quantiteLue } from '@/lib/commande'
 import { arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
-import { Icone, Plume } from './Ornements'
+import { Action, Icone, Plume } from './Ornements'
 
 /*
  * The book of Missives: the list of missives, one page per missive (needs, contributions, ledger),
@@ -96,9 +97,9 @@ export function Signature({ reg }: { reg: CtxRegistre }) {
   return (
     <p className="signature-membre">
       Ton nom n&apos;est pas encore écrit à l&apos;ex-libris.{' '}
-      <button type="button" className="lien-encre" onClick={() => reg.allerA('ex-libris')}>
+      <Action icone="signer" onClick={() => reg.allerA('ex-libris')}>
         signer l&apos;ex-libris
-      </button>
+      </Action>
     </p>
   )
 }
@@ -108,9 +109,9 @@ function Ferme({ r }: { r: EtatRegistre }) {
     return (
       <div className="registre-ferme">
         <p>{r.erreur}</p>
-        <button type="button" className="lien-encre" onClick={r.relire}>
+        <Action icone="coursier" onClick={r.relire}>
           renvoyer le coursier
-        </button>
+        </Action>
       </div>
     )
   if (!r.donnees) return <p className="registre-ferme attente-encre">Le scribe déroule le registre…</p>
@@ -238,13 +239,9 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
           </p>
         )}
         {close && (
-          <button
-            type="button"
-            className="lien-encre"
-            onClick={() => document.querySelector('[data-pattes]')?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
-          >
+          <Action icone="partage" onClick={() => document.querySelector('[data-pattes]')?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
             voir le partage
-          </button>
+          </Action>
         )}
       </div>
       {/* The goods themselves are in the table on the right page: one line here, the actions right after. */}
@@ -950,6 +947,7 @@ const montantVente = (v: Vente) => v.lignes.reduce((t, l) => t + (l.prixReel ?? 
 export function GaucheVentes({ page, reg, compact }: { page: PageVentes; reg?: CtxRegistre; compact: boolean }) {
   const r = reg?.r
   const ventes = r?.donnees?.ventes
+  const aVerser = ventes?.filter((v) => !v.versee).length ?? 0
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
@@ -957,16 +955,78 @@ export function GaucheVentes({ page, reg, compact }: { page: PageVentes; reg?: C
       {reg && <Signature reg={reg} />}
       {ventes && ventes.length > 0 && (
         <p className="missive-resume">
-          {ventes.length} bon{ventes.length > 1 ? 's' : ''} scellé{ventes.length > 1 ? 's' : ''} · {prix(Math.round(ventes.reduce((t, v) => t + montantVente(v), 0)))} septims
+          {ventes.length} vente{ventes.length > 1 ? 's' : ''}, {aVerser ? <strong className="a-verser">{aVerser} part{aVerser > 1 ? 's' : ''} à verser</strong> : 'toutes les parts versées'}
+          <br />
+          {prix(Math.round(ventes.reduce((t, v) => t + montantVente(v), 0)))} septims en tout
         </p>
       )}
     </>
   )
 }
 
+/**
+ * The caravan's share of one sale: « Part à verser » with an optional amount (the Patriarchs set it) and
+ * the gesture to record it as handed over; once recorded, who and when, and the way to take it back.
+ */
+function Versement({ v, reg }: { v: Vente; reg: CtxRegistre }) {
+  const [montant, setMontant] = useState('')
+  const peut = reg.r.marchand?.droits?.versement !== false
+  const ecrire = (versee: boolean) => {
+    const m = montant.trim() ? Number(montant.replace(',', '.')) : null
+    reg.r.agir('versement', { numero: v.numero, versee, montant: m }, (d) => ({
+      ...d,
+      ventes: d.ventes?.map((x) =>
+        x.numero !== v.numero
+          ? x
+          : versee
+            ? { ...x, versee, verseeLe: new Date().toISOString(), verseePar: reg.r.marchand?.identite ?? '', montantVerse: m !== null && Number.isFinite(m) ? m : null }
+            : { ...x, versee, verseeLe: '', verseePar: '', montantVerse: null },
+      ),
+    }))
+    setMontant('')
+  }
+  if (v.versee)
+    return (
+      <div className="versement versee">
+        <span className="tampon petit">Part versée</span>
+        <em>
+          {v.verseeLe && <>le {dateTamrielique(v.verseeLe)}</>}
+          {v.verseePar && <> par {v.verseePar}</>}
+          {v.montantVerse !== null && <> · {prix(v.montantVerse)} septims</>}
+        </em>
+        {peut && (
+          <Action icone="annuler" onClick={() => ecrire(false)}>
+            annuler
+          </Action>
+        )}
+      </div>
+    )
+  return (
+    <div className="versement">
+      <span className="a-verser">Part à verser</span>
+      {peut && (
+        <>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={montant}
+            onChange={(e) => setMontant(e.target.value.replace(/[^\d.,]/g, '').slice(0, 10))}
+            placeholder="montant ?"
+            aria-label={`Montant versé au coffre pour le bon n° ${v.numero} (facultatif)`}
+            title="Facultatif : le montant est fixé par les Patriarches"
+          />
+          <Action icone="verser" onClick={() => ecrire(true)}>
+            versée au coffre
+          </Action>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function DroiteVentes({ reg }: { reg?: CtxRegistre }) {
   const r = reg?.r
-  if (!r?.donnees?.relie) return null
+  if (!r?.donnees?.relie || !reg) return null
   if (!r.marchand?.identite) return <p className="vide-encre">Signe d’abord l’ex-libris : le registre ne montre à chacun que ses propres ventes.</p>
   const ventes = r.donnees.ventes
   if (ventes === null || ventes === undefined)
@@ -975,26 +1035,32 @@ export function DroiteVentes({ reg }: { reg?: CtxRegistre }) {
   return (
     <div className="ventes">
       {ventes.map((v) => (
-        <section key={v.numero} className="vente">
+        <section key={v.numero} className={`vente ${v.versee ? 'versee' : ''}`}>
           <h4>
             <span>{v.horodatage ? dateTamrielique(v.horodatage) : v.numero}</span>
             <em>n° {v.numero}</em>
           </h4>
           <ul className="detail-lignes">
-            {v.lignes.map((l, i) => (
-              <li key={i}>
-                <span>
-                  {quantite(l.quantite)} {l.article}
-                  {l.statut && <em className="vente-statut"> · {l.statut}</em>}
-                </span>
-                <span className="points" />
-                <strong>{prix(l.prixReel ?? l.total)}</strong>
-              </li>
-            ))}
+            {v.lignes.map((l, i) => {
+              const unite = quantiteLue(l.quantite, l.unite)
+              return (
+                <li key={i}>
+                  <span>
+                    {quantite(l.quantite)} {l.article}
+                    {unite && <em className="vente-statut"> ({unite})</em>}
+                    {l.horsCatalogue && <em className="vente-statut"> · hors catalogue</em>}
+                    {l.statut && <em className="vente-statut"> · {l.statut}</em>}
+                  </span>
+                  <span className="points" />
+                  <strong>{prix(l.prixReel ?? l.total)}</strong>
+                </li>
+              )
+            })}
           </ul>
           <p className="vente-total">
             Total <strong>{prix(Math.round(montantVente(v) * 100) / 100)}</strong> septims
           </p>
+          <Versement v={v} reg={reg} />
         </section>
       ))}
     </div>

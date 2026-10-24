@@ -43,8 +43,22 @@ export type LigneMissive = { produit: string; quantite: number }
  * (Google republishes it every few minutes): `chapitre` is a chapter id of content/chapitres.json.
  */
 /** One sealed order as the « Commandes » tab holds it (one row per article). */
-export type LigneVente = { article: string; quantite: number; prixUnitaire: number | null; total: number | null; prixReel: number | null; statut: string }
-export type Vente = { numero: string; horodatage: string; vendeur: string; total: number | null; lignes: LigneVente[] }
+export type LigneVente = { article: string; quantite: number; prixUnitaire: number | null; total: number | null; prixReel: number | null; statut: string; unite: string; horsCatalogue: boolean }
+/**
+ * `versee`: the caravan's share of this sale handed over to its coffer (who, when, how much — the amount
+ * is the Patriarchs' to set, it may stay empty).
+ */
+export type Vente = {
+  numero: string
+  horodatage: string
+  vendeur: string
+  total: number | null
+  lignes: LigneVente[]
+  versee: boolean
+  verseeLe: string
+  verseePar: string
+  montantVerse: number | null
+}
 export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; enAttente?: boolean }
 export type Missive = {
   numero: string
@@ -107,7 +121,8 @@ export type DonneesRegistre = {
 /** `cloture`: deliver the missive (success) or give it up (inachevée); both close it and share the reward. */
 /** `vente`: a recipe's product put up for sale (a row added to the Catalogues tab). */
 /** `usage`: a product's usual recipe chosen; `choix`: a missive's recipe for one of its items. */
-export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix'
+/** `versement`: the caravan's share of a sealed order marked as handed over (or taken back). */
+export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix' | 'versement'
 
 /* ───────────────────────── Lookups ───────────────────────── */
 
@@ -641,9 +656,28 @@ export function lireOnglets(o: Onglets) {
       const numero = texte(r.numero)
       const article = texte(r.article)
       if (!numero || !article) continue
-      const v = par.get(numero) ?? { numero, horodatage: date(r.horodatage), vendeur: texte(r.vendeur), total: nombre(r.totalCommande), lignes: [] }
+      const v = par.get(numero) ?? {
+        numero,
+        horodatage: date(r.horodatage),
+        vendeur: texte(r.vendeur),
+        total: nombre(r.totalCommande),
+        lignes: [],
+        versee: marque(r.versee),
+        verseeLe: date(r.verseeLe),
+        verseePar: texte(r.verseePar),
+        montantVerse: nombre(r.montantVerse),
+      }
       par.set(numero, v)
-      v.lignes.push({ article, quantite: nombre(r.quantite) ?? 0, prixUnitaire: nombre(r.prixUnitaire), total: nombre(r.total), prixReel: nombre(r.prixReel), statut: texte(r.statut) })
+      v.lignes.push({
+        article,
+        quantite: nombre(r.quantite) ?? 0,
+        prixUnitaire: nombre(r.prixUnitaire),
+        total: nombre(r.total),
+        prixReel: nombre(r.prixReel),
+        statut: texte(r.statut),
+        unite: texte(r.unite),
+        horsCatalogue: marque(r.horsCatalogue),
+      })
     }
     ventes = [...par.values()].sort((a, b) => b.horodatage.localeCompare(a.horodatage))
   }

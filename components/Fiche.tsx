@@ -31,7 +31,7 @@ import {
 } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
-import { Icone } from './Ornements'
+import { Action, Icone } from './Ornements'
 
 /*
  * A loose slip laid on the left page (on the whole screen on mobile): a recipe's tree, or the form
@@ -210,19 +210,22 @@ export function FicheVolante({
             <header className="fiche-tete">
               {embleme && <div className="fiche-embleme">{embleme}</div>}
               <div className="fiche-surtitre">{surtitre}</div>
-              <h2 className="fiche-titre">{titre}</h2>
+              <div className="fiche-titre-ligne">
+                <h2 className="fiche-titre">{titre}</h2>
+                {/* Several recipes: the stamp of the note on top, beside its title. */}
+                {pile && (
+                  <span className={`tampon tampon-fiche ${pile.dessus === pile.usage ? 'usage' : ''}`}>
+                    Recette {pile.dessus.variante}
+                    {pile.dessus === pile.usage && <small>d&apos;usage</small>}
+                  </span>
+                )}
+              </div>
               {sousTitre && <div className="fiche-titre-en">{sousTitre}</div>}
               <button type="button" className="fiche-ranger" onClick={partir}>
                 Ranger
               </button>
             </header>
-            <div className={`fiche-corps ${pile ? 'avec-tampon' : ''}`}>{corps}</div>
-            {pile && (
-              <span className={`tampon tampon-fiche ${pile.dessus === pile.usage ? 'usage' : ''}`}>
-                Recette {pile.dessus.variante}
-                {pile.dessus === pile.usage && <small>d&apos;usage</small>}
-              </span>
-            )}
+            <div className="fiche-corps">{corps}</div>
           </div>
         </div>
         <div className="fiche-rouleau" ref={rouleau} style={{ height: EPAIS_ROULEAU }} aria-hidden />
@@ -413,9 +416,9 @@ function Signe({ env, action, children }: { env: Env; action: ActionRegistre; ch
     return (
       <div className="fiche-non-signe">
         <p className="fiche-note">Ce registre ne se signe qu&apos;à l&apos;ex-libris du grimoire, une fois pour toutes.</p>
-        <button type="button" className="lien-encre" onClick={() => env.reg.allerA('ex-libris')}>
+        <Action icone="signer" onClick={() => env.reg.allerA('ex-libris')}>
           aller à l&apos;ex-libris
-        </button>
+        </Action>
       </div>
     )
   }
@@ -604,9 +607,9 @@ function Lignes({
           {proposer && active === i && <Propositions connus={proposer(l.objet)} choisir={(n) => regler(i, { objet: n })} />}
         </div>
       ))}
-      <button type="button" className="lien-encre fiche-ajouter" onClick={() => setLignes([...lignes, { objet: '', qte: '' }])}>
-        + une ligne
-      </button>
+      <Action icone="ligne" className="fiche-ajouter" onClick={() => setLignes([...lignes, { objet: '', qte: '' }])}>
+        une ligne de plus
+      </Action>
     </div>
   )
 }
@@ -688,17 +691,16 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
         </p>
       )}
       {recette && <FeuilleRecette key={recette.variante} r={recette} usage={recette === usage} plusieurs={plusieurs} moinsChere={recette === moinsChere} env={env} />}
-      {recette && <AuCatalogue recette={recette} env={env} />}
       <div className="fiche-actions">
         {droits?.recette !== false && (
-          <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
+          <Action icone="consigner" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
             {vs.length ? 'Ajouter une variante' : 'Consigner la recette'}
-          </button>
+          </Action>
         )}
         {droits?.ressource !== false && ressource && (
-          <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'ressource', nom: ressource.nom })}>
+          <Action icone="matiere" onClick={() => env.changer({ genre: 'ressource', nom: ressource.nom })}>
             Corriger la matière
-          </button>
+          </Action>
         )}
       </div>
     </div>
@@ -742,7 +744,6 @@ function FeuilleRecette({ r, usage, plusieurs, moinsChere, env }: { r: Recette; 
         Une fournée donne <strong>{quantite(r.rendement)}</strong> {r.produit}
         {r.artisan && <> · {metierDe(r.artisan).nom}</>}
         {moinsChere && <em className="marque-chere"> · la moins chère</em>}
-        {plusieurs && coutsParRecette([r], env).get(r)! > 0 && <> · <strong>{prix(arrondi(coutsParRecette([r], env).get(r)!))}</strong> septims l&apos;unité</>}
       </p>
       {r.note && <p className="fiche-note"><em>{r.note}</em></p>}
       <label className="fiche-combien">
@@ -759,18 +760,19 @@ function FeuilleRecette({ r, usage, plusieurs, moinsChere, env }: { r: Recette; 
               <Branche key={`${e.nom}-${i}`} n={e} profondeur={0} env={env} />
             ))}
           </ul>
-          <CoutMatieres nom={r.produit} n={n} rendement={r.rendement} index={index} env={env} />
+          <CoutMatieres nom={r.produit} n={n} rendement={r.rendement} index={index} env={env} sansFournee />
         </>
       )}
+      <EncadrePrix r={r} env={env} />
       {droits?.recette !== false && (
         <div className="feuille-actions">
-          <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'edition-recette', nom: r.produit, variante: r.variante })}>
+          <Action icone="corriger" onClick={() => env.changer({ genre: 'edition-recette', nom: r.produit, variante: r.variante })}>
             corriger{plusieurs ? ` la recette ${r.variante}` : ' la recette'}
-          </button>
+          </Action>
           {plusieurs && !usage && droits?.usage !== false && (
-            <button type="button" className="lien-encre" onClick={choisir}>
+            <Action icone="usage" onClick={choisir}>
               en faire la recette d&apos;usage
-            </button>
+            </Action>
           )}
         </div>
       )}
@@ -785,38 +787,44 @@ function articleDe(recette: Recette, env: Env): Article | undefined {
 }
 
 /** Whether the caravan sells a recipe's product: where it stands in the catalogue, or the way to put it up for sale. */
-function AuCatalogue({ recette, env }: { recette: Recette; env: Env }) {
-  const article = articleDe(recette, env)
+/**
+ * Cost, floor and ceiling side by side in a frame: what this recipe's materials cost per unit made, and
+ * the catalogue's prices when the caravan sells the product (else the way to put it up for sale).
+ */
+function EncadrePrix({ r, env }: { r: Recette; env: Env }) {
+  const article = articleDe(r, env)
   const enAttente = env.reg.r.donnees?.catalogue?.some((a) => a.enAttente && cle(a.fr) === cle(article?.fr ?? ''))
-  if (article) {
-    return (
-      <div className={`fiche-catalogue ${enAttente ? 'en-attente' : ''}`}>
-        <p className="fiche-note">
-          <strong>Au catalogue de la caravane.</strong>{' '}
-          {article.min === null && article.max === null ? (
-            <>Prix à négocier.</>
-          ) : (
-            <>
-              Plancher <strong>{prix(article.min)}</strong>, plafond <strong>{prix(article.max)}</strong> septims.
-            </>
-          )}
-        </p>
-        <button type="button" className="lien-encre" onClick={() => env.reg.allerA(chapitreDeArticle(article, env) ?? '')}>
-          voir au catalogue{(() => {
-            const t = env.chapitres.find((c) => c.id === chapitreDeArticle(article, env))?.titre
-            return t ? ` · ${t}` : ''
-          })()}
-        </button>
-      </div>
-    )
-  }
-  if (env.reg.r.marchand?.droits?.vente === false) return null
+  const cout = coutsParRecette([r], env).get(r)!
+  const chapitre = article ? chapitreDeArticle(article, env) : undefined
+  const titre = chapitre ? env.chapitres.find((c) => c.id === chapitre)?.titre : undefined
+  const case_ = (mot: string, valeur: ReactNode, sous?: string) => (
+    <div className="encadre-case">
+      <span className="encadre-mot">{mot}</span>
+      <strong>{valeur}</strong>
+      {sous && <em>{sous}</em>}
+    </div>
+  )
   return (
-    <div className="fiche-catalogue">
-      <p className="fiche-note">Cet ouvrage n’est pas encore au catalogue : la caravane ne le vend pas.</p>
-      <button type="button" className="lien-encre" onClick={() => env.changer({ genre: 'vente', nom: recette.produit })}>
-        le mettre en vente
-      </button>
+    <div className={`encadre-prix-bloc ${enAttente ? 'en-attente' : ''}`}>
+      <div className="encadre-prix">
+        {case_('Coût', cout > 0 ? prix(arrondi(cout)) : <em className="a-estimer">à estimer</em>, 'l’unité')}
+        {case_('Plancher', article?.min !== null && article?.min !== undefined ? prix(article.min) : '—')}
+        {case_('Plafond', article?.max !== null && article?.max !== undefined ? prix(article.max) : '—')}
+      </div>
+      {article ? (
+        <Action icone="catalogue" onClick={() => env.reg.allerA(chapitre ?? '')}>
+          voir au catalogue{titre ? ` · ${titre}` : ''}
+        </Action>
+      ) : env.reg.r.marchand?.droits?.vente !== false ? (
+        <p className="encadre-note">
+          Pas encore au catalogue.{' '}
+          <Action icone="vendre" onClick={() => env.changer({ genre: 'vente', nom: r.produit })}>
+            le mettre en vente
+          </Action>
+        </p>
+      ) : (
+        <p className="encadre-note">Pas encore au catalogue.</p>
+      )}
     </div>
   )
 }
@@ -940,9 +948,9 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
         {champ('max', 'Plafond', { inputMode: 'decimal', placeholder: proposes ? `p. ex. ${proposes.max}` : 'à négocier' })}
       </div>
       {proposes && !v.min && !v.max && (
-        <button type="button" className="lien-encre fiche-ajouter" onClick={() => setV({ ...v, min: String(proposes.min), max: String(proposes.max) })}>
+        <Action icone="marges" className="fiche-ajouter" onClick={() => setV({ ...v, min: String(proposes.min), max: String(proposes.max) })}>
           prendre les marges d’usage du chapitre
-        </button>
+        </Action>
       )}
       {champ('note', 'Note', { placeholder: 'facultative' })}
       <Message m={message} />
@@ -954,16 +962,19 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
 }
 
 /** What the raw materials of one craft (and of « Pour N ») cost at their « prix courant ». */
-function CoutMatieres({ nom, n, rendement, index, env }: { nom: string; n: number; rendement: number; index: Map<string, Recette>; env: Env }) {
+function CoutMatieres({ nom, n, rendement, index, env, sansFournee = false }: { nom: string; n: number; rendement: number; index: Map<string, Recette>; env: Env; sansFournee?: boolean }) {
   const ressources = env.reg.r.donnees?.ressources ?? []
   const une = coutMatieres(arbre(nom, rendement, index), ressources)
   const toutes = coutMatieres(arbre(nom, n, index), ressources)
   if (!une.cout && !une.sansPrix.length) return null
+  if (sansFournee && n === rendement && !toutes.sansPrix.length) return null
   return (
     <div className="fiche-cout">
-      <p>
-        Matières d&apos;une fournée : <strong>{prix(une.cout)}</strong> septims
-      </p>
+      {!sansFournee && (
+        <p>
+          Matières d&apos;une fournée : <strong>{prix(une.cout)}</strong> septims
+        </p>
+      )}
       {n !== rendement && (
         <p>
           Pour {quantite(n)} : <strong>{prix(toutes.cout)}</strong> septims
@@ -1093,10 +1104,10 @@ function FormRecette({ nom, variante, nouvelle: ajout, artisanPropose, env }: { 
         <div className={`fiche-propositions doublons ${memeNom ? 'meme' : ''}`} role="status">
           <span>{memeNom ? 'Cet ouvrage a déjà sa recette :' : 'Déjà au registre, peut-être :'}</span>
           {doublons.map((r) => (
-            <button key={r.produit} type="button" className="lien-encre" onClick={() => env.changer({ genre: 'recette', nom: r.produit })}>
+            <Action key={r.produit} icone="ouvrir" onClick={() => env.changer({ genre: 'recette', nom: r.produit })}>
               ouvrir {r.produit}
               {r.en && <em> · {r.en}</em>}
-            </button>
+            </Action>
           ))}
           {variante_ && <span className="variante-annonce">ou consigner celle-ci comme sa recette n° {numero} (une variante).</span>}
         </div>

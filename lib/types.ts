@@ -9,6 +9,8 @@ export type Article = {
   max: number | null
   artisan: Artisan
   note: string
+  /** Sold by lot (Catalogues « Lot »: e.g. 80 arrows to the quiver); null: not a lot. */
+  lot?: number | null
 }
 
 export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'caravane'

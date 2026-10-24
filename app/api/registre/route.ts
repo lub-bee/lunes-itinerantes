@@ -380,6 +380,22 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       }
     }
 
+    case 'versement': {
+      // The caravan's share of a sealed order handed over to its coffer (or taken back), signed.
+      if (lu.ventes === null) non('Le scribe du registre ne sait pas encore relire les bons scellés : qu’on recopie le dernier script du grimoire dans la feuille.')
+      const v = lu.ventes!.find((x) => x.numero === mot(b.numero, 40))
+      if (!v) non('Ce bon de commande est introuvable dans le registre.')
+      const versee = b.versee === true
+      const montant = versee ? nombreOuVide(b.montant, 1e8, 'Le montant versé') : null
+      return {
+        action,
+        charge: { versement: { numero: v!.numero, versee, montant, par: qui.nom, quand } },
+        message: versee
+          ? `La part de la caravane sur le bon n° ${v!.numero} est versée au coffre${montant !== null ? ` : ${montant} septims` : ''}.`
+          : `Le versement du bon n° ${v!.numero} est rayé du registre.`,
+      }
+    }
+
     case 'vente': {
       // A product put up for sale: one row added to the Catalogues tab (the book shows it at once,
       // the published CSV a few minutes later).
@@ -401,7 +417,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement']
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)

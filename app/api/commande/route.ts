@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
 import { nomSigne } from '@/lib/identite'
 import { chargerArticles } from '@/lib/livre'
-import { calculerLigne, centimes, poidsLigne, repartirGlobal, statut, totaux, type CommandeEnvoyee } from '@/lib/commande'
+import { oublierRegistre } from '@/lib/registre'
+import { calculerLigne, centimes, poidsLigne, repartirGlobal, statut, totaux, uniteLigne, type CommandeEnvoyee } from '@/lib/commande'
 
 // Seals an order: validates it, recomputes every total from the catalogue, and hands it to the
 // Google Apps Script web app that writes it in the "Commandes" sheet (scripts/apps-script/commandes.gs).
@@ -53,15 +54,24 @@ export async function POST(req: NextRequest) {
     if (!article || !Number.isInteger(quantite) || quantite < 1 || quantite > 9999 || !Number.isFinite(prixUnitaire) || prixUnitaire < 0 || prixUnitaire > 1e7) {
       return refus(`Une ligne est mal écrite${article ? ` (${article})` : ''} : quantité ou prix illisible.`, 400)
     }
-    const connu = typeof b.id === 'string' ? catalogue.get(b.id) : undefined
+    // A line typed by hand (hors catalogue): no floor, no ceiling, so never « à perte ».
+    const horsCatalogue = b.horsCatalogue === true
+    const connu = !horsCatalogue && typeof b.id === 'string' ? catalogue.get(b.id) : undefined
     const nombreOuNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-    const min = connu ? connu.min : nombreOuNull(b.min)
-    const max = connu ? connu.max : nombreOuNull(b.max)
+    // Sold by the piece of a lot (40 arrows of a quiver of 80): floor and ceiling prorated.
+    const lot = connu?.lot ?? null
+    const piece = Boolean(lot) && b.unite === 'piece'
+    const parPiece = (v: number | null) => (v === null || !piece ? v : centimes(v / lot!))
+    const min = horsCatalogue ? null : parPiece(connu ? connu.min : nombreOuNull(b.min))
+    const max = horsCatalogue ? null : parPiece(connu ? connu.max : nombreOuNull(b.max))
+    const nom = connu?.fr ?? article
     lignes.push({
-      article: connu?.fr ?? article,
+      article: nom,
       articleEn: connu?.en ?? (typeof b.articleEn === 'string' ? b.articleEn.slice(0, 160) : ''),
       prixMini: min,
       prixIdeal: max,
+      unite: uniteLigne(nom, lot, piece),
+      horsCatalogue,
       ...calculerLigne(quantite, prixUnitaire, min, max),
     })
   }
@@ -124,5 +134,7 @@ export async function POST(req: NextRequest) {
     return refus("Le coursier s'est perdu en route. Ta commande reste sur la table : réessaie plus tard.", 504)
   }
 
+  // « Mes ventes » reads the orders from the registre: its cached copy is now too old.
+  oublierRegistre()
   return NextResponse.json({ ok: true, numero: commande.numero, total: commande.total })
 }

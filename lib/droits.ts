@@ -20,6 +20,7 @@ export const ROLES_REQUIS: Record<ActionRegistre, Role[] | null> = {
   vente: null, // a recipe's product added to the catalogue; later perhaps ['patriarche']
   usage: null, // which recipe of a product is the usual one
   choix: null, // a missive's recipe for one of its items
+  versement: null, // the caravan's share of a sale marked as handed over; later ['patriarche']
 }
 
 export function peut(action: ActionRegistre, roles: Role[]): boolean {

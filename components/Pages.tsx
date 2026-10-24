@@ -4,8 +4,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import type { Article, Livre, Page, PageChapitre } from '@/lib/types'
 import { articleCorrespond, plages } from '@/lib/recherche'
 import { dateTamrielique, prix, romain } from '@/lib/format'
-import { Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
+import { Action, Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
+import { motLot } from '@/lib/commande'
 import { COLOPHON } from '@/lib/credits'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
@@ -151,9 +152,9 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
           <EnTete surtitre="Dévotions" titre={d?.nom ?? page.titre} compact={compact}>
             {d && <p className="dedicace">{d.dedicace}</p>}
             {!compact && <p className="note-encre devotion-note">Ce que les Khajiits de la caravane chantent à sa gloire. Touche un titre pour lire le poème.</p>}
-            <button type="button" className="lien-encre" tabIndex={ctx.interactif ? 0 : -1} onClick={() => ctx.aller?.(0)}>
+            <Action icone="annuler" tabIndex={ctx.interactif ? 0 : -1} onClick={() => ctx.aller?.(0)}>
               ce n&apos;est pas mon nom
-            </button>
+            </Action>
           </EnTete>
         )
       }
@@ -632,6 +633,7 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
                   ))}
               </span>
               <span className="nom-en"><Surligne texte={a.en} requetes={requetes} /></span>
+              {a.lot && <span className="note-article lot-article">le {motLot(a.fr)} de {a.lot}</span>}
               {a.note && <span className="note-article">{a.note}</span>}
             </div>
             <span className="points-conduite" aria-hidden />
@@ -650,9 +652,9 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
       </div>
       {/* A merchandise of its own (no recipe needed): only its name is required. */}
       {ctx.interactif && ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
-        <button type="button" className="lien-encre inscrire-marchandise" onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
-          + inscrire une marchandise
-        </button>
+        <Action icone="vendre" className="inscrire-marchandise" onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
+          inscrire une marchandise
+        </Action>
       )}
       <p className="registre-pied">Prix exprimés en septims d&apos;or</p>
     </div>

@@ -8,7 +8,7 @@
 // - a write answers with every tab: the writing instance keeps that copy, nothing is read again.
 // COMMANDES_SCRIPT_URL and COMMANDES_JETON never leave the server, nor does the members' list.
 
-import { unstable_cache } from 'next/cache'
+import { revalidateTag, unstable_cache } from 'next/cache'
 import { lireOnglets, type Onglets } from './missives'
 
 export const ETIQUETTE_REGISTRE = 'registre'
@@ -59,6 +59,12 @@ const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3'], { revali
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
+
+/** A write that does not answer with the tabs (a sealed order): the next read goes to the sheet. */
+export function oublierRegistre() {
+  frais = null
+  revalidateTag(ETIQUETTE_REGISTRE)
+}
 
 function garder(l: Lecture) {
   if (!frais || l.version >= frais.version) frais = { ...l, le: Date.now() }

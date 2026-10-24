@@ -5,7 +5,7 @@ import type { Ctx } from './Pages'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
 import { GAUFRAGE } from '@/lib/gaufrage'
 import { oeufDeNom } from '@/lib/oeufs'
-import { Icone } from './Ornements'
+import { Action, Icone } from './Ornements'
 
 /*
  * The ex-libris: a bookplate pasted inside the cover, the first page of the grimoire once the
@@ -263,9 +263,9 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
         </p>
       )}
       {m?.identite && !m.discord && (
-        <button type="button" className="lien-encre ex-libris-autre" tabIndex={tab} onClick={r?.oublier}>
+        <Action icone="annuler" className="ex-libris-autre" tabIndex={tab} onClick={r?.oublier}>
           ce n&apos;est pas mon nom
-        </button>
+        </Action>
       )}
     </div>
   )

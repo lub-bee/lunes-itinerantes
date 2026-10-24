@@ -10,7 +10,7 @@ import { articleCorrespond, artisanDe, compterDans, jetons, nomsCorrespondent, p
 import { metierDe } from '@/lib/metiers'
 import { cle, type Recette } from '@/lib/missives'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
-import { CoinLaiton, Embleme, Icone, Plume } from './Ornements'
+import { CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
 import { ICONE_COPIE } from '@/lib/copie'
@@ -682,6 +682,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const portee = tourne ? <div className="ombre-portee" data-portee aria-hidden /> : null
 
   return (
+    <IconesLivre.Provider value={icones}>
     <div
       className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''}`}
       style={{ '--gaufrage': GAUFRAGE.intensite, '--gaufrage-registres': GAUFRAGE.registres, '--gaufrage-exlibris': GAUFRAGE.exLibris } as CSSProperties}
@@ -972,5 +973,6 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         </>
       )}
     </div>
+    </IconesLivre.Provider>
   )
 }

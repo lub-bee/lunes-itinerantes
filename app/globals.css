@@ -3215,9 +3215,9 @@ em.besoins-recette { border: 0; cursor: default; }
 /* Sticking out further grows the tab to the left: its other end stays under the note. */
 .fiche-onglet:hover, .fiche-onglet:focus-visible { outline: none; padding-left: 18px; color: var(--encre-rouge); }
 .fiche-onglet.actif { padding-left: 23px; background-color: #f4e5c0; color: var(--encre-rouge); }
-/* The stamp of the note on top, in its bottom-right corner. */
-.tampon-fiche { position: absolute; z-index: 2; right: 22px; bottom: 16px; pointer-events: none; }
-.fiche-corps.avec-tampon { padding-bottom: 46px; }
+/* The stamp of the note on top, beside its title. */
+.fiche-titre-ligne { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.tampon-fiche { flex: none; pointer-events: none; }
 @media (max-width: 860px) {
   /* The bottom sheet fills the width: the tabs stand on its top edge. */
   .fiche.mobile .fiche-onglets { top: auto; right: auto; left: 18px; bottom: calc(100% - 14px); flex-direction: row; align-items: flex-end; }
@@ -3229,3 +3229,48 @@ em.besoins-recette { border: 0; cursor: default; }
   .fiche.mobile .fiche-dessous.dessous-1 { transform: translate(-3px, -20px) rotate(-1.6deg); }
   .fiche.mobile .fiche-dessous.dessous-2 { transform: translate(6px, -27px) rotate(2.6deg); }
 }
+
+/* ─── Actions with their engraved icon (lib/actions.ts), one set for the whole book ─── */
+.lien-encre.action { display: inline-flex; align-items: baseline; gap: 6px; }
+.action-icone { flex: none; width: 15px; height: 15px; align-self: center; color: var(--encre-rouge); opacity: 0.85; }
+.fiche-ajouter.action .action-icone { width: 13px; height: 13px; }
+
+/* ─── A recipe's prices in a frame: cost, floor, ceiling side by side ─── */
+.encadre-prix-bloc { margin: 10px 0 4px; text-align: center; }
+.encadre-prix-bloc.en-attente { opacity: 0.65; }
+.encadre-prix {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0 auto 6px;
+  max-width: 340px;
+  border: 1px solid rgba(110, 75, 35, 0.55);
+  outline: 1px solid rgba(110, 75, 35, 0.3);
+  outline-offset: 2px;
+  background: rgba(255, 248, 228, 0.35);
+}
+.encadre-case { display: flex; flex-direction: column; align-items: center; padding: 5px 4px 4px; }
+.encadre-case + .encadre-case { border-left: 1px solid rgba(110, 75, 35, 0.35); }
+.encadre-mot { font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.1em; color: var(--encre-rouge); }
+.encadre-case strong { font-family: var(--f-capitales); font-weight: 400; font-size: 21px; line-height: 1.2; color: var(--encre); font-variant-numeric: lining-nums; }
+.encadre-case > em { font-size: 12px; color: var(--encre-pale); }
+.encadre-note { margin: 0; font-style: italic; font-size: 15px; color: var(--encre-douce); }
+.encadre-note .action { font-style: normal; }
+
+/* ─── Order sheet: by the lot or by the piece, lines outside the catalogue ─── */
+.commande-lot { display: inline-flex; gap: 0; margin-top: 2px; }
+.commande-lot button { padding: 0 6px; border: 1px solid rgba(110, 80, 45, 0.45); background: transparent; font-family: var(--f-capitales); font-size: 11.5px; letter-spacing: 0.03em; color: var(--encre-pale); cursor: pointer; }
+.commande-lot button:first-child { border-radius: 8px 0 0 8px; }
+.commande-lot button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
+.commande-lot button.actif { background: rgba(142, 31, 20, 0.1); color: var(--encre-rouge); }
+.commande-libre { width: 100%; min-width: 0; padding: 0 2px; border: 0; border-bottom: 1px dotted rgba(90, 64, 41, 0.6); background: transparent; font: inherit; color: var(--encre); }
+.commande-hors { display: block; margin: 8px auto 2px; font-size: 13px; }
+.lot-article { font-style: italic; }
+
+/* ─── Mes ventes: the caravan's share of each sale ─── */
+.versement { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 10px; margin-top: 4px; font-size: 14.5px; }
+.versement input { width: 82px; padding: 0 3px; border: 0; border-bottom: 1px dotted rgba(90, 64, 41, 0.6); background: transparent; font: inherit; font-style: normal; text-align: right; color: var(--encre); }
+.versement > em { color: var(--encre-pale); }
+.a-verser { font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.04em; color: var(--encre-rouge); }
+strong.a-verser { font-weight: 400; }
+.vente.versee h4 { color: var(--encre-douce); }
+.commande-lot button { white-space: nowrap; }

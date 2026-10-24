@@ -1,7 +1,24 @@
-import { useId } from 'react'
+'use client'
+
+import { createContext, useContext, useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import type { Artisan } from '@/lib/types'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
 import { ARTISANS, ICONES_ARTISANS } from '@/lib/recherche'
+import { ICONES_ACTIONS } from '@/lib/actions'
+
+/** The book's icons (name → SVG body), for the actions anywhere in the book (Grimoire.tsx provides them). */
+export const IconesLivre = createContext<Record<string, string>>({})
+
+/** An ink link that acts, with its small engraved icon before the words. */
+export function Action({ icone, children, className, ...props }: { icone: keyof typeof ICONES_ACTIONS; children: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const icones = useContext(IconesLivre)
+  return (
+    <button type="button" className={`lien-encre action ${className ?? ''}`} {...props}>
+      <Icone corps={icones[ICONES_ACTIONS[icone]]} className="action-icone" />
+      <span>{children}</span>
+    </button>
+  )
+}
 
 /** A game-icons.net glyph (512×512, filled with currentColor). */
 export function Icone({ corps, className }: { corps?: string; className?: string }) {
