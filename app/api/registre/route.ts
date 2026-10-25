@@ -342,8 +342,13 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
         origine: mot(b.origine, 60),
         prix: nombreOuVide(b.prix, 1e7, 'Le prix courant'),
         bonneAffaire: nombreOuVide(b.bonneAffaire, 1e7, 'La bonne affaire'),
+        // How many units these prices buy (« 1 septim les 3 »); 1 = by the unit.
+        lot: entier(b.lot ?? 1, 1, 100000, 'Le lot'),
         note: mot(b.note, 200),
       }
+      // A script before v3j would drop the lot and keep a lot's price as a unit's.
+      if (ressource.lot > 1 && !lu.lotsMatieres)
+        non('Le scribe du registre ne sait pas encore tenir les prix par lot : qu’on recopie le dernier script du grimoire dans la feuille, puis qu’on réessaie.')
       return { action, charge: { ressource }, message: `La ressource ${nom} est inscrite au registre.` }
     }
 

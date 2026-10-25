@@ -22,7 +22,11 @@ export const PART_COMMUNE_DEFAUT = 20
  * A raw material: goods the caravan harvests, loots, crafts or buys (never sells). `prix`: the usual
  * buying price per unit (weighs contributions); `bonneAffaire`: buy without hesitation at or below it.
  */
-export type Ressource = { nom: string; en: string; origine: string; prix: number | null; bonneAffaire: number | null; note: string }
+/** `lot`: how many units `prix` and `bonneAffaire` buy (« 1 septim les 3 »); 1 when the sheet says nothing. */
+export type Ressource = { nom: string; en: string; origine: string; prix: number | null; bonneAffaire: number | null; note: string; lot?: number }
+
+/** A raw material's exact price per unit (its price ÷ its lot, never rounded), or null. */
+export const prixUnite = (r: Pick<Ressource, 'prix' | 'lot'>) => (r.prix === null ? null : r.prix / Math.max(1, r.lot ?? 1))
 export type Ingredient = { nom: string; quantite: number }
 /** `rendement`: units of the product made by one craft. */
 /** `en`: the product's English name (Recettes « Produit EN », for products not in the catalogue). */
@@ -205,7 +209,7 @@ export function evaluateur(articles: ArticleValeur[], recettes: Recette[], resso
   // The usual recipes; a raw material that also has one is valued at its price (bought by default).
   const recs = indexRecettes(recettes, ressources)
   const res = new Map<string, number>()
-  for (const r of ressources) if (r.prix !== null) res.set(cle(r.nom), r.prix)
+  for (const r of ressources) if (r.prix !== null) res.set(cle(r.nom), prixUnite(r)!)
   const memo = new Map<string, number>()
   const valeur = (nom: string, chemin: string[] = []): number => {
     const k = cle(nom)
@@ -253,7 +257,7 @@ export function arbre(nom: string, quantite: number, recettes: Map<string, Recet
  * known price (not counted).
  */
 export function coutMatieres(n: Noeud, ressources: Ressource[]): { cout: number; sansPrix: string[] } {
-  const prix = new Map(ressources.map((r) => [cle(r.nom), r.prix]))
+  const prix = new Map(ressources.map((r) => [cle(r.nom), prixUnite(r)]))
   let cout = 0
   const sansPrix = new Set<string>()
   const visiter = (x: Noeud) => {
@@ -263,7 +267,8 @@ export function coutMatieres(n: Noeud, ressources: Ressource[]): { cout: number;
     else cout += p * x.quantite
   }
   n.enfants.forEach(visiter)
-  return { cout: Math.round(cout * 100) / 100, sansPrix: [...sansPrix] }
+  // Exact: rounded only where it is shown (whole septims, costs rounded up).
+  return { cout, sansPrix: [...sansPrix] }
 }
 
 /** The first recipe loop reachable from `nom`, or null. */
@@ -567,7 +572,7 @@ export function lireOnglets(o: Onglets) {
     .filter((m) => m.nom && !horsCaravane(m.role))
 
   const ressources: Ressource[] = (o.ressources ?? [])
-    .map((r) => ({ nom: texte(r.nom), en: texte(r.en), origine: texte(r.origine), prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: texte(r.note) }))
+    .map((r) => ({ nom: texte(r.nom), en: texte(r.en), origine: texte(r.origine), prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: texte(r.note), lot: Math.max(1, Math.round(nombre(r.lot) ?? 1)) }))
     .filter((r) => r.nom)
 
   const recettes: Recette[] = []
@@ -647,6 +652,8 @@ export function lireOnglets(o: Onglets) {
 
   // A script that knows recipe variants (v3g) reads the « Variante » column (even empty): every row has the key.
   const variantes = !(o.recettes ?? []).length || 'variante' in (o.recettes ?? [])[0]
+  // A script that writes the raw materials' « Lot » (v3j) reads the column: every row has the key.
+  const lotsMatieres = !(o.ressources ?? []).length || 'lot' in (o.ressources ?? [])[0]
 
   // Sealed orders, grouped by number (null: the script does not read them).
   let ventes: Vente[] | null = null
@@ -682,5 +689,5 @@ export function lireOnglets(o: Onglets) {
     ventes = [...par.values()].sort((a, b) => b.horodatage.localeCompare(a.horodatage))
   }
 
-  return { membres, ressources, recettes, missives, mouvements, catalogue, variantes, ventes }
+  return { membres, ressources, recettes, missives, mouvements, catalogue, variantes, lotsMatieres, ventes }
 }

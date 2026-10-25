@@ -3274,3 +3274,7 @@ em.besoins-recette { border: 0; cursor: default; }
 strong.a-verser { font-weight: 400; }
 .vente.versee h4 { color: var(--encre-douce); }
 .commande-lot button { white-space: nowrap; }
+
+/* ─── Whole septims: a rounded amount shows its exact value on hover; raw materials priced by lot ─── */
+.arrondi { cursor: help; text-decoration: underline dotted rgba(110, 80, 45, 0.45); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.prix .par-lot { display: block; font-size: 11.5px; line-height: 1; color: var(--encre-pale); white-space: nowrap; }

@@ -3,12 +3,12 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives, PageVentes } from '@/lib/types'
 import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
-import { dateTamrielique, prix } from '@/lib/format'
+import { dateTamrielique, prix, prixParLot, septims } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
 import { quantiteLue } from '@/lib/commande'
 import { arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
-import { Action, Icone, Plume } from './Ornements'
+import { Action, Icone, Plume, Septims } from './Ornements'
 
 /*
  * The book of Missives: the list of missives, one page per missive (needs, contributions, ledger),
@@ -475,8 +475,8 @@ function Contributions({ e, nbMembres }: { e: EtatMissive; nbMembres: number }) 
               <div key={c.membre} className="part">
                 <span className="part-nom">{c.membre}</span>
                 <span className="part-detail">
-                  a apporté <strong>{prix(Math.round(c.total * 100) / 100)}</strong> septims de valeur
-                  {c.depots > 0 && c.facons > 0 && <> (dépôts {prix(Math.round(c.depots * 100) / 100)}, façonnage {prix(Math.round(c.facons * 100) / 100)})</>}
+                  a apporté <strong><Septims v={c.total} /></strong> septims de valeur
+                  {c.depots > 0 && c.facons > 0 && <> (dépôts <Septims v={c.depots} />, façonnage <Septims v={c.facons} />)</>}
                   {c.depots === 0 && c.facons > 0 && <> en façonnant</>}
                   {recu !== undefined && <> · a reçu <strong>{prix(recu)}</strong> septims</>}
                 </span>
@@ -665,8 +665,8 @@ function CoutsRecettes({ x, reg }: { x: Recette & { toutes: Recette[] }; reg: Ct
   })
   if (!couts.some((k) => k.cout > 0)) return null
   return (
-    <b title={couts.map((k) => `recette ${k.v.variante}${k.v === x ? ' (d’usage)' : ''} : ${k.cout > 0 ? prix(Math.round(k.cout * 100) / 100) : '?'} septims l’unité`).join('\n')}>
-      {couts.map((k) => (k.cout > 0 ? prix(Math.round(k.cout * 100) / 100) : '?')).join(' / ')}
+    <b title={couts.map((k) => `recette ${k.v.variante}${k.v === x ? ' (d’usage)' : ''} : ${k.cout > 0 ? `${septims(k.cout, true).texte} septims l’unité (${septims(k.cout, true).exactement ?? 'compte rond'})` : 'prix inconnu'}`).join('\n')}>
+      {couts.map((k) => (k.cout > 0 ? septims(k.cout, true).texte : '?')).join(' / ')}
     </b>
   )
 }
@@ -848,8 +848,15 @@ function RegistreMatieres({ reg, tab, ressources }: { reg: CtxRegistre; tab: num
                 {x.en && <span className="nom-en">{x.en}</span>}
               </span>
               <span className="points-conduite" aria-hidden />
-              <span className="prix">{x.prix === null ? <em className="a-estimer">à estimer</em> : prix(x.prix)}</span>
-              <span className="prix prix-affaire">{prix(x.bonneAffaire)}</span>
+              {/* Prices of one lot (« 1 les 3 »); the computations use price ÷ lot. */}
+              <span className="prix" title={x.prix !== null ? prixParLot(x.prix, x.lot) : undefined}>
+                {x.prix === null ? <em className="a-estimer">à estimer</em> : prix(x.prix)}
+                {x.prix !== null && (x.lot ?? 1) > 1 && <em className="par-lot">les {x.lot}</em>}
+              </span>
+              <span className="prix prix-affaire" title={x.bonneAffaire !== null ? prixParLot(x.bonneAffaire, x.lot) : undefined}>
+                {prix(x.bonneAffaire)}
+                {x.bonneAffaire !== null && (x.lot ?? 1) > 1 && <em className="par-lot">les {x.lot}</em>}
+              </span>
             </div>
           ))}
           {!montrees.length && <p className="vide-encre">Nulle matière ici.</p>}
@@ -957,7 +964,7 @@ export function GaucheVentes({ page, reg, compact }: { page: PageVentes; reg?: C
         <p className="missive-resume">
           {ventes.length} vente{ventes.length > 1 ? 's' : ''}, {aVerser ? <strong className="a-verser">{aVerser} part{aVerser > 1 ? 's' : ''} à verser</strong> : 'toutes les parts versées'}
           <br />
-          {prix(Math.round(ventes.reduce((t, v) => t + montantVente(v), 0)))} septims en tout
+          <Septims v={ventes.reduce((t, v) => t + montantVente(v), 0)} /> septims en tout
         </p>
       )}
     </>
@@ -1052,13 +1059,15 @@ export function DroiteVentes({ reg }: { reg?: CtxRegistre }) {
                     {l.statut && <em className="vente-statut"> · {l.statut}</em>}
                   </span>
                   <span className="points" />
-                  <strong>{prix(l.prixReel ?? l.total)}</strong>
+                  <strong>
+                    <Septims v={l.prixReel ?? l.total} />
+                  </strong>
                 </li>
               )
             })}
           </ul>
           <p className="vente-total">
-            Total <strong>{prix(Math.round(montantVente(v) * 100) / 100)}</strong> septims
+            Total <strong><Septims v={montantVente(v)} /></strong> septims
           </p>
           <Versement v={v} reg={reg} />
         </section>

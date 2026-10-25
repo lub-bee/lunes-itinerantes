@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Article } from '@/lib/types'
-import { prix } from '@/lib/format'
+import { prix, prixParLot } from '@/lib/format'
 import { proches } from '@/lib/recherche'
 import { METIERS, metierDe, SANS_METIER } from '@/lib/metiers'
 import { estImage, RANGS, SANS_RANG } from '@/lib/rangs'
@@ -31,7 +31,7 @@ import {
 } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
-import { Action, Icone } from './Ornements'
+import { Action, Icone, Septims } from './Ornements'
 
 /*
  * A loose slip laid on the left page (on the whole screen on mobile): a recipe's tree, or the form
@@ -679,8 +679,8 @@ function VueRecette({ nom, variante: voulue, env }: { nom: string; variante?: nu
       {ressource && (
         <p className="fiche-note">
           Matière première{ressource.origine && <> ({ressource.origine})</>}, que la caravane se procure sans jamais la revendre.
-          {ressource.prix !== null && <> Prix courant : <strong>{prix(ressource.prix)}</strong> septims l&apos;unité.</>}
-          {ressource.bonneAffaire !== null && <> Bonne affaire à <strong>{prix(ressource.bonneAffaire)}</strong> ou moins : qu&apos;on achète sans hésiter.</>}
+          {ressource.prix !== null && <> Prix courant : <strong>{prixParLot(ressource.prix, ressource.lot)}</strong>.</>}
+          {ressource.bonneAffaire !== null && <> Bonne affaire à <strong>{prixParLot(ressource.bonneAffaire, ressource.lot)}</strong> ou moins : qu&apos;on achète sans hésiter.</>}
           {ressource.note && <em> {ressource.note}</em>}
           {recette && <> Elle <strong>se fabrique aussi</strong> : d&apos;ordinaire la caravane l&apos;achète, une missive peut choisir de la façonner.</>}
         </p>
@@ -807,7 +807,7 @@ function EncadrePrix({ r, env }: { r: Recette; env: Env }) {
   return (
     <div className={`encadre-prix-bloc ${enAttente ? 'en-attente' : ''}`}>
       <div className="encadre-prix">
-        {case_('Coût', cout > 0 ? prix(arrondi(cout)) : <em className="a-estimer">à estimer</em>, 'l’unité')}
+        {case_('Coût', cout > 0 ? <Septims v={cout} haut /> : <em className="a-estimer">à estimer</em>, 'l’unité')}
         {case_('Plancher', article?.min !== null && article?.min !== undefined ? prix(article.min) : '—')}
         {case_('Plafond', article?.max !== null && article?.max !== undefined ? prix(article.max) : '—')}
       </div>
@@ -972,12 +972,12 @@ function CoutMatieres({ nom, n, rendement, index, env, sansFournee = false }: { 
     <div className="fiche-cout">
       {!sansFournee && (
         <p>
-          Matières d&apos;une fournée : <strong>{prix(une.cout)}</strong> septims
+          Matières d&apos;une fournée : <strong><Septims v={une.cout} haut /></strong> septims
         </p>
       )}
       {n !== rendement && (
         <p>
-          Pour {quantite(n)} : <strong>{prix(toutes.cout)}</strong> septims
+          Pour {quantite(n)} : <strong><Septims v={toutes.cout} haut /></strong> septims
         </p>
       )}
       {toutes.sansPrix.length > 0 && <p className="fiche-cout-note">sans prix courant au registre : {toutes.sansPrix.join(', ')}</p>}
@@ -1155,7 +1155,7 @@ function FormRessource({ nom, env }: { nom: string; env: Env }) {
   const ancienne = d?.ressources.find((r) => cle(r.nom) === cle(nom))
   const origines = [...new Set(['récolte', 'loot', 'achat', 'craft', ...(d?.ressources ?? []).map((r) => r.origine).filter(Boolean)])]
   const ecrit = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v).replace('.', ','))
-  const [v, setV] = useState({ nom: ancienne?.nom ?? nom, en: ancienne?.en ?? '', origine: ancienne?.origine ?? '', prix: ecrit(ancienne?.prix), bonneAffaire: ecrit(ancienne?.bonneAffaire), note: ancienne?.note ?? '' })
+  const [v, setV] = useState({ nom: ancienne?.nom ?? nom, en: ancienne?.en ?? '', origine: ancienne?.origine ?? '', prix: ecrit(ancienne?.prix), bonneAffaire: ecrit(ancienne?.bonneAffaire), note: ancienne?.note ?? '', lot: String(ancienne?.lot ?? 1) })
   const { message, setMessage, confier } = useEnvoi(env)
   const champ = (k: keyof typeof v, mot: string, extra: Record<string, unknown> = {}) => (
     <label className="fiche-champ">
@@ -1175,7 +1175,8 @@ function FormRessource({ nom, env }: { nom: string; env: Env }) {
         const bonne = lu(v.bonneAffaire)
         if ((prixCourant !== null && !(prixCourant >= 0)) || (bonne !== null && !(bonne >= 0))) return setMessage({ ok: false, texte: 'Un prix est illisible : un nombre de septims est attendu.' })
         const ancienNom = ancienne && cle(ancienne.nom) !== cle(n) ? ancienne.nom : undefined
-        const r: Ressource = { nom: n, en: v.en.trim(), origine: v.origine.trim(), prix: prixCourant, bonneAffaire: bonne, note: v.note.trim() }
+        const lot = Math.max(1, Math.round(entier(v.lot)) || 1)
+        const r: Ressource = { nom: n, en: v.en.trim(), origine: v.origine.trim(), prix: prixCourant, bonneAffaire: bonne, note: v.note.trim(), lot }
         confier('ressource', { ...v, nom: n, ancienNom }, (dd) => ({ ...dd, ressources: [...dd.ressources.filter((x) => cle(x.nom) !== cle(ancienNom ?? n)), r] }))
       }}
     >
@@ -1185,6 +1186,7 @@ function FormRessource({ nom, env }: { nom: string; env: Env }) {
       <div className="fiche-deux">
         {champ('prix', 'Prix courant', { inputMode: 'decimal', placeholder: 'septims l’unité', title: 'Le prix d’achat habituel ; il pèse aussi les dépôts dans les parts des missives' })}
         {champ('bonneAffaire', 'Bonne affaire', { inputMode: 'decimal', placeholder: 'facultatif', title: 'À ce prix ou moins, qu’on achète sans hésiter' })}
+        {champ('lot', 'Par lot de', { inputMode: 'numeric', title: 'Combien d’unités ces prix achètent : « 1 septim les 3 » = prix 1, lot de 3' })}
       </div>
       {champ('origine', 'Origine', { list: 'fiche-origines', placeholder: 'facultatif : récolte, loot, achat, craft…' })}
       {champ('note', 'Note', { placeholder: 'facultative' })}

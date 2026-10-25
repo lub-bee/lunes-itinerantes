@@ -42,7 +42,7 @@
  *                                                                              ingredients known nowhere added to
  *                                                                              Ressources, prices empty (v3f;
  *                                                                              answer: ressourcesAjoutees)
- *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note } }
+ *      'ressource'   { ressource: { nom, ancienNom?, en, origine, prix, bonneAffaire, note, lot } } (lot: v3j)
  *                                                                            → the Ressources row updated, or added
  *      'usage'       { usage: { produit, variante } }                    → « Usage » on that variant's rows only (v3g)
  *      'choix'       { choix: { numero, recettes } }                     → the missive's « Recettes » cell (v3g)
@@ -103,6 +103,8 @@ var ONGLETS = {
     colonnes: [
       ['Ressource', 'nom'], ['Nom EN', 'en'], ['Origine', 'origine', ['Catégorie', 'Sorte']],
       ['Prix courant', 'prix', ['Valeur']], ['Bonne affaire', 'bonneAffaire'], ['Note', 'note'],
+      // How many units the two prices buy (« 1 septim les 3 »); empty = 1 (v3j).
+      ['Lot', 'lot', ['par', 'par lot', 'unités par lot', 'taille du lot', 'contenance']],
     ],
   },
   recettes: {
@@ -387,7 +389,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3i';
+var CACHE = 'registre-v3j';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -759,7 +761,8 @@ var ECRITURES = {
     var o = ouvrir(ONGLETS.ressources);
     var p = o.p;
     var nombre = function (v) { return v === null || v === undefined ? '' : v; };
-    var valeurs = { nom: r.nom, en: r.en || '', origine: r.origine || '', prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: r.note || '' };
+    var lot = Number(r.lot) || 1;
+    var valeurs = { nom: r.nom, en: r.en || '', origine: r.origine || '', prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: r.note || '', lot: lot > 1 ? lot : '' };
     var cible = cleEntete(r.ancienNom || r.nom);
     var maj = function (o) {
       var trouvee = false;

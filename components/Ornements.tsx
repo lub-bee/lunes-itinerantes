@@ -5,6 +5,7 @@ import type { Artisan } from '@/lib/types'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
 import { ARTISANS, ICONES_ARTISANS } from '@/lib/recherche'
 import { ICONES_ACTIONS } from '@/lib/actions'
+import { septims } from '@/lib/format'
 
 /** The book's icons (name → SVG body), for the actions anywhere in the book (Grimoire.tsx provides them). */
 export const IconesLivre = createContext<Record<string, string>>({})
@@ -17,6 +18,19 @@ export function Action({ icone, children, className, ...props }: { icone: keyof 
       <Icone corps={icones[ICONES_ACTIONS[icone]]} className="action-icone" />
       <span>{children}</span>
     </button>
+  )
+}
+
+/** An amount in whole septims (`haut`: a cost, rounded up); the exact value on hover when rounded. */
+export function Septims({ v, haut = false }: { v: number | null; haut?: boolean }) {
+  if (v === null) return <>—</>
+  const s = septims(v, haut)
+  return s.exactement ? (
+    <span className="arrondi" title={s.exactement}>
+      {s.texte}
+    </span>
+  ) : (
+    <>{s.texte}</>
   )
 }
 
