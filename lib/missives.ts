@@ -5,7 +5,7 @@
 import { normaliser } from './recherche'
 
 /** game-icons.net glyphs of the missives (loaded with the book's other icons). */
-export const ICONES_MISSIVES = ['cauldron', 'open-chest', 'anvil-impact', 'hand-truck', 'two-coins', 'magnifying-glass', 'scroll-quill', 'wheat', 'quill']
+export const ICONES_MISSIVES = ['wooden-crate', 'cauldron', 'open-chest', 'anvil-impact', 'hand-truck', 'two-coins', 'magnifying-glass', 'scroll-quill', 'wheat', 'quill']
 
 /** Comparable name: no case, accents, apostrophes, spaces or punctuation ("Ma’Dran-jo" = "madranjo"). */
 export const cle = (s: string) =>

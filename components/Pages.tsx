@@ -11,7 +11,7 @@ import { COLOPHON } from '@/lib/credits'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
-import { DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
+import { Geste, DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
   livre: Livre
@@ -298,6 +298,14 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
   return (
     <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
+      {/* The chapter's primary action, as every book's: on the left page, under the introduction. */}
+      {ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
+        <div className="gestes">
+          <Geste icone={ctx.livre.icones['wooden-crate']} onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
+            Inscrire une marchandise
+          </Geste>
+        </div>
+      )}
       <label className="recherche-locale">
         <Plume className="plume" />
         <input
@@ -650,12 +658,6 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
         ))}
         {filtres.length === 0 && <p className={`vide ${generation > 0 ? 'ecrit' : ''}`}>{VIDES[requetes.join('').length % VIDES.length]}</p>}
       </div>
-      {/* A merchandise of its own (no recipe needed): only its name is required. */}
-      {ctx.interactif && ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
-        <Action icone="vendre" className="inscrire-marchandise" onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
-          inscrire une marchandise
-        </Action>
-      )}
       <p className="registre-pied">Prix exprimés en septims d&apos;or</p>
     </div>
   )
