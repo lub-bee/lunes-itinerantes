@@ -19,7 +19,8 @@ const CONTENU = path.join(process.cwd(), 'content')
 export const PARTIES: Partie[] = [
   { id: 'sommaire', titre: 'Sommaire', court: 'Sommaire', couleur: '#8a6a1f', icone: 'open-book' },
   { id: 'marchandises', titre: 'Livre des Marchandises', court: 'Marchandises', couleur: '#8a1c12', icone: 'coins' },
-  { id: 'atelier', titre: "Livre de l'Atelier", court: 'Atelier', couleur: '#2f5b3a', icone: 'cauldron' },
+  // id kept 'atelier' (links, saved state); shown as the Livre des Recettes.
+  { id: 'atelier', titre: 'Livre des Recettes', court: 'Recettes', couleur: '#2f5b3a', icone: 'cauldron' },
   { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
   { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
 ]

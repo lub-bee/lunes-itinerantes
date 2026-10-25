@@ -691,3 +691,17 @@ export function lireOnglets(o: Onglets) {
 
   return { membres, ressources, recettes, missives, mouvements, catalogue, variantes, lotsMatieres, ventes }
 }
+
+/**
+ * An item's English name, to show beside its French one: a raw material's, else a recipe's product's,
+ * else the catalogue's (`articles`); '' when none is known.
+ */
+export function anglaisDe(d: Pick<DonneesRegistre, 'ressources' | 'recettes'> | null | undefined, nom: string, articles: { fr: string; en: string }[] = []): string {
+  const k = cle(nom)
+  return (
+    d?.ressources.find((r) => cle(r.nom) === k)?.en ||
+    d?.recettes.find((r) => cle(r.produit) === k && r.en)?.en ||
+    articles.find((a) => cle(a.fr) === k && a.en)?.en ||
+    ''
+  )
+}

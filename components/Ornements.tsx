@@ -34,6 +34,11 @@ export function Septims({ v, haut = false }: { v: number | null; haut?: boolean 
   )
 }
 
+/** An item's English name beside its French one, in small italics (nothing when unknown). */
+export function En({ nom }: { nom: string }) {
+  return nom ? <em className="nom-en-ligne"> {nom}</em> : null
+}
+
 /** A game-icons.net glyph (512×512, filled with currentColor). */
 export function Icone({ corps, className }: { corps?: string; className?: string }) {
   if (!corps) return null

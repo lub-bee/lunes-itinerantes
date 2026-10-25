@@ -107,7 +107,7 @@ armes,Épée en fer,Iron Sword,8.2,25,30,forgeron,
 ### Chapters — `content/chapitres.json`
 
 A chapter with `"masque": true` stays in the catalogue (its articles keep their prices and values) but
-has no page and no side tab (the « Ingrédients » chapter: raw materials live in the Atelier).
+has no page and no side tab (the « Ingrédients » chapter: raw materials live in the Livre des Recettes).
 
 Order of the array = order of the pages and side tabs. Each chapter: `id`, `titre` (FR), `titreEn`,
 `court` (tab label), `icone` (see Icons) and `intro` (in-character paragraph). Add, rename, reorder or split chapters here,
@@ -291,7 +291,7 @@ top of `commandes.gs` (header + value per column); the payload also carries `art
 ## The book's parts (v3)
 
 Ribbons, in order: a bare **Sommaire** ribbon (its shape only, no word), **Marchandises** (price
-chapters), **Atelier** (« Recettes », « Matières premières »), **Missives** (the list, one page per
+chapters), **Livre des Recettes** (id `atelier`: « Sommaire des recettes », one tab per craft, « Matières premières » set apart last), **Missives** (the list, one page per
 missive, « Le coffre »; only missives in progress get a side tab, closed ones are opened from the list)
 and **Caravane** (the roster still to be written, then the memo pages). When the sheet is linked (see
 below), an **ex-libris** is the page before the title page: the book opens on it for a reader not yet
@@ -333,13 +333,13 @@ in v2. When the sheet cannot be read, the pages say so in character, with « ren
   registre* (the stock the ledger computed just before the count), *Compté* (found in the chest),
   *Écart* (compté − selon le registre, red when not zero), with who and when. An item's first count
   has nothing to compare with: « premier compte ».
-- **Atelier → Sommaire des recettes**: the crafts present in the « Artisan » column (Alchimiste,
+- **Livre des Recettes → Sommaire des recettes**: the crafts present in the « Artisan » column (Alchimiste,
   Brasseur, Forgeron…, each with its count), then **one side tab per craft** (engraved icon, a line of
   introduction for the known ones, « Consigner une recette » with the craft filled in), recipes
   without a craft under « Sans métier ». A recipe opens on a slip (foldable tree down to raw materials,
   « Pour N », material cost). Crafts: `lib/metiers.ts` (name, icon, introduction; any other value gets
   its own tab with a generic icon).
-- **Atelier → Matières premières**: a small buying ledger (the caravan harvests, loots, crafts or buys
+- **Livre des Recettes → Matières premières**: a small buying ledger (the caravan harvests, loots, crafts or buys
   them, never sells): *Prix courant* (the usual buying price, also the value used for merit), *Bonne
   affaire* (buy without hesitation at or below it), the origin as a small note. « Inscrire une matière ».
 - **Price ledger**: outside order mode, clicking a row opens the article's recipe; a small cauldron
@@ -482,6 +482,8 @@ that server's copy.
   `ressemblance` in `lib/recherche.ts`) and offers to open the existing one; each ingredient row offers
   the items already known (raw materials, products, earlier ingredients), so the same item is not
   written under two spellings. An ingredient known nowhere joins the raw materials, prices empty.
+- Every ingredient shows its English name beside the French one (recipe tree, crafting slip, the
+  missives' needs, missing prices), from the raw material's or the product's EN when known.
 - One line per product, with « N recettes » when it has several. Its slip shows every recipe one
   under the other (ingredients, materials' cost per unit), marks the usual one and the cheapest, and
   offers « en faire la recette d'usage », « Corriger la recette n° N » and « Ajouter une variante ».

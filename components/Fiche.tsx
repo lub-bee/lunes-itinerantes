@@ -21,6 +21,7 @@ import {
   texteCycle,
   trouverCycle,
   variantesDe,
+  anglaisDe,
   type ActionRegistre,
   type DonneesRegistre,
   type Mouvement,
@@ -31,7 +32,7 @@ import {
 } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
-import { Action, Icone, Septims } from './Ornements'
+import { Action, En, Icone, Septims } from './Ornements'
 
 /*
  * A loose slip laid on the left page (on the whole screen on mobile): a recipe's tree, or the form
@@ -636,6 +637,7 @@ function Branche({ n, profondeur, env }: { n: Noeud; profondeur: number; env: En
         <span className="branche-qte">{quantite(n.quantite)}</span>
         <button type="button" className="branche-nom" onClick={() => env.changer({ genre: 'recette', nom: n.nom })} title={`Ouvrir la recette de ${n.nom}`}>
           {n.nom}
+          <En nom={anglaisDe(env.reg.r.donnees, n.nom, env.articles)} />
         </button>
         {pliable && <em className="branche-fournees">{n.fournees} fournée{n.fournees > 1 ? 's' : ''}</em>}
         {n.cycle && <em className="branche-cycle">recette en boucle</em>}
@@ -980,7 +982,15 @@ function CoutMatieres({ nom, n, rendement, index, env, sansFournee = false }: { 
           Pour {quantite(n)} : <strong><Septims v={toutes.cout} haut /></strong> septims
         </p>
       )}
-      {toutes.sansPrix.length > 0 && <p className="fiche-cout-note">sans prix courant au registre : {toutes.sansPrix.join(', ')}</p>}
+      {toutes.sansPrix.length > 0 && (
+        <p className="fiche-cout-note">
+          sans prix courant au registre :{' '}
+          {toutes.sansPrix.map((x, i) => {
+            const en = anglaisDe(env.reg.r.donnees, x, env.articles)
+            return `${i ? ', ' : ''}${x}${en ? ` (${en})` : ''}`
+          })}
+        </p>
+      )}
     </div>
   )
 }
@@ -1418,7 +1428,10 @@ function FormFabrication({ env, numero, produit: impose }: { env: Env; numero: s
           <label className="fiche-releve-ligne fiche-plain qte-avant">
             <span className="fiche-signe">+</span>
             <input type="text" inputMode="numeric" value={sortie} onChange={(ev) => setSortie(ev.target.value.replace(/\D/g, '').slice(0, 7))} aria-label={`Quantité de ${recette.produit} façonnée`} />
-            <span>{recette.produit}</span>
+            <span>
+              {recette.produit}
+              <En nom={anglaisDe(env.reg.r.donnees, recette.produit, env.articles)} />
+            </span>
           </label>
           <p className="fiche-sous-titre">Pris dans le coffre</p>
           <div className="fiche-releve">
@@ -1429,7 +1442,10 @@ function FormFabrication({ env, numero, produit: impose }: { env: Env; numero: s
                 <label key={i.nom} className={`fiche-releve-ligne fiche-plain qte-avant ${q > dispo ? 'ecart' : ''}`}>
                   <span className="fiche-signe">−</span>
                   <input type="text" inputMode="numeric" value={entrees[i.nom] ?? ''} onChange={(ev) => setEntrees({ ...entrees, [i.nom]: ev.target.value.replace(/[^\d.,]/g, '').slice(0, 8) })} aria-label={`Quantité de ${i.nom} prise`} />
-                  <span>{i.nom}</span>
+                  <span>
+                    {i.nom}
+                    <En nom={anglaisDe(env.reg.r.donnees, i.nom, env.articles)} />
+                  </span>
                   {q > dispo && <em className="fiche-ecart">le registre n&apos;en compte que {quantite(dispo)} au coffre</em>}
                 </label>
               )

@@ -3278,3 +3278,12 @@ strong.a-verser { font-weight: 400; }
 /* ─── Whole septims: a rounded amount shows its exact value on hover; raw materials priced by lot ─── */
 .arrondi { cursor: help; text-decoration: underline dotted rgba(110, 80, 45, 0.45); text-underline-offset: 3px; text-decoration-thickness: 1px; }
 .prix .par-lot { display: block; font-size: 11.5px; line-height: 1; color: var(--encre-pale); white-space: nowrap; }
+
+/* The raw materials' tab, set apart after the crafts in the Livre des Recettes (as « Mes ventes »). */
+.onglet.onglet-matieres { margin-top: 18px; background-color: #c9d3a6; box-shadow: inset 0 0 0 1px rgba(47, 91, 58, 0.5), inset -2px 0 0 rgba(255, 255, 255, 0.35), 3px 4px 8px rgba(0, 0, 0, 0.5); color: #2f4a26; }
+.onglet.onglet-matieres.actif { background-color: #dfe6c4; color: #2f5b3a; }
+@media (max-width: 860px) {
+  .onglet.onglet-matieres { margin-top: 0; margin-left: 14px; }
+}
+/* An English name beside the French one (ingredients, needs, trees). */
+.nom-en-ligne { font-family: var(--f-texte); font-variant: normal; letter-spacing: 0; text-transform: none; font-size: 0.8em; font-style: italic; color: var(--encre-pale); white-space: nowrap; }

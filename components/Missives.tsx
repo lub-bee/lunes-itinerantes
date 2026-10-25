@@ -6,9 +6,9 @@ import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix, prixParLot, septims } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
 import { quantiteLue } from '@/lib/commande'
-import { arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
+import { anglaisDe, arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
-import { Action, Icone, Plume, Septims } from './Ornements'
+import { Action, En, Icone, Plume, Septims } from './Ornements'
 
 /*
  * The book of Missives: the list of missives, one page per missive (needs, contributions, ledger),
@@ -358,6 +358,7 @@ function LigneBesoinVue({ b, e, reg, ouverte, icones }: { b: LigneBesoin; e: Eta
       <span className="besoins-nom">
         <span className="besoins-mot">
           {b.nom}
+          <En nom={anglaisDe(reg.r.donnees, b.nom)} />
           {faconner && (
             <button
               type="button"
@@ -751,7 +752,7 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
     const metiers = metiersDe(recettes)
     return (
       <div className="atelier-droite">
-        <h3 className="titre-section">Les métiers de l’atelier</h3>
+        <h3 className="titre-section">Les métiers des artisans</h3>
         <p className="note-encre">Chaque métier a son onglet et ses recettes. Touche un métier pour l’ouvrir.</p>
         {metiers.length ? (
           <ul className="liste-recettes liste-metiers">
