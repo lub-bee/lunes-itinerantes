@@ -255,6 +255,36 @@ export function EnTete({
   compact?: boolean
   children?: ReactNode
 }) {
+  // A title that wraps keeps a box as wide as the room it had, its lines centred inside it: the
+  // medallion is then far from the words. The box is narrowed to its longest line, so the medallion
+  // and the title stay together, the group centred as a whole.
+  const titreRef = useRef<HTMLHeadingElement>(null)
+  useLayoutEffect(() => {
+    const h = titreRef.current
+    const ligne = h?.parentElement
+    if (!h || !ligne) return
+    let vue = -1
+    const ajuster = () => {
+      const libre = ligne.clientWidth
+      if (libre === vue) return
+      vue = libre
+      h.style.width = ''
+      const r = document.createRange()
+      r.selectNodeContents(h)
+      const lignes = [...r.getClientRects()]
+      const droite = Math.max(...lignes.map((x) => x.right))
+      const gauche = Math.min(...lignes.map((x) => x.left))
+      if (lignes.length > 1 && Number.isFinite(droite)) h.style.width = `${Math.ceil(droite - gauche) + 8}px`
+    }
+    ajuster()
+    document.fonts?.ready.then(() => {
+      vue = -1
+      ajuster()
+    })
+    const suivi = new ResizeObserver(ajuster)
+    suivi.observe(ligne)
+    return () => suivi.disconnect()
+  }, [titre])
   return (
     <header className={`en-tete ${compact ? 'compact' : ''}`}>
       <div className="surtitre">{surtitre}</div>
@@ -264,7 +294,9 @@ export function EnTete({
             <Icone corps={icone} />
           </span>
         )}
-        <h2 className="titre-page">{titre}</h2>
+        <h2 ref={titreRef} className="titre-page">
+          {titre}
+        </h2>
       </div>
       {sousTitre && <div className="sous-titre">{sousTitre}</div>}
       <Fleuron />
