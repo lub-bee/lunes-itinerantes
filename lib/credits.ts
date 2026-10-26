@@ -1,6 +1,11 @@
 // The book's last leaf: the colophon and its credits, in-character but exact. The same facts are in
 // README.md (« Credits & licenses »), LICENSE (code, MIT) and NOTICE.md (content, CC BY‑NC 4.0).
 
+import paquet from '../package.json'
+
+/** The edition, from package.json (« 3.3.0 » → « 3.3 »): a release only bumps package.json. */
+export const EDITION = paquet.version.split('.').slice(0, 2).join('.')
+
 export const COLOPHON = {
   surtitre: 'Dernier feuillet',
   titre: 'Achevé de copier',
@@ -8,7 +13,7 @@ export const COLOPHON = {
   /** Left page. */
   intro:
     'Ce grimoire fut relié, réglé et copié par Ri’Oblan, copiste autoproclamé de la caravane, afin que nul marchand des Lunes Itinérantes ne cède jamais une pièce en dessous de sa valeur.',
-  enluminures: 'L’emblème de la caravane et les médaillons des rangs sont de sa main : Ri’Oblan les a illustrés avec GPT Image 2.',
+  enluminures: 'L’emblème de la caravane et les médaillons des rangs sont de sa main : Ri’Oblan les a illustrés avec Gépéthé Image 2.',
   signature: 'Ri’Oblan, copiste autoproclamé de la caravane',
   citation: 'Ce qui est copié avec soin ne se perd jamais tout à fait.',
   /** Right page: one short paragraph per heading. */

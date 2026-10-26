@@ -7,7 +7,7 @@ import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Action, Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
 import { motLot } from '@/lib/commande'
-import { COLOPHON } from '@/lib/credits'
+import { COLOPHON, EDITION } from '@/lib/credits'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
@@ -143,6 +143,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
             <p className="intro lettrine">{COLOPHON.intro}</p>
             <p className="intro">{COLOPHON.enluminures}</p>
             <p className="signature">{COLOPHON.signature}</p>
+            <p className="edition">Édition {EDITION}</p>
             {!compact && <CitationFin texte={COLOPHON.citation} />}
           </EnTete>
         )

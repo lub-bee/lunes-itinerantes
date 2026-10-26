@@ -14,8 +14,8 @@ license and indicate if changes were made.
 - The in-book texts and poems written for the grimoire, including the devotional poems in
   `lib/poemes.ts`, the easter eggs' texts in `lib/oeufs.ts`, the rank quotes in `lib/rangs.ts` and the
   colophon in `lib/credits.ts`.
-- `public/logo.svg`: the caravan's emblem (illustrated by Ri'Oblan with GPT Image 2).
-- `public/rangs/*`: the rank medallions (illustrated by Ri'Oblan with GPT Image 2).
+- `public/logo.svg`: the caravan's emblem (illustrated by Ri'Oblan with Gépéthé Image 2).
+- `public/rangs/*`: the rank medallions (illustrated by Ri'Oblan with Gépéthé Image 2).
 - `public/textures/gaufrage.webp`: the blind-pressed emblem, derived from the emblem.
 - `public/textures/chiffon.jpg` (rag paper) and `public/textures/parchemin-impression.jpg` (print
   parchment): generated for this project.

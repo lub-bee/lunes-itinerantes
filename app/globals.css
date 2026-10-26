@@ -3287,3 +3287,6 @@ strong.a-verser { font-weight: 400; }
 }
 /* An English name beside the French one (ingredients, needs, trees). */
 .nom-en-ligne { font-family: var(--f-texte); font-variant: normal; letter-spacing: 0; text-transform: none; font-size: 0.8em; font-style: italic; color: var(--encre-pale); white-space: nowrap; }
+
+/* The colophon's edition (package.json version). */
+.edition { margin: 2px 0 0; text-align: right; font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.14em; color: var(--encre-pale); }

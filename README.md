@@ -547,11 +547,13 @@ forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
 
 ## Credits & licenses
 
+The colophon shows the edition (« Édition 3.3 ») read from `package.json` `version` at build time: a release only bumps it there.
+
 The book's last leaf, « Achevé de copier » (*Colophon & Credits*, `lib/credits.ts`), carries the same
 facts in character; it is listed at the end of the table of contents.
 
 - Grimoire bound and copied by **Ri'Oblan**, the caravan's copyist. The emblem (`public/logo.svg`) and
-  the rank medallions (`public/rangs/*`) were illustrated by Ri'Oblan with GPT Image 2.
+  the rank medallions (`public/rangs/*`) were illustrated by Ri'Oblan with Gépéthé Image 2.
 - Icons: [game-icons.net](https://game-icons.net) (Lorc, Delapouite and contributors), CC BY 3.0, also
   credited in a short line on the title page.
 - Textures: Poly Haven's wood_table, brown_leather and rusty_metal_04 (CC0) for `table.jpg`, `cuir.jpg` /
