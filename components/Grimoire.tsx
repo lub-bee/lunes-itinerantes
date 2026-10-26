@@ -121,16 +121,20 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     }))
     // Articles just put up for sale (« vente »): in their chapter at once, before the published CSV shows them.
     const vendus: Article[] = (registre.donnees?.catalogue ?? []).map((a) => ({ id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note }))
-    if (!vues.length && !exLibris.length && !metiers.length && !vendus.length) return livreServeur
+    // Taken out of the catalogue (the sheet wins over the published copy, still a few minutes behind).
+    const retires = new Set((registre.donnees?.retires ?? []).map(cle))
+    if (!vues.length && !exLibris.length && !metiers.length && !vendus.length && !retires.size) return livreServeur
     const chapitres = new Set(livreServeur.pages.flatMap((x) => (x.type === 'chapitre' ? [x.id] : [])))
     const chapitreDe = (k: string) => (chapitres.has(k) ? k : chapitres.has('divers') ? 'divers' : [...chapitres].pop())
-    const p = vendus.length
-      ? livreServeur.pages.map((x) => {
-          if (x.type !== 'chapitre') return x
-          const ici = vendus.filter((a, k) => chapitreDe(registre.donnees!.catalogue![k].chapitre) === x.id && !x.articles.some((b) => cle(b.fr) === cle(a.fr)))
-          return ici.length ? { ...x, articles: [...x.articles, ...ici] } : x
-        })
-      : livreServeur.pages
+    const p =
+      vendus.length || retires.size
+        ? livreServeur.pages.map((x) => {
+            if (x.type !== 'chapitre') return x
+            const restent = retires.size ? x.articles.filter((a) => !retires.has(cle(a.fr))) : x.articles
+            const ici = vendus.filter((a, k) => chapitreDe(registre.donnees!.catalogue![k].chapitre) === x.id && !restent.some((b) => cle(b.fr) === cle(a.fr)) && !retires.has(cle(a.fr)))
+            return ici.length || restent.length !== x.articles.length ? { ...x, articles: [...restent, ...ici] } : x
+          })
+        : livreServeur.pages
     const apresRecettes = p.findIndex((x) => x.id === 'recettes') + 1
     const apresMissives = p.findIndex((x) => x.type === 'missives') + 1
     return {

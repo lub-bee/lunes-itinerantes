@@ -589,7 +589,7 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
   // articles that have one and opens it in both modes.
   const reg = ctx.interactif && ctx.registre?.r.donnees?.relie ? ctx.registre : undefined
   const recettes = ctx.registre?.r.calcul?.recettes
-  const voirRecette = (a: Article) => reg?.ouvrir({ genre: 'recette', nom: a.fr })
+  const voirRecette = (a: Article) => reg?.ouvrir({ genre: 'recette', nom: a.fr, depuis: 'catalogue' })
 
   const filtres = page.articles.filter((a) => articleCorrespond(a, montre.requete) && articleCorrespond(a, montre.locale))
   const requetes = [montre.requete, montre.locale].filter(Boolean)

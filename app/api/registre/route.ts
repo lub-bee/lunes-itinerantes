@@ -51,6 +51,20 @@ async function catalogueEnRetard(lu: Lu) {
   return lu.catalogue.filter((a) => !publie.has(cle(a.fr)) || (a.chapitre && publie.get(cle(a.fr)) !== a.chapitre))
 }
 
+/**
+ * The published CSV's articles that the sheet's Catalogues tab no longer holds (taken out with
+ * 'retirer'): the sheet wins. Only when the tab read is clearly the one the CSV publishes (most of the
+ * CSV's names are in it), so a different published tab never hides the whole catalogue.
+ */
+async function retires(lu: Lu): Promise<string[]> {
+  if (!lu.catalogue.length) return []
+  const feuille = new Set(lu.catalogue.flatMap((a) => [cle(a.fr), a.en ? cle(a.en) : '']).filter(Boolean))
+  const publies = await chargerArticles()
+  const absents = publies.filter((a) => !feuille.has(cle(a.fr)))
+  if (!publies.length || absents.length > publies.length * 0.2) return []
+  return absents.map((a) => a.fr)
+}
+
 /** « already in the catalogue », naming its chapter (a hidden one said so; one the published copy does not show yet, too). */
 function dejaAuCatalogue(a: { fr: string; chapitre: string }, publies: { fr: string; chapitre: string }[]): string {
   const c = (chapitres as { id: string; titre: string; masque?: boolean }[]).find((x) => x.id === a.chapitre)
@@ -76,6 +90,7 @@ async function vue(lu: Lu, qui: string | null = null): Promise<DonneesRegistre> 
     missives: lu.missives,
     mouvements: lu.mouvements.filter((m) => m.type !== 'partage' || contributeurs.get(m.missive)?.has(cle(m.membre))),
     catalogue: await catalogueEnRetard(lu),
+    retires: await retires(lu),
     // A script before v3h does not read the orders: null (the page says so in character).
     ventes: lu.ventes === null ? null : qui ? lu.ventes.filter((v) => cle(v.vendeur) === cle(qui)) : [],
     nbMembres: lu.membres.length,

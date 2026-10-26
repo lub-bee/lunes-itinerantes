@@ -16,6 +16,7 @@ export const ICONES_ACTIONS = {
   marges: 'scales',
   ouvrir: 'open-book',
   verser: 'pay-money',
+  retirer: 'burning-book',
   matiere: 'wheat',
 } as const
 

@@ -114,6 +114,11 @@ export type DonneesRegistre = {
   mouvements: Mouvement[]
   /** Catalogue rows the sheet holds but the published CSV does not show yet (absent with an older script). */
   catalogue?: ArticleVente[]
+  /**
+   * Articles the published CSV still shows but the sheet no longer holds (taken out of the catalogue):
+   * hidden at once, the sheet's copy wins (names, compared by `cle`).
+   */
+  retires?: string[]
   /** The signed member's sealed orders, one per order (null: a script before v3h, which does not read them). */
   ventes?: Vente[] | null
   nbMembres: number

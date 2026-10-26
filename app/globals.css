@@ -3297,3 +3297,5 @@ strong.a-verser { font-weight: 400; }
 
 /* The colophon's edition (package.json version). */
 .edition { margin: 2px 0 0; text-align: right; font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.14em; color: var(--encre-pale); }
+.encadre-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; }
+.confirmer-retrait { margin-top: 4px; color: var(--encre-rouge); }

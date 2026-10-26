@@ -17,7 +17,8 @@ import { Action, En, Icone, Plume, Septims } from './Ornements'
  */
 
 export type Fiche =
-  | { genre: 'recette'; nom: string; variante?: number }
+  /** `depuis`: opened from the catalogue itself (no « voir au catalogue » then). */
+  | { genre: 'recette'; nom: string; variante?: number; depuis?: 'catalogue' }
   /** `variante`: the recipe edited (else the usual one); `nouvelle`: a new recipe (variant) of that product. */
   | { genre: 'edition-recette'; nom: string; artisan?: string; variante?: number; nouvelle?: boolean }
   | { genre: 'ressource'; nom: string }
