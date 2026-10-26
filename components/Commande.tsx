@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
 import { bornesLigne, calculerLigne, centimes, LIBELLES_STATUT, lirePrix, motLot, poidsLigne, repartirGlobal, statut, type CommandeEnvoyee, type LigneCommande } from '@/lib/commande'
-import { Icone } from './Ornements'
+import { Icone, Action } from './Ornements'
 import type { EtatRegistre } from './Registre'
 
 /*
@@ -569,9 +569,9 @@ export function FeuilleCommande({
               ))}
             </>
           )}
-          <button type="button" className="lien-encre commande-hors" onClick={c.ajouterLibre}>
-            + ligne hors catalogue
-          </button>
+          <Action icone="ligne" className="commande-hors" onClick={c.ajouterLibre}>
+            ligne hors catalogue
+          </Action>
         </div>
 
         <footer className="commande-pied">

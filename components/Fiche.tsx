@@ -715,19 +715,40 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
         </p>
       )}
       {/* A merchandise without a recipe: its prices, and the way to take it out of the catalogue. */}
-      {!recette && article && <PrixArticle article={article} env={env} depuis={depuis} />}
-      {recette && <FeuilleRecette key={recette.variante} r={recette} usage={recette === usage} plusieurs={plusieurs} moinsChere={recette === moinsChere} depuis={depuis} env={env} />}
+      {!recette && article && <PrixArticle article={article} />}
+      {recette && <FeuilleRecette key={recette.variante} r={recette} moinsChere={recette === moinsChere} env={env} />}
+      {/* Every action of the note in one block at its foot: the recipe's first, then the material's, then
+          the catalogue's, taking out last. */}
       <div className="fiche-actions">
+        {droits?.recette !== false && recette && (
+          <Action icone="corriger" onClick={() => env.changer({ genre: 'edition-recette', nom: recette.produit, variante: recette.variante })}>
+            corriger{plusieurs ? ` la recette ${recette.variante}` : ' la recette'}
+          </Action>
+        )}
+        {plusieurs && recette && recette !== usage && droits?.usage !== false && (
+          <Action
+            icone="usage"
+            onClick={() =>
+              env.reg.r.agir('usage', { produit: recette.produit, variante: recette.variante }, (d) => ({
+                ...d,
+                recettes: d.recettes.map((x) => (cle(x.produit) === cle(recette.produit) ? { ...x, usage: x.variante === recette.variante } : x)),
+              }))
+            }
+          >
+            en faire la recette d&apos;usage
+          </Action>
+        )}
         {droits?.recette !== false && (
           <Action icone="consigner" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
-            {vs.length ? 'Ajouter une variante' : 'Consigner la recette'}
+            {vs.length ? 'ajouter une variante' : 'consigner la recette'}
           </Action>
         )}
         {droits?.ressource !== false && ressource && (
           <Action icone="matiere" onClick={() => env.changer({ genre: 'ressource', nom: ressource.nom })}>
-            Corriger la matière
+            corriger la matière
           </Action>
         )}
+        {(recette || article) && <ActionsCatalogue produit={recette?.produit ?? nom} article={recette ? articleDe(recette, env) : article} depuis={depuis} env={env} />}
       </div>
     </div>
   )
@@ -752,18 +773,12 @@ function moinsChereDe(couts: Map<Recette, number>): Recette | undefined {
  * One leaf: one recipe only — its yield, its tree for « Pour N », its own cost, its actions — and, when
  * the product has several, the ink stamp « Recette N » in the corner (« d'usage » on the usual one).
  */
-function FeuilleRecette({ r, usage, plusieurs, moinsChere, depuis, env }: { r: Recette; usage: boolean; plusieurs: boolean; moinsChere: boolean; depuis?: 'catalogue'; env: Env }) {
+function FeuilleRecette({ r, moinsChere, env }: { r: Recette; moinsChere: boolean; env: Env }) {
   const c = env.reg.r.calcul!
-  const droits = env.reg.r.marchand?.droits
   const [combien, setCombien] = useState(String(r.rendement))
   const n = Math.max(1, Math.min(99999, Math.round(entier(combien)) || 1))
   const index = indexAvec(c, r)
   const cycle = trouverCycle(r.produit, index)
-  const choisir = () =>
-    env.reg.r.agir('usage', { produit: r.produit, variante: r.variante }, (d) => ({
-      ...d,
-      recettes: d.recettes.map((x) => (cle(x.produit) === cle(r.produit) ? { ...x, usage: x.variante === r.variante } : x)),
-    }))
   return (
     <div className="feuille-recette">
       <p className="fiche-note">
@@ -789,19 +804,7 @@ function FeuilleRecette({ r, usage, plusieurs, moinsChere, depuis, env }: { r: R
           <CoutMatieres nom={r.produit} n={n} rendement={r.rendement} index={index} env={env} sansFournee />
         </>
       )}
-      <EncadrePrix r={r} depuis={depuis} env={env} />
-      {droits?.recette !== false && (
-        <div className="feuille-actions">
-          <Action icone="corriger" onClick={() => env.changer({ genre: 'edition-recette', nom: r.produit, variante: r.variante })}>
-            corriger{plusieurs ? ` la recette ${r.variante}` : ' la recette'}
-          </Action>
-          {plusieurs && !usage && droits?.usage !== false && (
-            <Action icone="usage" onClick={choisir}>
-              en faire la recette d&apos;usage
-            </Action>
-          )}
-        </div>
-      )}
+      <EncadrePrix r={r} env={env} />
     </div>
   )
 }
@@ -817,74 +820,63 @@ function articleDe(recette: Recette, env: Env): Article | undefined {
  * Cost, floor and ceiling side by side in a frame: what this recipe's materials cost per unit made, and
  * the catalogue's prices when the caravan sells the product (else the way to put it up for sale).
  */
-function EncadrePrix({ r, depuis, env }: { r: Recette; depuis?: 'catalogue'; env: Env }) {
+function EncadrePrix({ r, env }: { r: Recette; env: Env }) {
   const article = articleDe(r, env)
   const enAttente = env.reg.r.donnees?.catalogue?.some((a) => a.enAttente && cle(a.fr) === cle(article?.fr ?? ''))
   const cout = coutsParRecette([r], env).get(r)!
-  const chapitre = article ? chapitreDeArticle(article, env) : undefined
-  const titre = chapitre ? env.chapitres.find((c) => c.id === chapitre)?.titre : undefined
-  const case_ = (mot: string, valeur: ReactNode, sous?: string) => (
-    <div className="encadre-case">
-      <span className="encadre-mot">{mot}</span>
-      <strong>{valeur}</strong>
-      {sous && <em>{sous}</em>}
-    </div>
-  )
   return (
     <div className={`encadre-prix-bloc ${enAttente ? 'en-attente' : ''}`}>
       <div className="encadre-prix">
-        {case_('Coût', cout > 0 ? <Septims v={cout} haut /> : <em className="a-estimer">à estimer</em>, 'l’unité')}
-        {case_('Plancher', article?.min !== null && article?.min !== undefined ? prix(article.min) : '—')}
-        {case_('Plafond', article?.max !== null && article?.max !== undefined ? prix(article.max) : '—')}
+        <CasePrix mot="Coût" sous="l’unité">{cout > 0 ? <Septims v={cout} haut /> : <em className="a-estimer">à estimer</em>}</CasePrix>
+        <CasePrix mot="Plancher">{article?.min !== null && article?.min !== undefined ? prix(article.min) : '—'}</CasePrix>
+        <CasePrix mot="Plafond">{article?.max !== null && article?.max !== undefined ? prix(article.max) : '—'}</CasePrix>
       </div>
-      {article ? (
-        <div className="encadre-actions">
-          {/* Opened from the catalogue, the reader is already on the article's chapter. */}
-          {depuis !== 'catalogue' && (
-            <Action icone="catalogue" onClick={() => env.reg.allerA(chapitre ?? '')}>
-              voir au catalogue{titre ? ` · ${titre}` : ''}
-            </Action>
-          )}
-          <RetirerDuCatalogue fr={article.fr} env={env} />
-        </div>
-      ) : env.reg.r.marchand?.droits?.vente !== false ? (
-        <p className="encadre-note">
-          Pas encore au catalogue.{' '}
-          <Action icone="vendre" onClick={() => env.changer({ genre: 'vente', nom: r.produit })}>
-            le mettre en vente
-          </Action>
-        </p>
-      ) : (
-        <p className="encadre-note">Pas encore au catalogue.</p>
-      )}
+      {!article && <p className="encadre-note">Pas encore au catalogue.</p>}
     </div>
   )
 }
 
-/** A merchandise without a recipe: its floor and ceiling in the frame, and its removal. */
-function PrixArticle({ article, depuis, env }: { article: Article; depuis?: 'catalogue'; env: Env }) {
-  const chapitre = chapitreDeArticle(article, env)
-  const titre = chapitre ? env.chapitres.find((c) => c.id === chapitre)?.titre : undefined
-  const case_ = (mot: string, v: number | null) => (
+function CasePrix({ mot, sous, children }: { mot: string; sous?: string; children: ReactNode }) {
+  return (
     <div className="encadre-case">
       <span className="encadre-mot">{mot}</span>
-      <strong>{v === null ? '—' : prix(v)}</strong>
+      <strong>{children}</strong>
+      {sous && <em>{sous}</em>}
     </div>
   )
+}
+
+/** The catalogue's actions of a note: see it in its chapter, put it up for sale, take it out (last). */
+function ActionsCatalogue({ produit, article, depuis, env }: { produit: string; article?: Article; depuis?: 'catalogue'; env: Env }) {
+  if (!article)
+    return env.reg.r.marchand?.droits?.vente !== false ? (
+      <Action icone="vendre" onClick={() => env.changer({ genre: 'vente', nom: produit })}>
+        le mettre en vente
+      </Action>
+    ) : null
+  const chapitre = chapitreDeArticle(article, env)
+  const titre = chapitre ? env.chapitres.find((c) => c.id === chapitre)?.titre : undefined
+  return (
+    <>
+      {/* Opened from the catalogue, the reader is already on the article's chapter. */}
+      {depuis !== 'catalogue' && (
+        <Action icone="catalogue" onClick={() => env.reg.allerA(chapitre ?? '')}>
+          voir au catalogue{titre ? ` · ${titre}` : ''}
+        </Action>
+      )}
+      <RetirerDuCatalogue fr={article.fr} recette={variantesDe(env.reg.r.donnees?.recettes ?? [], produit).length > 0} env={env} />
+    </>
+  )
+}
+
+/** A merchandise without a recipe: its floor and ceiling in the frame, and its removal. */
+function PrixArticle({ article }: { article: Article }) {
   return (
     <div className="encadre-prix-bloc">
       <div className="encadre-prix">
-        {case_('Coût', article.prod)}
-        {case_('Plancher', article.min)}
-        {case_('Plafond', article.max)}
-      </div>
-      <div className="encadre-actions">
-        {depuis !== 'catalogue' && (
-          <Action icone="catalogue" onClick={() => env.reg.allerA(chapitre ?? '')}>
-            voir au catalogue{titre ? ` · ${titre}` : ''}
-          </Action>
-        )}
-        <RetirerDuCatalogue fr={article.fr} recette={false} env={env} />
+        <CasePrix mot="Coût">{prix(article.prod)}</CasePrix>
+        <CasePrix mot="Plancher">{prix(article.min)}</CasePrix>
+        <CasePrix mot="Plafond">{prix(article.max)}</CasePrix>
       </div>
     </div>
   )
@@ -899,7 +891,7 @@ function RetirerDuCatalogue({ fr, recette = true, env }: { fr: string; recette?:
   if (env.reg.r.marchand?.droits?.retirer === false) return null
   if (!demande)
     return (
-      <Action icone="retirer" onClick={() => setDemande(true)}>
+      <Action icone="retirer" className="action-discrete" onClick={() => setDemande(true)}>
         retirer du catalogue
       </Action>
     )
@@ -910,7 +902,7 @@ function RetirerDuCatalogue({ fr, recette = true, env }: { fr: string; recette?:
       retires: [...(d.retires ?? []), fr],
     }))
   return (
-    <p className="encadre-note confirmer-retrait" role="alert">
+    <p className="confirmer-retrait" role="alert">
       Retirer {fr} du catalogue ?{recette ? ' La recette reste au Livre des Recettes.' : ''}{' '}
       <Action icone="retirer" onClick={retirer}>
         oui, le retirer

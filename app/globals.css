@@ -1958,7 +1958,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .fiche-en { margin: 6px 0 0; text-align: center; font-style: italic; color: var(--encre-pale); }
 .fiche-note { margin: 8px 0; line-height: 1.45; color: var(--encre-douce); }
 .fiche-note strong { font-weight: 400; font-family: var(--f-capitales); color: var(--encre-rouge); }
-.fiche-actions { display: flex; justify-content: center; gap: 16px; margin: 12px 0 4px; }
+.fiche-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 6px 18px; margin: 14px 0 4px; padding-top: 10px; border-top: 1px dotted rgba(110, 80, 45, 0.3); }
 
 /* Recipe tree: ingredients and sub-recipes, foldable. */
 .fiche-combien { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; font-family: var(--f-capitales); font-size: 15px; color: var(--encre-douce); }
@@ -3240,7 +3240,7 @@ em.besoins-recette { border: 0; cursor: default; }
 /* ─── Actions with their engraved icon (lib/actions.ts), one set for the whole book ─── */
 .lien-encre.action { display: inline-flex; align-items: baseline; gap: 6px; }
 .action-icone { flex: none; width: 15px; height: 15px; align-self: center; color: var(--encre-rouge); opacity: 0.85; }
-.fiche-ajouter.action .action-icone { width: 13px; height: 13px; }
+
 
 /* ─── A recipe's prices in a frame: cost, floor, ceiling side by side ─── */
 .encadre-prix-bloc { margin: 10px 0 4px; text-align: center; }
@@ -3270,7 +3270,7 @@ em.besoins-recette { border: 0; cursor: default; }
 .commande-lot button:last-child { border-radius: 0 8px 8px 0; border-left: 0; }
 .commande-lot button.actif { background: rgba(142, 31, 20, 0.1); color: var(--encre-rouge); }
 .commande-libre { width: 100%; min-width: 0; padding: 0 2px; border: 0; border-bottom: 1px dotted rgba(90, 64, 41, 0.6); background: transparent; font: inherit; color: var(--encre); }
-.commande-hors { display: block; margin: 8px auto 2px; font-size: 13px; }
+.commande-hors { display: flex; width: fit-content; margin: 8px auto 2px; }
 .lot-article { font-style: italic; }
 
 /* ─── Mes ventes: the caravan's share of each sale ─── */
@@ -3323,3 +3323,14 @@ strong.a-verser { font-weight: 400; }
 .fiche-menu button { padding: 3px 8px; border: 0; background: none; text-align: left; font: inherit; font-size: 15px; color: var(--encre); cursor: pointer; }
 .fiche-menu button:hover { background: rgba(201, 162, 78, 0.25); }
 .fiche-menu em { color: var(--encre-pale); font-size: 13px; }
+
+/* One style for every action link of the book: same small capitals, size, icon and underline (labels in
+   lower case: small capitals throughout, no larger first letter). */
+.lien-encre.action { font-size: 13.5px; text-transform: none; }
+.lien-encre.action .action-icone { width: 14px; height: 14px; }
+/* The destructive one, last and quieter. */
+.lien-encre.action.action-discrete { color: var(--encre-pale); }
+.lien-encre.action.action-discrete .action-icone { color: var(--encre-pale); opacity: 0.7; }
+.lien-encre.action.action-discrete:hover { color: var(--encre-rouge); }
+.confirmer-retrait { flex-basis: 100%; margin: 4px 0 0; text-align: center; font-style: italic; font-size: 15px; color: var(--encre-rouge); }
+.confirmer-retrait .action { font-style: normal; }
