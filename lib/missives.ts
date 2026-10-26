@@ -63,7 +63,7 @@ export type Vente = {
   verseePar: string
   montantVerse: number | null
 }
-export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; enAttente?: boolean }
+export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; lot?: number | null; enAttente?: boolean }
 export type Missive = {
   numero: string
   horodatage: string
@@ -119,6 +119,8 @@ export type DonneesRegistre = {
    * hidden at once, the sheet's copy wins (names, compared by `cle`).
    */
   retires?: string[]
+  /** `catalogue` is the whole Catalogues tab (the one the CSV publishes): its rows win over the page's CSV copy. */
+  catalogueComplet?: boolean
   /** The signed member's sealed orders, one per order (null: a script before v3h, which does not read them). */
   ventes?: Vente[] | null
   nbMembres: number
@@ -652,6 +654,10 @@ export function lireOnglets(o: Onglets) {
       max: nombre(r.max),
       artisan: texte(r.artisan),
       note: texte(r.note),
+      lot: (() => {
+        const n = Math.round(nombre(r.lot) ?? 0)
+        return n > 1 ? n : null
+      })(),
     }))
     .filter((a) => a.fr)
 

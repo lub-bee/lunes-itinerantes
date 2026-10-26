@@ -532,6 +532,12 @@ function useNoms(env: Env) {
   }, [env.articles, env.reg.r.donnees])
 }
 
+/** A row's suggestions among `noms` (with their English names), as the recipe form offers them. */
+function proposerDans(env: Env, noms: string[]) {
+  const connus: Connu[] = noms.map((n) => ({ nom: n, en: anglaisDe(env.reg.r.donnees, n, env.articles) }))
+  return (t: string) => (connus.some((c) => cle(c.nom) === cle(t) || (c.en && cle(c.en) === cle(t))) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
+}
+
 function Suggestions({ id, noms }: { id: string; noms: string[] }) {
   return (
     <datalist id={id}>
@@ -547,14 +553,27 @@ type Ligne = { objet: string; qte: string }
 /** An item the registre or the catalogue already knows, by its names. */
 type Connu = { nom: string; en: string }
 
-/** Known names offered under a field while typing (picked with a touch; the field keeps the focus). */
-function Propositions({ connus, choisir, titre = 'Déjà connu :' }: { connus: Connu[]; choisir: (nom: string) => void; titre?: string }) {
+/**
+ * Known names offered under a row's name field while typing: a small list laid OVER the slip (it never
+ * pushes the controls below), picked on pointer down (before the field's blur closes it).
+ */
+function Propositions({ connus, choisir }: { connus: Connu[]; choisir: (nom: string) => void }) {
   if (!connus.length) return null
   return (
-    <div className="fiche-propositions">
-      <span>{titre}</span>
+    <div className="fiche-menu" role="listbox" aria-label="Déjà connus au registre">
+      <span className="fiche-menu-titre">déjà connu</span>
       {connus.map((c) => (
-        <button key={c.nom} type="button" className="lien-encre" onMouseDown={(e) => e.preventDefault()} onClick={() => choisir(c.nom)}>
+        <button
+          key={c.nom}
+          type="button"
+          role="option"
+          aria-selected={false}
+          tabIndex={-1}
+          onPointerDown={(e) => {
+            e.preventDefault()
+            choisir(c.nom)
+          }}
+        >
           {c.nom}
           {c.en && <em> · {c.en}</em>}
         </button>
@@ -1323,7 +1342,7 @@ function FormMissive({ env }: { env: Env }) {
         </label>
       </div>
       <p className="fiche-sous-titre">Ouvrages demandés</p>
-      <Lignes lignes={lignes} setLignes={setLignes} liste="fiche-produits" />
+      <Lignes lignes={lignes} setLignes={setLignes} liste="fiche-produits" proposer={proposerDans(env, noms.produits)} />
       <Message m={message} />
       <div className="fiche-pied">
         <Sceller etat={etat} icones={env.icones}>Sceller la missive</Sceller>
@@ -1393,7 +1412,7 @@ function FormReleve({ env, numero }: { env: Env; numero?: string }) {
         </div>
       )}
       <p className="fiche-sous-titre">Autre chose dans le coffre</p>
-      <Lignes lignes={autres} setLignes={setAutres} liste="fiche-tous" mot="Compte" />
+      <Lignes lignes={autres} setLignes={setAutres} liste="fiche-tous" mot="Compte" proposer={proposerDans(env, noms.tous)} />
       <Message m={message} />
       <div className="fiche-pied">
         <Sceller icones={env.icones}>Consigner le relevé</Sceller>
@@ -1427,7 +1446,7 @@ function FormDepot({ env, numero, objet, qte }: { env: Env; numero: string; obje
     >
       <Suggestions id="fiche-depot" noms={noms.tous} />
       <p className="fiche-note">Ce que tu poses dans le coffre des missives, matière brute ou ouvrage fini, est porté à ton crédit.</p>
-      <Lignes lignes={lignes} setLignes={setLignes} liste="fiche-depot" />
+      <Lignes lignes={lignes} setLignes={setLignes} liste="fiche-depot" proposer={proposerDans(env, noms.tous)} />
       <label className="fiche-champ">
         <span>Note</span>
         <input type="text" value={note} onChange={(ev) => setNote(ev.target.value)} maxLength={200} placeholder="facultative" />

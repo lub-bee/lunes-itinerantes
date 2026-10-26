@@ -514,6 +514,12 @@ that server's copy.
   over it as over any line.
 - « Mes ventes » counts the sales and the caravan's shares still to hand over (« Part à verser »); each
   sale records its share as « Part versée » (who, when, an optional amount), and can be taken back.
+- The catalogue the book shows is the sheet's own when the Catalogues tab is the one the CSV publishes:
+  a merchandise just written, moved or taken out shows at once and stays so, whatever the published
+  copy (a few minutes behind) or the page (built from an older copy) say. A write says where the
+  article went (« … au chapitre Divers »).
+- The global search gives each result its path, book · page · item (« Marchandises · Alcools · Bière »,
+  « Recettes · Brasseur · Bière »), raw materials and missives included.
 - « Mes ventes », a coin-coloured tab set apart after the Marchandises chapters: the sealed orders whose
   seller is the signed member (from a v3h script).
 - A recipe's slip says whether the caravan sells its product (« Au catalogue de la caravane », its

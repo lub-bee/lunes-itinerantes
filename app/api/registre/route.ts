@@ -65,6 +65,19 @@ async function retires(lu: Lu): Promise<string[]> {
   return absents.map((a) => a.fr)
 }
 
+/** Whether the sheet's Catalogues tab is the one the CSV publishes (most of the CSV's names are in it). */
+async function memeCatalogue(lu: Lu): Promise<boolean> {
+  if (!lu.catalogue.length) return false
+  const feuille = new Set(lu.catalogue.map((a) => cle(a.fr)))
+  const publies = await chargerArticles()
+  return publies.length > 0 && publies.filter((a) => !feuille.has(cle(a.fr))).length <= publies.length * 0.2
+}
+
+async function copieCatalogue(lu: Lu): Promise<{ catalogue: DonneesRegistre['catalogue']; catalogueComplet: boolean }> {
+  if (await memeCatalogue(lu)) return { catalogue: lu.catalogue, catalogueComplet: true }
+  return { catalogue: await catalogueEnRetard(lu), catalogueComplet: false }
+}
+
 /** « already in the catalogue », naming its chapter (a hidden one said so; one the published copy does not show yet, too). */
 function dejaAuCatalogue(a: { fr: string; chapitre: string }, publies: { fr: string; chapitre: string }[]): string {
   const c = (chapitres as { id: string; titre: string; masque?: boolean }[]).find((x) => x.id === a.chapitre)
@@ -89,7 +102,9 @@ async function vue(lu: Lu, qui: string | null = null): Promise<DonneesRegistre> 
     ressources: lu.ressources,
     missives: lu.missives,
     mouvements: lu.mouvements.filter((m) => m.type !== 'partage' || contributeurs.get(m.missive)?.has(cle(m.membre))),
-    catalogue: await catalogueEnRetard(lu),
+    // The whole Catalogues tab when it is the one the CSV publishes (the page may hold an older copy of
+    // the CSV than this server: the sheet's rows always win), else only the rows the CSV lacks.
+    ...(await copieCatalogue(lu)),
     retires: await retires(lu),
     // A script before v3h does not read the orders: null (the page says so in character).
     ventes: lu.ventes === null ? null : qui ? lu.ventes.filter((v) => cle(v.vendeur) === cle(qui)) : [],
@@ -461,7 +476,8 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       const max = nombreOuVide(b.max, 1e7, 'Le plafond')
       if (min !== null && max !== null && min > max) non('Le plancher ne peut dépasser le plafond.')
       const article = { chapitre, fr, en, prod, min, max, artisan: mot(b.artisan, 40), note: mot(b.note, 200) }
-      return { action, charge: { article }, message: `${fr} rejoint le catalogue de la caravane : Khajiit a de nouvelles marchandises.` }
+      const titre = (chapitres as { id: string; titre: string }[]).find((c) => c.id === chapitre)?.titre ?? chapitre
+      return { action, charge: { article }, message: `${fr} rejoint le catalogue de la caravane, au chapitre ${titre} : Khajiit a de nouvelles marchandises.` }
     }
   }
 }

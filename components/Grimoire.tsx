@@ -23,7 +23,8 @@ import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
 type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
-type Resultat = { i: number; page: Page; total: number; articles: Article[]; recettes?: Recette[] }
+/** `autres`: raw materials and missives found (name, English name, the slip to open if any). */
+type Resultat = { i: number; page: Page; total: number; articles: Article[]; recettes?: Recette[]; autres?: { cle: string; fr: string; en: string; fiche?: Fiche }[] }
 type Geste = {
   id: number
   x0: number
@@ -119,20 +120,37 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     const metiers: PageMetier[] = metiersDe(registre.donnees?.recettes ?? []).map((m) => ({
       type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, titreEn: m.en, court: m.nom, icone: m.icone,
     }))
-    // Articles just put up for sale (« vente »): in their chapter at once, before the published CSV shows them.
-    const vendus: Article[] = (registre.donnees?.catalogue ?? []).map((a) => ({ id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note }))
-    // Taken out of the catalogue (the sheet wins over the published copy, still a few minutes behind).
+    // The catalogue as the sheet holds it now (rows just put up for sale, moved or taken out), over the
+    // published copy the page was built with (a few minutes older): the sheet's rows win.
+    const lignes = registre.donnees?.catalogue ?? []
+    const complet = Boolean(registre.donnees?.catalogueComplet)
+    const enArticle = (a: (typeof lignes)[number]): Article => ({ id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note, lot: a.lot ?? null })
     const retires = new Set((registre.donnees?.retires ?? []).map(cle))
-    if (!vues.length && !exLibris.length && !metiers.length && !vendus.length && !retires.size) return livreServeur
+    if (!vues.length && !exLibris.length && !metiers.length && !lignes.length && !retires.size) return livreServeur
     const chapitres = new Set(livreServeur.pages.flatMap((x) => (x.type === 'chapitre' ? [x.id] : [])))
-    const chapitreDe = (k: string) => (chapitres.has(k) ? k : chapitres.has('divers') ? 'divers' : [...chapitres].pop())
+    // A row in a hidden chapter stays out of the book; an unknown chapter lands in « Divers ».
+    const caches = new Set((CHAPITRES as { id: string; masque?: boolean }[]).filter((c) => c.masque).map((c) => c.id))
+    const chapitreDe = (k: string) => (caches.has(k) ? undefined : chapitres.has(k) ? k : chapitres.has('divers') ? 'divers' : [...chapitres].pop())
+    const parNom = new Map(lignes.map((a) => [cle(a.fr), a]))
     const p =
-      vendus.length || retires.size
+      lignes.length || retires.size
         ? livreServeur.pages.map((x) => {
             if (x.type !== 'chapitre') return x
-            const restent = retires.size ? x.articles.filter((a) => !retires.has(cle(a.fr))) : x.articles
-            const ici = vendus.filter((a, k) => chapitreDe(registre.donnees!.catalogue![k].chapitre) === x.id && !restent.some((b) => cle(b.fr) === cle(a.fr)) && !retires.has(cle(a.fr)))
-            return ici.length || restent.length !== x.articles.length ? { ...x, articles: [...restent, ...ici] } : x
+            // The page's articles still here (not taken out; in this chapter by the sheet), with the sheet's values.
+            const restent = x.articles
+              .filter((a) => !retires.has(cle(a.fr)) && !(complet && !parNom.has(cle(a.fr))))
+              .filter((a) => {
+                const f = parNom.get(cle(a.fr))
+                return !f || !f.chapitre || chapitreDe(f.chapitre) === x.id
+              })
+              .map((a) => {
+                const f = parNom.get(cle(a.fr))
+                return f ? { ...a, ...enArticle(f), id: a.id, lot: a.lot } : a
+              })
+            const ici = lignes
+              .filter((a) => chapitreDe(a.chapitre) === x.id && !retires.has(cle(a.fr)) && !restent.some((b) => cle(b.fr) === cle(a.fr)))
+              .map(enArticle)
+            return { ...x, articles: [...restent, ...ici] }
           })
         : livreServeur.pages
     const apresRecettes = p.findIndex((x) => x.id === 'recettes') + 1
@@ -536,9 +554,25 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           .sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
         return recettes.length ? [{ i, page: p, total: recettes.length, articles: [], recettes }] : []
       }
+      if (p.type === 'atelier' && p.vue === 'matieres') {
+        // Raw materials, by their French or English name.
+        const autres = (registre.donnees?.ressources ?? [])
+          .filter((x) => nomsCorrespondent([x.nom, x.en], requete))
+          .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+          .map((x) => ({ cle: x.nom, fr: x.nom, en: x.en, fiche: { genre: 'ressource' as const, nom: x.nom } }))
+        return autres.length ? [{ i, page: p, total: autres.length, articles: [], autres }] : []
+      }
+      if (p.type === 'missive') {
+        // A missive, by its title, its client or the goods it asks for.
+        const m = registre.donnees?.missives.find((x) => x.numero === p.numero)
+        if (!m || !nomsCorrespondent([m.titre, m.commanditaire, ...m.lignes.map((l) => l.produit)], requete)) return []
+        return [{ i, page: p, total: 1, articles: [], autres: [{ cle: m.numero, fr: m.titre, en: m.commanditaire }] }]
+      }
       return []
     })
-  }, [pages, requete, registre.donnees?.recettes])
+  }, [pages, requete, registre.donnees?.recettes, registre.donnees?.ressources, registre.donnees?.missives])
+  /** Where a result is: « Marchandises · Alcools » (the book's name as on its ribbon, then the page). */
+  const chemin = (p: Page) => `${parties.find((x) => x.id === p.partie)?.court ?? ''} · ${p.titre}`
 
   // Searching turns the pages: stay if the current page holds matches, else open the first one that does.
   useEffect(() => {
@@ -816,9 +850,10 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                   <section key={r.page.id}>
                     <button type="button" className="index-page" onMouseDown={(e) => e.preventDefault()} onClick={() => aller(r.i)}>
                       <Icone corps={icones[r.page.icone]} />
-                      <span>{r.page.titre}</span>
+                      <span>{chemin(r.page)}</span>
                       <span className="index-total">
-                        {r.total} {r.page.type === 'note' ? 'mention' : r.page.type === 'metier' ? 'recette' : 'article'}
+                        {r.total}{' '}
+                        {r.page.type === 'note' ? 'mention' : r.page.type === 'metier' ? 'recette' : r.page.type === 'missive' ? 'missive' : r.page.type === 'atelier' ? 'matière' : 'article'}
                         {r.total > 1 ? 's' : ''}
                       </span>
                     </button>
@@ -834,6 +869,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                         }}
                       >
                         <span>
+                          <span className="index-chemin">{chemin(r.page)} · </span>
                           <Surligne texte={a.fr} requete={requete} />
                         </span>
                         <em>
@@ -856,6 +892,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                         }}
                       >
                         <span>
+                          <span className="index-chemin">{chemin(r.page)} · </span>
                           <Surligne texte={x.produit} requete={requete} />
                         </span>
                         <em>
@@ -864,6 +901,31 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                       </button>
                     ))}
                     {(r.recettes?.length ?? 0) > 6 && <div className="index-plus">et {r.recettes!.length - 6} autres…</div>}
+                    {(r.autres ?? []).slice(0, 6).map((x) => (
+                      <button
+                        type="button"
+                        key={x.cle}
+                        className="index-article"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (x.fiche) {
+                            ficheApres.current = x.fiche
+                            if (r.i === destinationFiche) setFiche(x.fiche)
+                          }
+                          aller(r.i)
+                          setIndexOuvert(false)
+                        }}
+                      >
+                        <span>
+                          <span className="index-chemin">{r.page.type === 'missive' ? `${parties.find((y) => y.id === r.page.partie)?.court} · ` : `${chemin(r.page)} · `}</span>
+                          <Surligne texte={x.fr} requete={requete} />
+                        </span>
+                        <em>
+                          <Surligne texte={x.en} requete={requete} />
+                        </em>
+                      </button>
+                    ))}
+                    {(r.autres?.length ?? 0) > 6 && <div className="index-plus">et {r.autres!.length - 6} autres…</div>}
                   </section>
                 ))
               )}
