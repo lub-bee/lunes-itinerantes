@@ -1,18 +1,4 @@
-import type { Article, Artisan } from './types'
-
-export const ARTISANS: Record<Artisan, string> = {
-  alchimiste: 'Alchimiste',
-  forgeron: 'Forgeron',
-  couturier: 'Couturier',
-  divers: 'Divers',
-}
-
-export const ICONES_ARTISANS: Record<Artisan, string> = {
-  alchimiste: 'drink-me',
-  forgeron: 'anvil',
-  couturier: 'sewing-needle',
-  divers: 'two-coins',
-}
+import type { Article } from './types'
 
 export function normaliser(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -23,15 +9,6 @@ export function slug(s: string): string {
   return normaliser(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-/** The artisan glyph of a catalogue « Artisan » cell (emoji/labels like `🔨 Forgeron` work too). */
-export function artisanDe(s: string | undefined): Artisan {
-  const n = normaliser(s ?? '')
-  if (n.includes('alchim')) return 'alchimiste'
-  if (n.includes('forge')) return 'forgeron'
-  if (n.includes('coutur')) return 'couturier'
-  return 'divers'
-}
-
 export function jetons(requete: string): string[] {
   return normaliser(requete).split(/\s+/).filter(Boolean)
 }
@@ -39,7 +16,7 @@ export function jetons(requete: string): string[] {
 export function articleCorrespond(a: Article, requete: string): boolean {
   const js = jetons(requete)
   if (!js.length) return true
-  const foin = normaliser(`${a.fr} ${a.en} ${ARTISANS[a.artisan]} ${a.note}`)
+  const foin = normaliser(`${a.fr} ${a.en} ${a.artisan} ${a.note}`)
   return js.every((j) => foin.includes(j))
 }
 

@@ -47,6 +47,8 @@
  *      'usage'       { usage: { produit, variante } }                    → « Usage » on that variant's rows only (v3g)
  *      'choix'       { choix: { numero, recettes } }                     → the missive's « Recettes » cell (v3g)
  *      'versement'   { versement: { numero, versee, montant, par, quand } } → the order's « Part versée » cells (v3i)
+ *      'deplacer'    { deplacement: { fr, chapitre } }                     → the article's « Chapitre » cell (v3k)
+ *      'retirer'     { retrait: { fr } }                                   → the article's Catalogues row deleted (v3k)
  *      'vente'       { article: { chapitre, fr, en, prod, min, max, artisan, note } }
  *                                                                            → one row added to the Catalogues tab
  *                                                                              (only its existing columns are filled;
@@ -389,7 +391,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3j';
+var CACHE = 'registre-v3k';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -817,6 +819,59 @@ var ECRITURES = {
         });
       },
     };
+  },
+
+  /** An article of the catalogue moved to another chapter (its « Chapitre » cell), found by its name (v3k). */
+  deplacer: function (corps) {
+    var d = corps.deplacement;
+    if (!d || !d.fr || !d.chapitre) return { ok: false, erreur: 'no article' };
+    var def = ONGLETS.catalogue;
+    var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+    if (!feuille || feuille.getLastRow() < 2) return { ok: false, erreur: 'no catalogue tab' };
+    var tout = feuille.getDataRange().getValues();
+    var idx = indexColonnes(tout[0], def);
+    if (idx.fr < 0 || idx.chapitre < 0) return { ok: false, erreur: 'no catalogue chapter column' };
+    var k = cleEntete(d.fr);
+    for (var r = 1; r < tout.length; r++) {
+      if (cleEntete(tout[r][idx.fr]) !== k) continue;
+      feuille.getRange(r + 1, idx.chapitre + 1).setValue(d.chapitre);
+      return {
+        ok: true, article: d.fr,
+        maj: function (o) {
+          var vu = false;
+          (o.catalogue = o.catalogue || []).forEach(function (x) { if (cleEntete(x.fr) === k) { x.chapitre = d.chapitre; vu = true; } });
+          if (!vu) {
+            var ligne = {};
+            def.colonnes.forEach(function (col) { ligne[col[1]] = idx[col[1]] >= 0 ? tout[r][idx[col[1]]] : ''; });
+            ligne.chapitre = d.chapitre;
+            o.catalogue.push(ligne);
+          }
+        },
+      };
+    }
+    return { ok: false, erreur: 'unknown article ' + d.fr };
+  },
+
+  /** An article taken out of the catalogue: its Catalogues row deleted, found by its name (v3k). */
+  retirer: function (corps) {
+    var d = corps.retrait;
+    if (!d || !d.fr) return { ok: false, erreur: 'no article' };
+    var def = ONGLETS.catalogue;
+    var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+    if (!feuille || feuille.getLastRow() < 2) return { ok: false, erreur: 'no catalogue tab' };
+    var tout = feuille.getDataRange().getValues();
+    var idx = indexColonnes(tout[0], def);
+    if (idx.fr < 0) return { ok: false, erreur: 'no catalogue article column' };
+    var k = cleEntete(d.fr);
+    for (var r = tout.length - 1; r >= 1; r--) {
+      if (cleEntete(tout[r][idx.fr]) !== k) continue;
+      feuille.deleteRow(r + 1);
+      return {
+        ok: true, article: d.fr,
+        maj: function (o) { o.catalogue = (o.catalogue || []).filter(function (x) { return cleEntete(x.fr) !== k; }); },
+      };
+    }
+    return { ok: false, erreur: 'unknown article ' + d.fr };
   },
 
   /** A product put up for sale: one Catalogues row, in the columns the tab already has. */

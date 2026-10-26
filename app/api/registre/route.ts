@@ -41,12 +41,22 @@ const VIDE: DonneesRegistre = { relie: false, recettes: [], ressources: [], miss
 /** The Catalogues rows that the published CSV (what the book shows) does not hold yet. */
 async function catalogueEnRetard(lu: Lu) {
   if (!lu.catalogue.length) return []
-  const vus = new Set<string>()
+  // Shown from the sheet while the published copy lacks the article, or still has it in another chapter
+  // (moved by 'deplacer').
+  const publie = new Map<string, string>()
   ;(await chargerArticles()).forEach((a) => {
-    vus.add(cle(a.fr))
-    if (a.en) vus.add(cle(a.en))
+    publie.set(cle(a.fr), a.chapitre)
+    if (a.en) publie.set(cle(a.en), a.chapitre)
   })
-  return lu.catalogue.filter((a) => !vus.has(cle(a.fr)))
+  return lu.catalogue.filter((a) => !publie.has(cle(a.fr)) || (a.chapitre && publie.get(cle(a.fr)) !== a.chapitre))
+}
+
+/** « already in the catalogue », naming its chapter (a hidden one said so; one the published copy does not show yet, too). */
+function dejaAuCatalogue(a: { fr: string; chapitre: string }, publies: { fr: string; chapitre: string }[]): string {
+  const c = (chapitres as { id: string; titre: string; masque?: boolean }[]).find((x) => x.id === a.chapitre)
+  const ou = c ? (c.masque ? `au chapitre ${c.titre}, caché du livre` : `au chapitre ${c.titre}`) : 'parmi les Non classés'
+  const attente = !publies.some((p) => cle(p.fr) === cle(a.fr)) ? ' (la copie publiée du catalogue ne le montre pas encore)' : ''
+  return `« ${a.fr} » est déjà au catalogue de la caravane, ${ou}${attente}.`
 }
 
 /** The page's view: shares paid to members who brought nothing are summed up, not named. */
@@ -401,13 +411,32 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       }
     }
 
+    case 'deplacer': {
+      // An article of the catalogue moved to another chapter (e.g. out of a hidden one), by its name.
+      const fr = mot(b.fr, 120) || non('Le nom de l’ouvrage manque.')
+      const article = [...lu.catalogue, ...articles].find((a) => cle(a.fr) === cle(fr))
+      if (!article) non(`« ${fr} » n’est pas au catalogue de la caravane.`)
+      const visibles = (chapitres as { id: string; titre: string; masque?: boolean }[]).filter((c) => !c.masque)
+      const chapitre = visibles.find((c) => c.id === mot(b.chapitre, 40)) ?? non('Choisis le chapitre du catalogue où le ranger.')
+      return { action, charge: { deplacement: { fr: article!.fr, chapitre: chapitre.id } }, message: `${article!.fr} est rangé au chapitre ${chapitre.titre}.` }
+    }
+
+    case 'retirer': {
+      // An article taken out of the catalogue (its Catalogues row), by its name — for the migration of
+      // the hidden « Ingrédients » chapter to the raw materials.
+      const fr = mot(b.fr, 120) || non('Le nom de l’ouvrage manque.')
+      const article = [...lu.catalogue, ...articles].find((a) => cle(a.fr) === cle(fr))
+      if (!article) non(`« ${fr} » n’est pas au catalogue de la caravane.`)
+      return { action, charge: { retrait: { fr: article!.fr } }, message: `${article!.fr} quitte le catalogue de la caravane.` }
+    }
+
     case 'vente': {
       // A product put up for sale: one row added to the Catalogues tab (the book shows it at once,
       // the published CSV a few minutes later).
       const fr = mot(b.fr, 120) || non('Le nom de l’ouvrage manque.')
       const en = mot(b.en, 120)
-      const deja = [...articles, ...lu.catalogue].find((a) => cle(a.fr) === cle(fr) || (en && a.en && cle(a.en) === cle(en)))
-      if (deja) non(`« ${deja.fr} » est déjà au catalogue de la caravane.`)
+      const deja = [...lu.catalogue, ...articles].find((a) => cle(a.fr) === cle(fr) || (en && a.en && cle(a.en) === cle(en)))
+      if (deja) non(dejaAuCatalogue(deja, articles))
       // A chapter of the book (a hidden one is refused); none chosen: « Divers ».
       const visibles = (chapitres as { id: string; masque?: boolean }[]).filter((c) => !c.masque)
       const chapitre = mot(b.chapitre, 40) || 'divers'
@@ -422,7 +451,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement', 'deplacer', 'retirer']
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)

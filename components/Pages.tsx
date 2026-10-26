@@ -7,6 +7,7 @@ import { dateTamrielique, prix, romain } from '@/lib/format'
 import { Action, Embleme, Fleuron, GlypheArtisan, Icone, Plume } from './Ornements'
 import { cle } from '@/lib/missives'
 import { motLot } from '@/lib/commande'
+import { glypheMetier } from '@/lib/metiers'
 import { COLOPHON, EDITION } from '@/lib/credits'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
@@ -331,14 +332,6 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
   return (
     <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
-      {/* The chapter's primary action, as every book's: on the left page, under the introduction. */}
-      {ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
-        <div className="gestes">
-          <Geste icone={ctx.livre.icones['wooden-crate']} onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
-            Inscrire une marchandise
-          </Geste>
-        </div>
-      )}
       <label className="recherche-locale">
         <Plume className="plume" />
         <input
@@ -369,11 +362,22 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
             <div><dt>Plafond</dt><dd>le prix fort, à annoncer d&apos;abord</dd></div>
           </dl>
           <div className="legende-sceaux">
-            <span><GlypheArtisan artisan="alchimiste" icones={ctx.livre.icones} /> Alchimiste</span>
-            <span><GlypheArtisan artisan="forgeron" icones={ctx.livre.icones} /> Forgeron</span>
-            <span><GlypheArtisan artisan="couturier" icones={ctx.livre.icones} /> Couturier</span>
+            {/* The crafts of this chapter's articles, each with its glyph. */}
+            {[...new Set(page.articles.map((a) => a.artisan))].sort((a, b) => glypheMetier(a).nom.localeCompare(glypheMetier(b).nom, 'fr')).map((k) => (
+              <span key={k}>
+                <GlypheArtisan artisan={k} icones={ctx.livre.icones} /> {glypheMetier(k).nom}
+              </span>
+            ))}
           </div>
         </>
+      )}
+      {/* The chapter's primary action, as every book's: on the left page, after its search and legends. */}
+      {ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
+        <div className="gestes">
+          <Geste icone={ctx.livre.icones['wooden-crate']} onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
+            Inscrire une marchandise
+          </Geste>
+        </div>
       )}
     </EnTete>
   )

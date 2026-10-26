@@ -5,6 +5,7 @@ import type { Livre, Page, PageChapitre, PageNote } from '@/lib/types'
 import { prix, romain } from '@/lib/format'
 import { chapitreDe, CitationFin, EnTete, Frontispice, surtitreDe, type Ctx } from './Pages'
 import { Fleuron, GlypheArtisan } from './Ornements'
+import { glypheMetier } from '@/lib/metiers'
 import { DosCouverture, FaceCouverture } from './Couverture'
 
 /**
@@ -218,10 +219,11 @@ function ChapitreCopie({ page, livre }: { page: PageChapitre; livre: Livre }) {
       </table>
       <p className="registre-pied">Prix exprimés en septims d&apos;or</p>
       <div className="legende-sceaux">
-        <span><GlypheArtisan artisan="alchimiste" icones={livre.icones} /> Alchimiste</span>
-        <span><GlypheArtisan artisan="forgeron" icones={livre.icones} /> Forgeron</span>
-        <span><GlypheArtisan artisan="couturier" icones={livre.icones} /> Couturier</span>
-        <span><GlypheArtisan artisan="divers" icones={livre.icones} /> Divers</span>
+        {[...new Set(livre.pages.flatMap((p) => (p.type === 'chapitre' ? p.articles.map((a) => a.artisan) : [])))].sort().map((k) => (
+          <span key={k}>
+            <GlypheArtisan artisan={k} icones={livre.icones} /> {glypheMetier(k).nom}
+          </span>
+        ))}
       </div>
     </section>
   )

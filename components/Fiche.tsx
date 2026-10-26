@@ -51,6 +51,7 @@ export function FicheVolante({
   reg,
   articles,
   chapitres = [],
+  caches = [],
   icones,
   mobile,
   sansAnimation = false,
@@ -61,6 +62,8 @@ export function FicheVolante({
   articles: Article[]
   /** The catalogue's chapters (for putting a product up for sale). */
   chapitres?: Chapitre[]
+  /** Articles of the hidden chapters, with their chapter (title). */
+  caches?: (Article & { chapitre: string; titreChapitre: string })[]
   icones: Record<string, string>
   mobile: boolean
   sansAnimation?: boolean
@@ -139,7 +142,7 @@ export function FicheVolante({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { surtitre, titre, sousTitre, corps, embleme } = contenu(vue, { reg, articles, chapitres, icones, changer: setVue, fermer: partir })
+  const { surtitre, titre, sousTitre, corps, embleme } = contenu(vue, { reg, articles, chapitres, caches, icones, changer: setVue, fermer: partir })
 
   // A product with several recipes: one note per recipe, the others stacked underneath (their edges
   // showing, each at its own tilt), reached by tabs on the left of the whole note.
@@ -237,7 +240,7 @@ export function FicheVolante({
 
 /** A catalogue chapter and the ids of its articles. */
 type Chapitre = { id: string; titre: string; ids: string[] }
-type Env = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; changer: (f: Fiche) => void; fermer: () => void }
+type Env = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; caches?: (Article & { chapitre: string; titreChapitre: string })[]; icones: Record<string, string>; changer: (f: Fiche) => void; fermer: () => void }
 
 function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTitre?: string; corps: ReactNode; embleme?: ReactNode } {
   const missive = 'numero' in f && f.numero ? env.reg.r.calcul?.etats.find((e) => e.missive.numero === f.numero) : undefined
@@ -885,6 +888,8 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
     .filter((a, i, l) => l.findIndex((x) => cle(x.fr) === cle(a.fr)) === i)
     .slice(0, 3)
   const metiers = [...new Set(Object.values(METIERS).map((m) => m.nom))].sort((a, b) => a.localeCompare(b, 'fr'))
+  // Already in the catalogue, but in a hidden chapter (no page): the refusal says where.
+  const cache = [v.fr, v.en].filter((t) => t.trim()).map((t) => (env.caches ?? []).find((a) => cle(a.fr) === cle(t) || (a.en && cle(a.en) === cle(t)))).find(Boolean)
   return (
     <form
       className="fiche-form"
@@ -893,7 +898,12 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
         const fr = v.fr.trim()
         if (!fr) return setMessage({ ok: false, texte: 'Le nom de l’ouvrage manque.' })
         if (!chapitre) return setMessage({ ok: false, texte: 'Choisis le chapitre du catalogue où l’inscrire.' })
-        if (catalogue.some((a) => cle(a.fr) === cle(fr))) return setMessage({ ok: false, texte: `« ${fr} » est déjà au catalogue de la caravane.` })
+        if (cache) return setMessage({ ok: false, texte: `« ${cache.fr} » est déjà au catalogue, au chapitre ${cache.titreChapitre}, caché du livre.` })
+        const deja = catalogue.find((a) => cle(a.fr) === cle(fr))
+        if (deja) {
+          const t = env.chapitres.find((c) => c.id === chapitreDeArticle(deja as Article, env))?.titre
+          return setMessage({ ok: false, texte: `« ${deja.fr} » est déjà au catalogue de la caravane${t ? `, au chapitre ${t}` : ''}.` })
+        }
         const lu = (s: string) => (s.trim() ? entier(s) : null)
         const prod = lu(v.prod)
         const min = lu(v.min)

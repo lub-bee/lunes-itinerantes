@@ -761,6 +761,13 @@ mark { background: linear-gradient(transparent 10%, var(--surligne) 10%, var(--s
 .glyphe-forgeron { color: #5e2a12; }
 .glyphe-couturier { color: #3b3270; }
 .glyphe-divers { color: #7a5a14; }
+.glyphe-brasseur { color: #8a5a12; }
+.glyphe-cuisinier { color: #7a2e1a; }
+.glyphe-chasseur { color: #3e5a2a; }
+.glyphe-tanneur, .glyphe-bucheron, .glyphe-menuisier { color: #5c3d1e; }
+.glyphe-mineur, .glyphe-joaillier { color: #3c4a5e; }
+.glyphe-herboriste, .glyphe-pecheur { color: #2f5b4a; }
+.glyphe-enchanteur { color: #4e2f6b; }
 .legende-sceaux .glyphe { margin-top: 0; width: 18px; height: 18px; }
 
 .ligne.cible { animation: dorure 2.4s ease both; }

@@ -10,7 +10,8 @@ import { ICONES_RANGS } from './rangs'
 import { ICONES_ACTIONS } from './actions'
 import { icones } from './icones'
 import { COLOPHON } from './credits'
-import { artisanDe, ICONES_ARTISANS, normaliser, slug } from './recherche'
+import { normaliser, slug } from './recherche'
+import { artisanDe } from './metiers'
 import type { Article, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
 const CONTENU = path.join(process.cwd(), 'content')
@@ -163,7 +164,7 @@ async function lireNotes(): Promise<PageNote[]> {
 }
 
 /** Every article of the catalogue (CSV or published sheet), for the order route. */
-export async function chargerArticles(): Promise<Article[]> {
+export async function chargerArticles(): Promise<(Article & { chapitre: string })[]> {
   return lireArticles(await lireCatalogue())
 }
 
@@ -225,6 +226,10 @@ export async function chargerLivre(): Promise<Livre> {
     { type: 'colophon', id: 'colophon', partie: 'sommaire', titre: COLOPHON.titre, titreEn: COLOPHON.titreEn, court: 'Achevé', icone: 'quill' },
   ]
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ...Object.values(ICONES_ARTISANS), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS)]
-  return { parties: PARTIES, pages, consigneLe: new Date().toISOString(), icones: icones(noms) }
+  // Articles of the hidden chapters (« masque »): not in the book, but known to the sale slip, so it can
+  // say where an article is and offer to move it to a chapter of the book.
+  const caches = articles.filter((a) => defs.some((d) => d.masque && d.id === a.chapitre))
+
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS)]
+  return { parties: PARTIES, pages, caches, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

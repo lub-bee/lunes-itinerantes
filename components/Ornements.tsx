@@ -1,9 +1,8 @@
 'use client'
 
 import { createContext, useContext, useId, type ButtonHTMLAttributes, type ReactNode } from 'react'
-import type { Artisan } from '@/lib/types'
 import { EMBLEME_TRACE, EMBLEME_VIEWBOX } from '@/lib/embleme'
-import { ARTISANS, ICONES_ARTISANS } from '@/lib/recherche'
+import { glypheMetier } from '@/lib/metiers'
 import { ICONES_ACTIONS } from '@/lib/actions'
 import { septims } from '@/lib/format'
 
@@ -45,11 +44,13 @@ export function Icone({ corps, className }: { corps?: string; className?: string
   return <svg className={`icone ${className ?? ''}`} viewBox="0 0 512 512" aria-hidden dangerouslySetInnerHTML={{ __html: corps }} />
 }
 
-export function GlypheArtisan({ artisan, icones }: { artisan: Artisan; icones: Record<string, string> }) {
+/** A craft's engraved glyph (every craft of lib/metiers.ts has one; an unknown craft, the toolbox). */
+export function GlypheArtisan({ artisan, icones }: { artisan: string; icones: Record<string, string> }) {
+  const g = glypheMetier(artisan)
   return (
-    <span className={`glyphe glyphe-${artisan}`} title={ARTISANS[artisan]}>
-      <Icone corps={icones[ICONES_ARTISANS[artisan]]} />
-      <span className="visuellement-cache">{ARTISANS[artisan]}</span>
+    <span className={`glyphe glyphe-${artisan}`} title={g.nom}>
+      <Icone corps={icones[g.icone]} />
+      <span className="visuellement-cache">{g.nom}</span>
     </span>
   )
 }

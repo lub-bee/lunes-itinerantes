@@ -1,4 +1,5 @@
-export type Artisan = 'alchimiste' | 'forgeron' | 'couturier' | 'divers'
+/** A craft's key (lib/metiers.ts: 'alchimiste', 'chasseur'…, 'divers' when none is written). */
+export type Artisan = string
 
 export type Article = {
   id: string
@@ -61,4 +62,5 @@ export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
 export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes
 
-export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string> }
+/** `caches`: the articles of hidden chapters (content/chapitres.json « masque »), with their chapter id. */
+export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string>; caches?: (Article & { chapitre: string })[] }

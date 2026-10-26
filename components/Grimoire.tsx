@@ -6,8 +6,9 @@ import { ATTENTE_RECHERCHE_MS, divinite as divin, EMBLEME, oeufDeRecherche } fro
 import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
 import { GAUFRAGE } from '@/lib/gaufrage'
-import { articleCorrespond, artisanDe, compterDans, jetons, nomsCorrespondent, plages, slug } from '@/lib/recherche'
-import { metierDe } from '@/lib/metiers'
+import { articleCorrespond, compterDans, jetons, nomsCorrespondent, plages, slug } from '@/lib/recherche'
+import { artisanDe, metierDe } from '@/lib/metiers'
+import CHAPITRES from '@/content/chapitres.json'
 import { cle, type Recette } from '@/lib/missives'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
@@ -141,6 +142,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   // Every article the book shows (the CSV's and those just put up for sale), and the chapters, for the slips.
   const articlesLivre = useMemo(() => pages.flatMap((p) => (p.type === 'chapitre' ? p.articles : [])), [pages])
   const chapitres = useMemo(() => pages.flatMap((p) => (p.type === 'chapitre' ? [{ id: p.id, titre: p.titre, ids: p.articles.map((a) => a.id) }] : [])), [pages])
+  // Articles of hidden chapters (e.g. « Ingrédients »), with their chapter's title, for the sale slip.
+  const caches = useMemo(() => (livreServeur.caches ?? []).map((a) => ({ ...a, titreChapitre: CHAPITRES.find((c) => c.id === a.chapitre)?.titre ?? a.chapitre })), [livreServeur])
 
   const [index, setIndex] = useState(0)
   const [tourne, setTourne] = useState<Tourne | null>(null)
@@ -466,10 +469,35 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     lienInitial.current = ''
     setIndex(i)
   }, [pages])
+  // The address follows the page shown: one history entry per page reached (back / forward work), none
+  // when the address already says it.
   useEffect(() => {
     if (lienInitial.current) return
-    window.history.replaceState(null, '', index === 0 ? window.location.pathname : `#${pages[index].id}`)
+    const voulu = index === 0 ? '' : `#${pages[index].id}`
+    if (decodeURIComponent(window.location.hash) === voulu) return
+    window.history.pushState(null, '', voulu || window.location.pathname)
   }, [index, pages])
+  // An address typed or pasted while the book is open (only the #… changes: no reload), or back /
+  // forward: the book turns to that page; an unsigned reader stays on the ex-libris and goes there once
+  // signed.
+  useEffect(() => {
+    const suivre = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1))
+      const i = id ? pagesRef.current.findIndex((p) => p.id === id) : 0
+      if (i < 0) return
+      if (verrouilleRef.current && i !== 0) {
+        apresSignature.current = id
+        return
+      }
+      if (i !== (enAttente.current ?? indexRef.current)) aller(i)
+    }
+    window.addEventListener('hashchange', suivre)
+    window.addEventListener('popstate', suivre)
+    return () => {
+      window.removeEventListener('hashchange', suivre)
+      window.removeEventListener('popstate', suivre)
+    }
+  }, [aller])
 
   useEffect(() => {
     if (!cible) return
@@ -952,7 +980,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
               <FeuilleCommande c={commande} icones={icones} mobile={false} bande={bande} sansAnimation={Boolean(sansAnimation)} ecartee={ecartee} />
             )}
             {etroit === false && fiche && !tourne && (
-              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articlesLivre} chapitres={chapitres} icones={icones} mobile={false} sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />
+              <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articlesLivre} chapitres={chapitres} caches={caches} icones={icones} mobile={false} sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />
             )}
           </div>
         </div>
@@ -968,7 +996,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       {etroit && (
         <>
           {commande.ouverte && commande.deployee && <FeuilleCommande c={commande} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} />}
-          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articlesLivre} chapitres={chapitres} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />}
+          {fiche && !tourne && <FicheVolante key={JSON.stringify(fiche)} fiche={fiche} reg={ctxRegistre} articles={articlesLivre} chapitres={chapitres} caches={caches} icones={icones} mobile sansAnimation={Boolean(sansAnimation)} fermer={() => setFiche(null)} />}
           <BarreCommande c={commande} icones={icones} />
         </>
       )}

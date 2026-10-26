@@ -46,3 +46,17 @@ export function metierDe(artisan: string): { cle: string; nom: string; en: strin
 }
 
 export const idMetier = (cleMetier: string) => `metier-${cleMetier}`
+
+/** The craft key of a catalogue « Artisan » cell (labels like `🔨 Forgeron` work too); none written: 'divers'. */
+export function artisanDe(s: string | undefined): string {
+  const t = String(s ?? '').replace(/[^\p{L}\s'’-]/gu, '').trim()
+  if (!cle(t)) return 'divers'
+  const m = metierDe(t)
+  return m.cle === SANS_METIER.cle ? 'divers' : m.cle
+}
+
+/** A craft's name and engraved icon, from its key (an unknown craft: its key, the toolbox). */
+export function glypheMetier(k: string): { nom: string; icone: string } {
+  const m = METIERS[k]
+  return m ? { nom: m.nom, icone: m.icone } : { nom: k.charAt(0).toUpperCase() + k.slice(1), icone: ICONE_METIER_INCONNU }
+}

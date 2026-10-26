@@ -106,6 +106,8 @@ armes,Épée en fer,Iron Sword,8.2,25,30,forgeron,
 
 ### Chapters — `content/chapitres.json`
 
+Every craft of `lib/metiers.ts` has its engraved glyph, on the ledger rows and in each chapter's legend (the crafts of its articles); an unknown craft gets the toolbox.
+
 A chapter with `"masque": true` stays in the catalogue (its articles keep their prices and values) but
 has no page and no side tab (the « Ingrédients » chapter: raw materials live in the Livre des Recettes).
 
@@ -465,6 +467,8 @@ refused by the script itself (`already closed`), under the lock.
 | `choix` (v3g) | `{ choix: { numero, recettes } }` | The missive's `Recettes` cell on each of its rows (`recettes`: the whole list as text, built by the grimoire) |
 | `lire` (v3h) | — | also `onglets.commandes`: the Commandes tab (`horodatage, numero, vendeur, article, quantite, prixUnitaire, total, prixReel, statut, totalCommande`), so each member sees their own sales (« Mes ventes »: the server keeps only the signed member's orders). A sealed order now drops the cached tabs; the cache key is `registre-v3h` (a new script version never serves an older one's tabs) |
 | `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
+| `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
+| `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (the « Ingrédients » migration to the raw materials) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
