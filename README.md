@@ -567,10 +567,9 @@ sign before the fifth). Three beats, ~6–7 s (`components/Ombre.tsx`, run by `G
 3. Together: the paper burns at its edges, the light dims, gilding and brass blacken, the emblem turns
    flat blood red and point up (header, medallion, blind-pressed emblem), the shadow tabs come out and the
    page writes itself in: « Caravane de l'Ombre », « Celui qui voit dans l'ombre est puissant à la
-   lumière. », and « Enseignements » opposite.
+   lumière. », and the « Ombre » section opposite.
 
-The shadow book holds only Marchandises (the shadow goods), Recettes (the shadow recipes) and
-Enseignements (texts in `lib/ombre.ts`, easy to replace). Touching the inverted emblem closes it (the
+The shadow book opens on « Caravane de l'Ombre » and its « Ombre » section (texts in `lib/ombre.ts`, easy to replace), then holds only Marchandises (the shadow goods) and Recettes (the shadow recipes). Touching the inverted emblem closes it (the
 reverse). Never in the address, never kept across a reload. Reduced motion: one ~0.75 s fade.
 
 Which book shows a row: an optional **`Livre`** column (« Régulier » or empty / « Ombre ») in the

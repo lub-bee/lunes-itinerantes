@@ -708,7 +708,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           await fondu(c, () => {
             setSeptims(true)
             setOmbre('ombre')
-            setIndex(2)
+            setIndex(0)
           })
           return
         }
@@ -730,7 +730,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         ecran?.style.setProperty('--t-ombre', '1.8s')
         flushSync(() => {
           setOmbre('ombre')
-          setIndex(2)
+          setIndex(0)
         })
         await Promise.all([ecrire(c, blocsTexte(feuillets.current!), 1700), sortirOnglets(c, 1600), pause(c, 1800)])
       } catch (e) {

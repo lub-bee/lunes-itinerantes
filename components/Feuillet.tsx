@@ -31,6 +31,8 @@ export function Feuillet({
   const fenetre = (decalage: number, classe: string, contenu: ReactNode) => (
     <div className={`fenetre ${classe}`} style={{ '--d': decalage } as CSSProperties}>
       {contenu}
+      {/* The shadow book's burn and dim light, carried by the turning leaf too (shown only in the shadow). */}
+      <div className="brulure-volet" aria-hidden />
     </div>
   )
   const tranche = (k: number): ReactNode => {

@@ -3469,3 +3469,26 @@ strong.a-verser { font-weight: 400; }
 @media (prefers-reduced-motion: reduce) {
   .scene { --t-ombre: 0s !important; }
 }
+
+/* Turning leaves in the shadow book: the same burnt edges and dimmed light as the pages at rest (the
+   book's own burn and dim layers lie under the leaves). No SVG filter here: 2 × strips layers move. */
+.brulure-volet { display: none; }
+.scene.ombre .brulure-volet {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 76.1% 70% at var(--cx, 50%) 50%, transparent 60%, rgba(90, 40, 10, 0.32) 74%, rgba(170, 70, 15, 0.42) 79%, rgba(30, 12, 3, 0.9) 85%, #070302 95%),
+    radial-gradient(ellipse at var(--cx, 50%) 48%, rgba(30, 2, 0, 0.12), rgba(0, 0, 0, 0.32) 70%, rgba(0, 0, 0, 0.5));
+}
+.fenetre.page.gauche > .brulure-volet { --cx: 52.8%; }
+.fenetre.page.droite > .brulure-volet { --cx: 47.2%; }
+@media (max-width: 860px) {
+  .scene.ombre .fenetre.page.unique > .brulure-volet {
+    background:
+      radial-gradient(ellipse 80% 78% at 50% 50%, transparent 74%, rgba(90, 40, 10, 0.3) 84%, rgba(170, 70, 15, 0.38) 88%, rgba(30, 12, 3, 0.88) 93%, #070302 99%),
+      radial-gradient(ellipse at 50% 48%, rgba(30, 2, 0, 0.12), rgba(0, 0, 0, 0.32) 70%, rgba(0, 0, 0, 0.5));
+  }
+}

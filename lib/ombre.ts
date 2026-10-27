@@ -33,7 +33,7 @@ export const TEXTES = {
     'Ce que le jour achète au prix du marché, l’ombre le revend au prix du silence. Ce livre ne s’ouvre qu’à qui a su lire la devise à l’envers.',
   sortir: 'Touche le sceau renversé pour rendre le livre à la lumière.',
   enseignements: {
-    titre: 'Enseignements',
+    titre: 'Ombre',
     intro:
       'Ne demande jamais d’où vient la marchandise ; demande seulement ce qu’elle vaut, et à qui elle manque. Ce qui s’écrit ici ne se répète pas au grand jour.',
     // Placeholder maxims: replace freely.
@@ -60,8 +60,8 @@ export const TEXTES = {
 
 export const PARTIE_OMBRE: Partie = { id: 'ombre', titre: 'Livre d’ombre', court: 'Ombre', couleur: '#c8101c', icone: 'hood' }
 
-/** The shadow book's three pages, in tab order: Marchandises, Recettes, then Enseignements (it opens there). */
-export function pagesOmbre(articles: Article[]): [PageChapitre, PageMetier, PageOmbre] {
+/** The shadow book's three pages, in tab order: « Caravane de l'Ombre » and its « Ombre » section first (it opens there), then Marchandises, Recettes. */
+export function pagesOmbre(articles: Article[]): [PageOmbre, PageChapitre, PageMetier] {
   const marchandises: PageChapitre = {
     type: 'chapitre',
     id: 'ombre-marchandises',
@@ -86,8 +86,8 @@ export function pagesOmbre(articles: Article[]): [PageChapitre, PageMetier, Page
     court: 'Recettes',
     icone: 'poison-bottle',
   }
-  const enseignements: PageOmbre = { type: 'ombre', id: 'ombre', partie: 'ombre', titre: TEXTES.titre, titreEn: TEXTES.titreEn, court: 'Enseignements', icone: 'evil-eyes' }
-  return [marchandises, recettes, enseignements]
+  const enseignements: PageOmbre = { type: 'ombre', id: 'ombre', partie: 'ombre', titre: TEXTES.titre, titreEn: TEXTES.titreEn, court: 'Ombre', icone: 'evil-eyes' }
+  return [enseignements, marchandises, recettes]
 }
 
 export const ICONES_OMBRE = ['hood', 'evil-eyes', 'swap-bag', 'poison-bottle']
