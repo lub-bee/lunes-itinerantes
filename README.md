@@ -555,7 +555,30 @@ Code: `lib/missives.ts` (types, needs, stock, contributions, split, material cos
 `components/ExLibris.tsx`, `components/Missives.tsx` (pages), `components/Fiche.tsx` (slip, recipe tree,
 forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
 
-## Credits & licenses
+## The Livre d'ombre (shadow book)
+
+A secret: the caravan's motto « Fidélité, Honnêteté, Septims » (on the title page and on the memo
+« L'ombre de la Caravane ») opens it after five clicks on « Honnêteté » (a pause over 3 s starts over; no
+sign before the fifth). Three beats, ~6–7 s (`components/Ombre.tsx`, run by `Grimoire.tsx`):
+
+1. The motto bleeds: « Fidélité » and « Honnêteté » turn red and re-form as « Septims » (ink A: fibre
+   turbulence, a wet halo in the text's own colour); the third « Septims » turns red.
+2. The pages turn to « L'ombre de la Caravane »; all its ink dissolves at once; the side tabs retract.
+3. Together: the paper burns at its edges, the light dims, gilding and brass blacken, the emblem turns
+   flat blood red and point up (header, medallion, blind-pressed emblem), the shadow tabs come out and the
+   page writes itself in: « Caravane de l'Ombre », « Celui qui voit dans l'ombre est puissant à la
+   lumière. », and « Enseignements » opposite.
+
+The shadow book holds only Marchandises (the shadow goods), Recettes (the shadow recipes) and
+Enseignements (texts in `lib/ombre.ts`, easy to replace). Touching the inverted emblem closes it (the
+reverse). Never in the address, never kept across a reload. Reduced motion: one ~0.75 s fade.
+
+Which book shows a row: an optional **`Livre`** column (« Régulier » or empty / « Ombre ») in the
+Catalogues tab (read from the published CSV) and the Recettes tab. Shadow rows are hidden from the day
+book and its search, and the other way round. Writes from the shadow book send `livre: 'Ombre'`; they are
+refused in character until the sheet's script knows the column (`OMBRE_ECRITURE` in `lib/ombre.ts`).
+
+
 
 The colophon shows the edition (« Édition 3.3 ») read from `package.json` `version` at build time: a release only bumps it there.
 

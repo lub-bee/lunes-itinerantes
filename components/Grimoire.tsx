@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { flushSync } from 'react-dom'
 import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
 import { ATTENTE_RECHERCHE_MS, divinite as divin, EMBLEME, oeufDeRecherche } from '@/lib/oeufs'
 import { idMetier } from '@/lib/metiers'
@@ -20,6 +21,8 @@ import { useRegistre } from './Registre'
 import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
+import { Annule, blocsTexte, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
+import { PAGE_DEVISE, PARTIE_OMBRE, pagesOmbre, TEXTES as OMBRE_TEXTES } from '@/lib/ombre'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
 type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
@@ -96,7 +99,11 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   // A god signed the ex-libris (an egg, lib/oeufs.ts): its two pages follow the ex-libris until the
   // reader turns back to it. Nothing is signed.
   const [divinite, setDivinite] = useState<string | null>(null)
-  const livre = useMemo((): Livre => {
+  // The Livre d'ombre (lib/ombre.ts): the shadow book replaces the pages while it is open (never in the address, never kept).
+  const [ombre, setOmbre] = useState<EtatOmbre>('jour')
+  const [septims, setSeptims] = useState(false)
+  const [ombreJoue, setOmbreJoue] = useState(false)
+  const livreJour = useMemo((): Livre => {
     const etats = registre.calcul?.etats ?? []
     const vues: PageMissive[] = [...etats.filter((e) => !estClose(e.missive)), ...etats.filter((e) => estClose(e.missive))].map((e) => ({
       type: 'missive',
@@ -117,7 +124,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       )
     }
     // One page per craft of the workshop, after the recipes' contents.
-    const metiers: PageMetier[] = metiersDe(registre.donnees?.recettes ?? []).map((m) => ({
+    const metiers: PageMetier[] = metiersDe((registre.donnees?.recettes ?? []).filter((x) => !x.ombre)).map((m) => ({
       type: 'metier', id: idMetier(m.cle), partie: 'atelier', metier: m.cle === 'sans-metier' ? '' : m.nom, titre: m.nom, titreEn: m.en, court: m.nom, icone: m.icone,
     }))
     // The catalogue as the sheet holds it now (rows just put up for sale, moved or taken out), over the
@@ -148,7 +155,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                 return f ? { ...a, ...enArticle(f), id: a.id, lot: a.lot } : a
               })
             const ici = lignes
-              .filter((a) => chapitreDe(a.chapitre) === x.id && !retires.has(cle(a.fr)) && !restent.some((b) => cle(b.fr) === cle(a.fr)))
+              .filter((a) => !a.ombre && chapitreDe(a.chapitre) === x.id && !retires.has(cle(a.fr)) && !restent.some((b) => cle(b.fr) === cle(a.fr)))
               .map(enArticle)
             return { ...x, articles: [...restent, ...ici] }
           })
@@ -160,6 +167,15 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       pages: [...exLibris, ...p.slice(0, apresRecettes), ...metiers, ...p.slice(apresRecettes, apresMissives), ...vues, ...p.slice(apresMissives)],
     }
   }, [livreServeur, registre.calcul, registre.donnees, relie, divinite])
+  // The shadow book: its goods (the published copy's and the sheet's « Ombre » rows), its recipes, its teachings.
+  const livre = useMemo((): Livre => {
+    if (ombre === 'jour') return livreJour
+    const parNom = new Map((livreServeur.ombre ?? []).map((a) => [cle(a.fr), a]))
+    for (const a of registre.donnees?.catalogue ?? [])
+      if (a.ombre) parNom.set(cle(a.fr), { id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note, lot: a.lot ?? null, ombre: true })
+    const retires = new Set((registre.donnees?.retires ?? []).map(cle))
+    return { ...livreJour, parties: [PARTIE_OMBRE], pages: pagesOmbre([...parNom.values()].filter((a) => !retires.has(cle(a.fr)))) }
+  }, [ombre, livreJour, livreServeur.ombre, registre.donnees?.catalogue, registre.donnees?.retires])
   const { pages } = livre
   // Every article the book shows (the CSV's and those just put up for sale), and the chapters, for the slips.
   const articlesLivre = useMemo(() => pages.flatMap((p) => (p.type === 'chapitre' ? p.articles : [])), [pages])
@@ -220,6 +236,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       { duration: 760, easing: 'ease-out' },
     )
   }, [])
+  const ombreRef = useRef(ombre)
+  ombreRef.current = ombre
   const pagesRef = useRef(pages)
   pagesRef.current = pages
   const devotion = (i: number) => ['divinite', 'poemes'].includes(pagesRef.current[i]?.type)
@@ -494,16 +512,17 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   // The address follows the page shown: one history entry per page reached (back / forward work), none
   // when the address already says it.
   useEffect(() => {
-    if (lienInitial.current) return
+    if (lienInitial.current || ombre !== 'jour') return
     const voulu = index === 0 ? '' : `#${pages[index].id}`
     if (decodeURIComponent(window.location.hash) === voulu) return
     window.history.pushState(null, '', voulu || window.location.pathname)
-  }, [index, pages])
+  }, [index, pages, ombre])
   // An address typed or pasted while the book is open (only the #… changes: no reload), or back /
   // forward: the book turns to that page; an unsigned reader stays on the ex-libris and goes there once
   // signed.
   useEffect(() => {
     const suivre = () => {
+      if (ombreRef.current !== 'jour') return
       const id = decodeURIComponent(window.location.hash.slice(1))
       const i = id ? pagesRef.current.findIndex((p) => p.id === id) : 0
       if (i < 0) return
@@ -550,7 +569,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         const k = metierDe(p.metier).cle
         // One entry per product, found by any of its recipes' names.
         const recettes = produitsDe(registre.donnees?.recettes ?? [])
-          .filter((r) => metierDe(r.artisan).cle === k && r.toutes.some((v) => recetteCorrespond(v, requete)))
+          .filter((r) => (p.ombre ? r.ombre : !r.ombre && metierDe(r.artisan).cle === k) && r.toutes.some((v) => recetteCorrespond(v, requete)))
           .sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
         return recettes.length ? [{ i, page: p, total: recettes.length, articles: [], recettes }] : []
       }
@@ -642,6 +661,122 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     indexAvant.current = index
     if (index === 0 && venait !== 0 && divinite) setDivinite(null)
   }, [index, divinite])
+
+  /* ── The Livre d'ombre (lib/ombre.ts, components/Ombre.tsx) ─────────────── */
+
+  const scene = useRef<HTMLDivElement>(null)
+  const jetonOmbre = useRef(0)
+  const course = (): Course => {
+    const j = ++jetonOmbre.current
+    return { vivant: () => j === jetonOmbre.current }
+  }
+  /** Where the side tabs hide (back into the book): left on a spread, down on a phone. */
+  const cacheOnglet = () => (etroitRef.current ? 'translateY(105%)' : 'translateX(-105%)')
+  const ongletsVisibles = () => Array.from(document.querySelectorAll<HTMLElement>('.onglets .onglet'))
+  const rentrerOnglets = (c: Course) =>
+    fin(c, ongletsVisibles().map((o) => o.animate([{ transform: 'none', opacity: 1 }, { transform: cacheOnglet(), opacity: 0 }], { duration: 700, easing: 'cubic-bezier(.5,0,.6,1)', fill: 'forwards' })))
+  const sortirOnglets = (c: Course, duree: number) =>
+    fin(c, ongletsVisibles().map((o) => o.animate([{ transform: cacheOnglet(), opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: duree, easing: 'cubic-bezier(.25,.8,.35,1)', fill: 'backwards' })))
+  /** Reduced motion: the book fades out, the state changes, it fades back in (~0.75 s). */
+  const fondu = async (c: Course, changer: () => void) => {
+    const zone = scene.current?.querySelector<HTMLElement>('.livre-zone')
+    if (!zone) return changer()
+    const sortie = zone.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' })
+    await fin(c, sortie)
+    flushSync(changer)
+    const entree = zone.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 450 })
+    sortie.cancel()
+    await fin(c, entree)
+  }
+  /** Waits for the page turn in flight to land. */
+  const atterrir = async (c: Course) => {
+    await pause(c, 60)
+    while (tourneRef.current || enAttente.current !== null) await pause(c, 60)
+  }
+  const pageDevise = () => livreJour.pages.findIndex((p) => p.id === PAGE_DEVISE)
+
+  /** Five clicks on « Honnêteté »: the motto bleeds, the pages turn to its page, its ink goes, the shadow rises. */
+  const ouvrirOmbre = useCallback(
+    async (devise: HTMLElement) => {
+      if (ombreRef.current !== 'jour' || ombreJoueRef.current) return
+      const c = course()
+      setOmbreJoue(true)
+      setFiche(null)
+      const ecran = scene.current
+      try {
+        if (sansAnimation) {
+          await fondu(c, () => {
+            setSeptims(true)
+            setOmbre('ombre')
+            setIndex(2)
+          })
+          return
+        }
+        ecran?.style.setProperty('--t-ombre', '0s')
+        // I · The motto bleeds: « Fidélité » and « Honnêteté » turn red and re-form as « Septims ».
+        await encrerDevise(c, devise, false)
+        flushSync(() => setSeptims(true))
+        await pause(c, 200)
+        // II · The pages turn to « L'ombre de la caravane », then all its ink goes and the tabs retract.
+        const cible = pageDevise()
+        if (cible >= 0 && cible !== indexRef.current) {
+          aller(cible)
+          await atterrir(c)
+        }
+        await pause(c, 80)
+        await Promise.all([dissoudre(c, blocsTexte(feuillets.current!)), rentrerOnglets(c)])
+        await pause(c, 200)
+        // III · Everything at once: the paper burns, the light dims, the emblem turns, the shadow writes in.
+        ecran?.style.setProperty('--t-ombre', '1.8s')
+        flushSync(() => {
+          setOmbre('ombre')
+          setIndex(2)
+        })
+        await Promise.all([ecrire(c, blocsTexte(feuillets.current!), 1700), sortirOnglets(c, 1600), pause(c, 1800)])
+      } catch (e) {
+        if (!(e instanceof Annule)) console.error(e)
+      } finally {
+        setOmbreJoue(false)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sansAnimation, aller, livreJour],
+  )
+  /** The inverted emblem: the shadow's ink goes, the light comes back, the day book writes itself in again. */
+  const fermerOmbre = useCallback(async () => {
+    if (ombreRef.current !== 'ombre' || ombreJoueRef.current) return
+    const c = course()
+    setOmbreJoue(true)
+    setFiche(null)
+    const ecran = scene.current
+    const retour = Math.max(0, pageDevise())
+    try {
+      if (sansAnimation) {
+        await fondu(c, () => {
+          setOmbre('jour')
+          setSeptims(false)
+          setIndex(retour)
+        })
+        return
+      }
+      await Promise.all([dissoudre(c, blocsTexte(feuillets.current!), 1200), rentrerOnglets(c)])
+      ecran?.style.setProperty('--t-ombre', '1.8s')
+      flushSync(() => {
+        setOmbre('jour')
+        setSeptims(false)
+        setIndex(retour)
+      })
+      await Promise.all([ecrire(c, blocsTexte(feuillets.current!), 1500), sortirOnglets(c, 1400), pause(c, 1800)])
+    } catch (e) {
+      if (!(e instanceof Annule)) console.error(e)
+    } finally {
+      setOmbreJoue(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sansAnimation, livreJour])
+  const ombreJoueRef = useRef(ombreJoue)
+  ombreJoueRef.current = ombreJoue
+  const ctxOmbre = useMemo<CtxOmbre>(() => ({ etat: ombre, septims, joue: ombreJoue, ouvrir: ouvrirOmbre, fermer: fermerOmbre }), [ombre, septims, ombreJoue, ouvrirOmbre, fermerOmbre])
 
   /* ── Keyboard ───────────────────────────────────────────── */
 
@@ -749,13 +884,19 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   return (
     <IconesLivre.Provider value={icones}>
+    <OmbreContexte.Provider value={ctxOmbre}>
+    <FiltresOmbre />
     <div
-      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''}`}
+      ref={scene}
+      className={`scene ${tourne?.manuel ? 'en-tourne' : ''} ${verrouille ? 'verrouillee' : ''} ${GAUFRAGE.partout ? 'gaufrage-partout' : ''} ${ombre === 'ombre' ? 'ombre ombre-B' : ''}`}
       style={{ '--gaufrage': GAUFRAGE.intensite, '--gaufrage-registres': GAUFRAGE.registres, '--gaufrage-exlibris': GAUFRAGE.exLibris } as CSSProperties}
     >
       <header className="entete">
         <div className="blason">
-          <Embleme taille={64} className="embleme-entete" />
+          {/* In the shadow book the emblem turns over in blood red: touching it closes the book. */}
+          <span className={ombre === 'ombre' ? 'blason-ombre' : undefined} onClick={ombre === 'ombre' ? fermerOmbre : undefined} title={ombre === 'ombre' ? OMBRE_TEXTES.sortir : undefined}>
+            <Embleme taille={64} className="embleme-entete" />
+          </span>
           <div>
             <h1>Caravane des Lunes Itinérantes</h1>
             <p>Grimoire des marchands</p>
@@ -981,12 +1122,14 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         </nav>
 
         <div className="couverture">
+          <div className="cuir-ombre" aria-hidden />
           <Verrou onRefermer={refermer} />
           <CoinLaiton className="hg" />
           <CoinLaiton className="hd" />
           <CoinLaiton className="bg" />
           <CoinLaiton className="bd" />
           <div className="bloc-papier" aria-hidden />
+          <div className="voile-livre" aria-hidden />
           <div className="feuillets" ref={feuillets} onPointerDown={debutGeste} onClick={clicPapier}>
             {etroit === null || !pretSignature ? null : etroit ? (
               <>
@@ -1025,6 +1168,11 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                 )}
               </>
             )}
+            {/* The shadow book's burnt edges, creeping in from the page borders (darkness B). */}
+            <div className="brulures" aria-hidden>
+              <div className="brulure g" />
+              <div className="brulure d" />
+            </div>
             <button
               type="button"
               className="coin coin-gauche"
@@ -1066,7 +1214,10 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           <BarreCommande c={commande} icones={icones} />
         </>
       )}
+      {/* The light dims over everything but the side tabs (darkness B). */}
+      <div className="voile-ombre" aria-hidden />
     </div>
+    </OmbreContexte.Provider>
     </IconesLivre.Provider>
   )
 }

@@ -12,6 +12,7 @@ import { icones } from './icones'
 import { COLOPHON } from './credits'
 import { normaliser, slug } from './recherche'
 import { artisanDe } from './metiers'
+import { estOmbre, ICONES_OMBRE } from './ombre'
 import type { Article, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
 const CONTENU = path.join(process.cwd(), 'content')
@@ -69,6 +70,8 @@ export const ALIAS_COLONNES = {
   artisan: ['artisan', 'metier', 'atelier'],
   note: ['note', 'notes', 'remarque', 'commentaire'],
   lot: ['lot', 'par', 'par lot', 'unites par lot', 'taille du lot', 'contenance'],
+  // « Régulier » (or empty) / « Ombre »: which book shows the article (the shadow book's goods).
+  livre: ['livre', 'registre', 'book'],
 } as const
 
 type Colonne = keyof typeof ALIAS_COLONNES
@@ -117,6 +120,7 @@ function lireArticles(csv: string): (Article & { chapitre: string })[] {
         max: nombre(l[i.max]),
         artisan: artisanDe(l[i.artisan]),
         note: (l[i.note] ?? '').trim(),
+        ombre: i.livre >= 0 && estOmbre(l[i.livre]),
         lot: i.lot < 0 ? null : (() => {
           const n = Math.round(nombre(l[i.lot]) ?? 0)
           return n > 1 ? n : null
@@ -177,10 +181,10 @@ export async function chargerLivre(): Promise<Livre> {
     partie: 'marchandises',
     ...d,
     icone: d.icone || 'swap-bag',
-    articles: articles.filter((a) => a.chapitre === d.id),
+    articles: articles.filter((a) => a.chapitre === d.id && !a.ombre),
   }))
   // Articles pointing to an unknown chapter are never lost: they land in a last chapter.
-  const egares = articles.filter((a) => !defs.some((d) => d.id === a.chapitre))
+  const egares = articles.filter((a) => !a.ombre && !defs.some((d) => d.id === a.chapitre))
   if (egares.length) {
     chapitres.push({
       type: 'chapitre', partie: 'marchandises', id: 'non-classes', titre: 'Non classés', titreEn: 'Unsorted', court: 'Non classés', icone: 'swap-bag',
@@ -230,6 +234,8 @@ export async function chargerLivre(): Promise<Livre> {
   // say where an article is and offer to move it to a chapter of the book.
   const caches = articles.filter((a) => defs.some((d) => d.masque && d.id === a.chapitre))
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS)]
-  return { parties: PARTIES, pages, caches, consigneLe: new Date().toISOString(), icones: icones(noms) }
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE]
+  // The shadow book's goods, whatever their chapter (shown only in the Livre d'ombre).
+  const ombre = articles.filter((a) => a.ombre)
+  return { parties: PARTIES, pages, caches, ombre, consigneLe: new Date().toISOString(), icones: icones(noms) }
 }

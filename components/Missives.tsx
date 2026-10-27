@@ -5,6 +5,7 @@ import type { PageAtelier, PageCoffre, PageMetier, PageMissive, PageMissives, Pa
 import { idMetier, metierDe, SANS_METIER } from '@/lib/metiers'
 import { dateTamrielique, prix, prixParLot, septims } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
+import { TEXTES as OMBRE } from '@/lib/ombre'
 import { quantiteLue } from '@/lib/commande'
 import { anglaisDe, arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
@@ -20,7 +21,7 @@ export type Fiche =
   /** `depuis`: opened from the catalogue itself (no « voir au catalogue » then). */
   | { genre: 'recette'; nom: string; variante?: number; depuis?: 'catalogue' }
   /** `variante`: the recipe edited (else the usual one); `nouvelle`: a new recipe (variant) of that product. */
-  | { genre: 'edition-recette'; nom: string; artisan?: string; variante?: number; nouvelle?: boolean }
+  | { genre: 'edition-recette'; nom: string; artisan?: string; variante?: number; nouvelle?: boolean; ombre?: boolean }
   | { genre: 'ressource'; nom: string }
   | { genre: 'missive' }
   | { genre: 'releve'; numero?: string }
@@ -30,7 +31,7 @@ export type Fiche =
   | { genre: 'mouvement'; lignes: Mouvement[] }
   | { genre: 'rang'; cle: string }
   /** `chapitre`: the chapter page it is added from (a merchandise with no recipe yet). */
-  | { genre: 'vente'; nom: string; chapitre?: string }
+  | { genre: 'vente'; nom: string; chapitre?: string; ombre?: boolean }
   | { genre: 'poeme'; divinite: string; n: number }
 
 export type CtxRegistre = {
@@ -713,7 +714,7 @@ export function GaucheAtelier({ page, reg, icones, compact, recherche }: { page:
 export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: { page: PageAtelier; reg?: CtxRegistre; interactif: boolean; icones: Record<string, string>; requetes?: string[] }) {
   const r = reg?.r
   if (!r?.donnees?.relie || !reg) return null
-  const recettes = [...r.donnees.recettes].sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+  const recettes = r.donnees.recettes.filter((x) => !x.ombre).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const ressources = [...r.donnees.ressources].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
   const tab = interactif ? 0 : -1
   if (page.vue === 'recettes' && requetes.some(Boolean)) {
@@ -893,14 +894,15 @@ export function metiersDe(recettes: Recette[]) {
 export function GaucheMetier({ page, reg, icones, compact, recherche }: { page: PageMetier; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
   const r = reg?.r
   const m = metierDe(page.metier)
+  const intro = page.ombre ? page.intro : m.intro
   return (
     <>
-      {!compact && m.intro && <p className="intro lettrine">{m.intro}</p>}
+      {!compact && intro && <p className="intro lettrine">{intro}</p>}
       {r?.donnees?.relie && <ChampRecette recherche={recherche} />}
       {r && <Ferme r={r} />}
       {r && reg && ouvert(r) && r.marchand?.droits?.recette !== false && (
         <div className="gestes">
-          <Geste icone={icones['cauldron']} onClick={() => reg.ouvrir({ genre: 'edition-recette', nom: '', artisan: m.cle === SANS_METIER.cle ? '' : m.nom })}>
+          <Geste icone={icones['cauldron']} onClick={() => reg.ouvrir({ genre: 'edition-recette', nom: '', artisan: page.ombre || m.cle === SANS_METIER.cle ? '' : m.nom, ombre: page.ombre })}>
             Consigner une recette
           </Geste>
         </div>
@@ -914,7 +916,8 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
   if (!r?.donnees?.relie || !reg) return null
   const c = r.calcul
   const k = metierDe(page.metier).cle
-  const toutes = produitsDe(r.donnees.recettes).filter((x) => metierDe(x.artisan).cle === k)
+  // The shadow book's recipes page holds every « Ombre » recipe; a craft's page, its day recipes only.
+  const toutes = produitsDe(r.donnees.recettes).filter((x) => (page.ombre ? x.ombre : !x.ombre && metierDe(x.artisan).cle === k))
   const recettes = toutes.filter((x) => recetteCherchee(x, requetes)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const tab = interactif ? 0 : -1
   return (
@@ -942,7 +945,7 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
           ))}
         </ul>
       ) : (
-        <p className="vide-encre">{toutes.length ? 'Nulle recette de ce nom pour ce métier, ni en français ni en anglais.' : 'Plus aucune recette pour ce métier.'}</p>
+        <p className="vide-encre">{toutes.length ? 'Nulle recette de ce nom pour ce métier, ni en français ni en anglais.' : page.ombre ? OMBRE.recettes.vide : 'Plus aucune recette pour ce métier.'}</p>
       )}
     </div>
   )

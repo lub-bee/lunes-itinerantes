@@ -79,15 +79,20 @@ export function Embleme({ taille = 48, className }: { taille?: number; className
           <feComposite in="SourceGraphic" in2="refletForme" operator="arithmetic" k2="1" k3="0.6" />
         </filter>
       </defs>
-      <path
-        d={EMBLEME_TRACE}
-        fill={`url(#${id}-or)`}
-        fillRule="evenodd"
-        stroke="#4a3010"
-        strokeOpacity="0.55"
-        strokeWidth="4"
-        filter={`url(#${id}-relief)`}
-      />
+      <g className="emb">
+        <path
+          className="or"
+          d={EMBLEME_TRACE}
+          fill={`url(#${id}-or)`}
+          fillRule="evenodd"
+          stroke="#4a3010"
+          strokeOpacity="0.55"
+          strokeWidth="4"
+          filter={`url(#${id}-relief)`}
+        />
+        {/* The shadow book's emblem: flat blood red, shown (and turned point up) by the « ombre » class. */}
+        <path className="sang" d={EMBLEME_TRACE} fill="#c8101c" fillRule="evenodd" />
+      </g>
     </svg>
   )
 }

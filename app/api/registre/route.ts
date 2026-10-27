@@ -3,6 +3,7 @@ import { identite, type Identite } from '@/lib/identite'
 import { peut } from '@/lib/droits'
 import { chargerArticles } from '@/lib/livre'
 import chapitres from '@/content/chapitres.json'
+import { estOmbre, OMBRE_ECRITURE, TEXTES as TEXTES_OMBRE } from '@/lib/ombre'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 import {
   cle,
@@ -205,6 +206,9 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
     return m!
   }
   const quand = horodatage()
+
+  // Writes to the shadow book wait for a sheet script that knows the « Livre » column (lib/ombre.ts).
+  if (estOmbre(b.livre) && !OMBRE_ECRITURE) non(TEXTES_OMBRE.refus)
 
   switch (action) {
     case 'missive': {

@@ -3,6 +3,7 @@
 // stock, each missive's needs and each member's contribution are all computed from it.
 
 import { normaliser } from './recherche'
+import { estOmbre } from './ombre'
 
 /** game-icons.net glyphs of the missives (loaded with the book's other icons). */
 export const ICONES_MISSIVES = ['wooden-crate', 'cauldron', 'open-chest', 'anvil-impact', 'hand-truck', 'two-coins', 'magnifying-glass', 'scroll-quill', 'wheat', 'quill']
@@ -35,7 +36,8 @@ export type Ingredient = { nom: string; quantite: number }
  * one renumbers nothing); `usage` marks the « recette d'usage » (else variant 1, else the lowest), the
  * one that drives costs, values, trees and the missives' needs unless a missive chooses another.
  */
-export type Recette = { produit: string; en: string; variante: number; usage: boolean; rendement: number; artisan: string; note: string; ingredients: Ingredient[] }
+/** `ombre`: a recipe of the shadow book (Recettes « Livre » = Ombre, read from a v3l script): hidden by day. */
+export type Recette = { produit: string; en: string; variante: number; usage: boolean; rendement: number; artisan: string; note: string; ingredients: Ingredient[]; ombre?: boolean }
 /**
  * A missive's choice for one item: make it by recipe `variante`, or 0 = buy it (raw materials that
  * also have a recipe are bought unless the missive says otherwise).
@@ -63,7 +65,7 @@ export type Vente = {
   verseePar: string
   montantVerse: number | null
 }
-export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; lot?: number | null; enAttente?: boolean }
+export type ArticleVente = { chapitre: string; fr: string; en: string; prod: number | null; min: number | null; max: number | null; artisan: string; note: string; lot?: number | null; ombre?: boolean; enAttente?: boolean }
 export type Missive = {
   numero: string
   horodatage: string
@@ -596,6 +598,7 @@ export function lireOnglets(o: Onglets) {
     }
     if (!rec.en) rec.en = texte(r.produitEn)
     if (marque(r.usage)) rec.usage = true
+    if (estOmbre(r.livre)) rec.ombre = true
     const q = nombre(r.quantite)
     if (nom && q !== null && q > 0) rec.ingredients.push({ nom, quantite: q })
   }
@@ -654,6 +657,7 @@ export function lireOnglets(o: Onglets) {
       max: nombre(r.max),
       artisan: texte(r.artisan),
       note: texte(r.note),
+      ombre: estOmbre(r.livre),
       lot: (() => {
         const n = Math.round(nombre(r.lot) ?? 0)
         return n > 1 ? n : null

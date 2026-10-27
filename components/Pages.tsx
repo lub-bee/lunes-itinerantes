@@ -9,6 +9,8 @@ import { cle } from '@/lib/missives'
 import { motLot } from '@/lib/commande'
 import { glypheMetier } from '@/lib/metiers'
 import { COLOPHON, EDITION } from '@/lib/credits'
+import { PAGE_DEVISE, TEXTES as OMBRE } from '@/lib/ombre'
+import { Devise, useOmbre } from './Ombre'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
@@ -132,6 +134,8 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return <Frontispice ctx={ctx} compact={compact} />
       case 'divinite':
         return null
+      case 'ombre':
+        return <SectionOmbre compact={compact} />
       case 'ventes':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
@@ -165,6 +169,8 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       case 'note':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            {/* The caravan's motto, on its shadow's page (five clicks on « Honnêteté »…). */}
+            {page.id === PAGE_DEVISE && <Devise />}
             {page.resume && <p className="intro lettrine">{page.resume}</p>}
             {page.auteur && <p className="signature">Consigné par {page.auteur}</p>}
             {page.citation && (
@@ -315,6 +321,7 @@ export function Frontispice({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
       <h2 className="frontispice-titre">Caravane des Lunes Itinérantes</h2>
       <Fleuron />
       <p className="citation">« Il n’existe rien qu’un bon Khajiit ne saurait vendre. »</p>
+      <Devise className="devise-frontispice" />
       {!compact && (
         <p className="frontispice-texte">
           Registre de la Caravane des Lunes Itinérantes. Qu&apos;on le consulte avant chaque vente, et que jamais d&apos;yeux non
@@ -374,7 +381,7 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
       {/* The chapter's primary action, as every book's: on the left page, after its search and legends. */}
       {ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
         <div className="gestes">
-          <Geste icone={ctx.livre.icones['wooden-crate']} onClick={() => ctx.registre!.ouvrir({ genre: 'vente', nom: '', chapitre: page.id })}>
+          <Geste icone={ctx.livre.icones['wooden-crate']} onClick={() => ctx.registre!.ouvrir(page.partie === 'ombre' ? { genre: 'vente', nom: '', ombre: true } : { genre: 'vente', nom: '', chapitre: page.id })}>
             Inscrire une marchandise
           </Geste>
         </div>
@@ -397,6 +404,8 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
         )
       case 'ventes':
         return <DroiteVentes reg={ctx.registre} />
+      case 'ombre':
+        return <Enseignements />
       case 'colophon':
         return (
           <div className="credits">
@@ -693,9 +702,50 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
             )}
           </div>
         ))}
-        {filtres.length === 0 && <p className={`vide ${generation > 0 ? 'ecrit' : ''}`}>{VIDES[requetes.join('').length % VIDES.length]}</p>}
+        {filtres.length === 0 && <p className={`vide ${generation > 0 ? 'ecrit' : ''}`}>{!page.articles.length && page.vide ? page.vide : VIDES[requetes.join('').length % VIDES.length]}</p>}
       </div>
       <p className="registre-pied">Prix exprimés en septims d&apos;or</p>
+    </div>
+  )
+}
+
+/* ───────────────────────────── The shadow book ───────────────────────────── */
+
+/** « Caravane de l'Ombre »: the motto read backwards, the inverted emblem (touch it to close the book). */
+function SectionOmbre({ compact }: { compact: boolean }) {
+  const o = useOmbre()
+  return (
+    <div className="section-ombre">
+      <header className="en-tete">
+        <div className="surtitre">{OMBRE.surtitre}</div>
+        <div className="titre-ligne">
+          <h2 className="titre-page">{OMBRE.titre}</h2>
+        </div>
+        <p className="maxime">{OMBRE.maxime}</p>
+      </header>
+      <button type="button" className="medaillon-ombre" onClick={o.fermer} title={OMBRE.sortir} aria-label={OMBRE.sortir}>
+        <Embleme taille={compact ? 78 : 112} />
+      </button>
+      <Devise />
+      {!compact && <p className="intro lettrine">{OMBRE.intro}</p>}
+    </div>
+  )
+}
+
+function Enseignements() {
+  return (
+    <div className="enseignements">
+      <header className="en-tete">
+        <div className="surtitre">{OMBRE.surtitre}</div>
+        <h3 className="titre-section">{OMBRE.enseignements.titre}</h3>
+        <Fleuron />
+      </header>
+      <p className="intro lettrine">{OMBRE.enseignements.intro}</p>
+      <ol className="lecons">
+        {OMBRE.enseignements.lecons.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ol>
     </div>
   )
 }

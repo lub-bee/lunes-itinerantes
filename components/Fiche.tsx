@@ -253,7 +253,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
         titre: f.nom || 'Nouvelle recette',
         corps: (
           <Signe env={env} action="recette">
-            <FormRecette nom={f.nom} variante={f.variante} nouvelle={f.nouvelle} artisanPropose={f.artisan} env={env} />
+            <FormRecette nom={f.nom} variante={f.variante} nouvelle={f.nouvelle} artisanPropose={f.artisan} ombre={f.ombre} env={env} />
           </Signe>
         ),
       }
@@ -261,7 +261,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       return {
         surtitre: 'Livre des Marchandises',
         titre: f.nom ? 'Mettre en vente' : 'Inscrire une marchandise',
-        corps: <Signe env={env} action="vente"><FormVente nom={f.nom} chapitre={f.chapitre} env={env} /></Signe>,
+        corps: <Signe env={env} action="vente"><FormVente nom={f.nom} chapitre={f.chapitre} ombre={f.ombre} env={env} /></Signe>,
       }
     case 'ressource':
       return { surtitre: f.nom ? 'Corriger la matière' : 'Inscrire une matière', titre: f.nom || 'Nouvelle matière', corps: <Signe env={env} action="ressource"><FormRessource nom={f.nom} env={env} /></Signe> }
@@ -926,7 +926,7 @@ function chapitreDeArticle(article: Article, env: Env): string | undefined {
  * recipe, its cost from the recipe's materials, the floor and ceiling proposed from the chapter's
  * usual margins (to accept or change).
  */
-function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitre?: string; env: Env }) {
+function FormVente({ nom, chapitre: chapitreDonne, ombre = false, env }: { nom: string; chapitre?: string; ombre?: boolean; env: Env }) {
   // From a recipe (its names, craft and cost), or a merchandise of its own from a chapter page (only the
   // name is needed; a recipe may come later).
   const c = env.reg.r.calcul
@@ -977,7 +977,7 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
         e.preventDefault()
         const fr = v.fr.trim()
         if (!fr) return setMessage({ ok: false, texte: 'Le nom de l’ouvrage manque.' })
-        if (!chapitre) return setMessage({ ok: false, texte: 'Choisis le chapitre du catalogue où l’inscrire.' })
+        if (!chapitre && !ombre) return setMessage({ ok: false, texte: 'Choisis le chapitre du catalogue où l’inscrire.' })
         if (cache) return setMessage({ ok: false, texte: `« ${cache.fr} » est déjà au catalogue, au chapitre ${cache.titreChapitre}, caché du livre.` })
         const deja = catalogue.find((a) => cle(a.fr) === cle(fr))
         if (deja) {
@@ -993,7 +993,8 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
         const article: ArticleVente = { chapitre, fr, en: v.en.trim(), prod, min, max, artisan: artisan.trim(), note: v.note.trim(), enAttente: true }
         confier(
           'vente',
-          { ...article, enAttente: undefined },
+          // The shadow book's goods carry « Livre » = Ombre (refused until the sheet's script knows it).
+          { ...article, enAttente: undefined, ...(ombre ? { livre: 'Ombre', chapitre: '' } : {}) },
           (d) => ({ ...d, catalogue: [...(d.catalogue ?? []).filter((a) => cle(a.fr) !== cle(fr)), article] }),
           recette ? () => env.changer({ genre: 'recette', nom: recette.produit }) : undefined,
         )
@@ -1003,6 +1004,7 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
         {recette ? 'L’ouvrage' : 'La marchandise'} rejoint le catalogue de la caravane : chacun pourra la vendre et l’inscrire au bon de commande.
         {!recette && ' Seul le nom est requis ; prix et recette pourront venir plus tard.'}
       </p>
+      {!ombre && (
       <label className="fiche-champ">
         <span>Chapitre</span>
         <select value={chapitre} onChange={(e) => setChapitre(e.target.value)} required>
@@ -1014,6 +1016,7 @@ function FormVente({ nom, chapitre: chapitreDonne, env }: { nom: string; chapitr
           ))}
         </select>
       </label>
+      )}
       {champ('fr', recette ? 'Ouvrage' : 'Marchandise', { required: true, autoComplete: 'off' })}
       {champ('en', 'Nom anglais', { placeholder: 'facultatif', autoComplete: 'off' })}
       {doublons.length > 0 && (
@@ -1087,7 +1090,7 @@ function CoutMatieres({ nom, n, rendement, index, env, sansFournee = false }: { 
 
 /* ───────────────────────── Recipe and resource forms ───────────────────────── */
 
-function FormRecette({ nom, variante, nouvelle: ajout, artisanPropose, env }: { nom: string; variante?: number; nouvelle?: boolean; artisanPropose?: string; env: Env }) {
+function FormRecette({ nom, variante, nouvelle: ajout, artisanPropose, ombre = false, env }: { nom: string; variante?: number; nouvelle?: boolean; artisanPropose?: string; ombre?: boolean; env: Env }) {
   // One recipe (variant) is edited at a time: the one asked for, else the usual one; « ajouter une
   // variante » starts a blank recipe for the same product.
   const toutes = env.reg.r.donnees?.recettes ?? []
@@ -1161,6 +1164,7 @@ function FormRecette({ nom, variante, nouvelle: ajout, artisanPropose, env }: { 
         produit: p,
         ancienProduit: ancienne?.produit,
         ancienneVariante: ancienne?.variante,
+        ...(ombre || ancienne?.ombre ? { livre: 'Ombre' } : {}),
         en: en.trim(),
         rendement: nouvelle.rendement,
         artisan,

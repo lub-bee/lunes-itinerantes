@@ -12,9 +12,11 @@ export type Article = {
   note: string
   /** Sold by lot (Catalogues « Lot »: e.g. 80 arrows to the quiver); null: not a lot. */
   lot?: number | null
+  /** In the shadow book (Catalogues « Livre » = Ombre): hidden from the day book, shown only in the Livre d'ombre. */
+  ombre?: boolean
 }
 
-export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'caravane'
+export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'caravane' | 'ombre'
 
 export type Partie = { id: PartieId; titre: string; court: string; couleur: string; icone: string }
 
@@ -26,7 +28,8 @@ type Base = { id: string; partie: PartieId; titre: string; court: string; icone:
 
 /** `citation`: closing quote at the foot of the right page. */
 export type PageSommaire = Base & { type: 'sommaire'; citation: string }
-export type PageChapitre = Base & { type: 'chapitre'; titreEn: string; intro: string; articles: Article[] }
+/** `vide`: what the page says when it holds no article (the shadow book's chapter). */
+export type PageChapitre = Base & { type: 'chapitre'; titreEn: string; intro: string; articles: Article[]; vide?: string }
 /** `citation` / `citationAuteur`: optional saying under the memo's summary, on the left page. */
 export type PageNote = Base & { type: 'note'; resume: string; auteur: string; citation: string; citationAuteur: string; html: string; texte: string }
 export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string; citation: string }
@@ -35,7 +38,8 @@ export type PageAvenir = Base & { type: 'avenir'; intro: string; attente: string
 export type PageMissives = Base & { type: 'missives'; intro: string; citation: string }
 /** `close`: delivered or given up — still a page, but no side tab. */
 /** One craft of the workshop and its recipes (added by the page from the Recettes tab). */
-export type PageMetier = Base & { type: 'metier'; metier: string }
+/** `ombre`: the shadow book's recipes page (every recipe with « Livre » = Ombre, whatever its craft). */
+export type PageMetier = Base & { type: 'metier'; metier: string; ombre?: boolean; intro?: string }
 
 /** The caravan's ranks drawn as a tree; touching a rank lists its members. */
 export type PageCaravane = Base & { type: 'caravane'; intro: string; citation: string }
@@ -54,13 +58,18 @@ export type PageExLibris = Base & { type: 'exlibris' }
  */
 /** The book's last leaf: colophon and credits (lib/credits.ts). Back matter: no chapter; on it, its own side tab only. */
 export type PageColophon = Base & { type: 'colophon' }
+/** The shadow book's first spread: the section « Caravane de l'Ombre » and its « Enseignements » (lib/ombre.ts). */
+export type PageOmbre = Base & { type: 'ombre' }
 /** The signed member's sales (sealed orders whose seller is them), in the Marchandises part, after the chapters. */
 export type PageVentes = Base & { type: 'ventes'; intro: string }
 
 export type PageDivinite = Base & { type: 'divinite'; divinite: string }
 export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre
 
-/** `caches`: the articles of hidden chapters (content/chapitres.json « masque »), with their chapter id. */
-export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string>; caches?: (Article & { chapitre: string })[] }
+/**
+ * `caches`: the articles of hidden chapters (content/chapitres.json « masque »), with their chapter id.
+ * `ombre`: the shadow book's articles (« Livre » = Ombre), shown only in the Livre d'ombre.
+ */
+export type Livre = { parties: Partie[]; pages: Page[]; consigneLe: string; icones: Record<string, string>; caches?: (Article & { chapitre: string })[]; ombre?: Article[] }
