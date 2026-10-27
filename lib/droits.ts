@@ -21,6 +21,7 @@ export const ROLES_REQUIS: Record<ActionRegistre, Role[] | null> = {
   usage: null, // which recipe of a product is the usual one
   choix: null, // a missive's recipe for one of its items
   deplacer: null, // an article of the catalogue moved to another chapter
+  livre: null, // an article and its recipe moved to the Livre d'ombre (or back); later perhaps ['patriarche']
   retirer: null, // an article taken out of the catalogue; later perhaps ['patriarche']
   versement: null, // the caravan's share of a sale marked as handed over; later ['patriarche']
 }

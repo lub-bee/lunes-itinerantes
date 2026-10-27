@@ -145,7 +145,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
             if (x.type !== 'chapitre') return x
             // The page's articles still here (not taken out; in this chapter by the sheet), with the sheet's values.
             const restent = x.articles
-              .filter((a) => !retires.has(cle(a.fr)) && !(complet && !parNom.has(cle(a.fr))))
+              .filter((a) => !retires.has(cle(a.fr)) && !(complet && !parNom.has(cle(a.fr))) && !parNom.get(cle(a.fr))?.ombre)
               .filter((a) => {
                 const f = parNom.get(cle(a.fr))
                 return !f || !f.chapitre || chapitreDe(f.chapitre) === x.id

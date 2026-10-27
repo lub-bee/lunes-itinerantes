@@ -135,7 +135,7 @@ export type DonneesRegistre = {
 /** `vente`: a recipe's product put up for sale (a row added to the Catalogues tab). */
 /** `usage`: a product's usual recipe chosen; `choix`: a missive's recipe for one of its items. */
 /** `versement`: the caravan's share of a sealed order marked as handed over (or taken back). */
-export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix' | 'versement' | 'deplacer' | 'retirer'
+export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix' | 'versement' | 'deplacer' | 'retirer' | 'livre'
 
 /* ───────────────────────── Lookups ───────────────────────── */
 

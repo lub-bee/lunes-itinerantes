@@ -367,7 +367,7 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       return {
         action,
         charge: {
-          recette: { produit, variante, usage, ancienProduit: editee ? ancien : undefined, ancienneVariante: editee ? ancienneVariante : undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources },
+          recette: { livre: estOmbre(b.livre) ? 'Ombre' : '', produit, variante, usage, ancienProduit: editee ? ancien : undefined, ancienneVariante: editee ? ancienneVariante : undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources },
         },
         message: ingredients.length
           ? `La recette${variante > 1 || soeurs.length ? ` n° ${variante}` : ''} de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} ${nouvellesRessources.length > 1 ? 'rejoignent' : 'rejoint'} les matières premières, prix à inscrire.` : ''}`
@@ -455,6 +455,21 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       return { action, charge: { deplacement: { fr: article!.fr, chapitre: chapitre.id } }, message: `${article!.fr} est rangé au chapitre ${chapitre.titre}.` }
     }
 
+    case 'livre': {
+      // Which book shows an article and its recipe(s): « Ombre » (the Livre d'ombre) or the day book (v3l).
+      const fr = mot(b.fr, 120) || non('Le nom de l’ouvrage manque.')
+      const valeur = estOmbre(b.valeur) ? 'Ombre' : ''
+      const article = [...lu.catalogue, ...articles].find((a) => cle(a.fr) === cle(fr))
+      const recette = lu.recettes.find((r) => cle(r.produit) === cle(fr))
+      if (!article && !recette) non(`« ${fr} » n’est ni au catalogue ni au Livre des Recettes.`)
+      const nom = article?.fr ?? recette!.produit
+      return {
+        action,
+        charge: { livre: { fr: nom, valeur } },
+        message: valeur ? `${nom} passe dans le livre d’ombre.` : `${nom} revient au grand jour.`,
+      }
+    }
+
     case 'retirer': {
       // An article taken out of the catalogue (its Catalogues row), by its name — for the migration of
       // the hidden « Ingrédients » chapter to the raw materials.
@@ -479,14 +494,14 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       const min = nombreOuVide(b.min, 1e7, 'Le plancher')
       const max = nombreOuVide(b.max, 1e7, 'Le plafond')
       if (min !== null && max !== null && min > max) non('Le plancher ne peut dépasser le plafond.')
-      const article = { chapitre, fr, en, prod, min, max, artisan: mot(b.artisan, 40), note: mot(b.note, 200) }
+      const article = { chapitre, fr, en, prod, min, max, artisan: mot(b.artisan, 40), note: mot(b.note, 200), livre: estOmbre(b.livre) ? 'Ombre' : '' }
       const titre = (chapitres as { id: string; titre: string }[]).find((c) => c.id === chapitre)?.titre ?? chapitre
       return { action, charge: { article }, message: `${fr} rejoint le catalogue de la caravane, au chapitre ${titre} : Khajiit a de nouvelles marchandises.` }
     }
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement', 'deplacer', 'retirer']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement', 'deplacer', 'retirer', 'livre']
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)

@@ -47,6 +47,8 @@
  *      'usage'       { usage: { produit, variante } }                    → « Usage » on that variant's rows only (v3g)
  *      'choix'       { choix: { numero, recettes } }                     → the missive's « Recettes » cell (v3g)
  *      'versement'   { versement: { numero, versee, montant, par, quand } } → the order's « Part versée » cells (v3i)
+ *      'livre'       { livre: { fr, valeur } }                            → « Livre » on the article's Catalogues row and its
+ *                                                                              Recettes rows (« Ombre » / empty) (v3l)
  *      'deplacer'    { deplacement: { fr, chapitre } }                     → the article's « Chapitre » cell (v3k)
  *      'retirer'     { retrait: { fr } }                                   → the article's Catalogues row deleted (v3k)
  *      'vente'       { article: { chapitre, fr, en, prod, min, max, artisan, note } }
@@ -116,6 +118,8 @@ var ONGLETS = {
     colonnes: [
       ['Produit', 'produit'], ['Produit EN', 'produitEn'], ['Ingrédient', 'ingredient'], ['Quantité', 'quantite'], ['Rendement', 'rendement'],
       ['Artisan', 'artisan'], ['Note', 'note'], ['Variante', 'variante'], ['Usage', 'usage'],
+      // « Régulier » or empty / « Ombre »: a recipe of the Livre d'ombre (v3l; added at the end of row 1 on the first write).
+      ['Livre', 'livre', ['registre', 'book']],
     ],
   },
   missives: {
@@ -147,6 +151,8 @@ var ONGLETS = {
       ['Artisan', 'artisan', ['métier', 'atelier']],
       ['Note', 'note', ['notes', 'remarque', 'commentaire']],
       ['Lot', 'lot', ['par', 'par lot', 'unités par lot', 'taille du lot', 'contenance']],
+      // Which book shows the row: « Régulier » or empty / « Ombre » (the Livre d'ombre) (v3l).
+      ['Livre', 'livre', ['registre', 'book']],
     ],
   },
   /**
@@ -301,6 +307,15 @@ function lireOnglet(def) {
   return res;
 }
 
+/** The Catalogues tab's « Livre » column: added at the end of row 1 (the owner's other headers untouched); its 0-based index. */
+function colonneLivre(feuille) {
+  var premiere = feuille.getRange(1, 1, 1, Math.max(feuille.getLastColumn(), 1)).getValues()[0];
+  var fin = premiere.length;
+  while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
+  feuille.getRange(1, fin + 1).setValue('Livre').setFontWeight('bold');
+  return fin;
+}
+
 /** Comparable header: lower case, no accents, letters and digits only. */
 function cleEntete(s) {
   return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -391,7 +406,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3k';
+var CACHE = 'registre-v3l';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -669,7 +684,7 @@ var ECRITURES = {
     var objets = (r.ingredients || []).map(function (ing) {
       return {
         produit: r.produit, produitEn: r.en || '', ingredient: ing.ingredient, quantite: ing.quantite, rendement: r.rendement || 1,
-        artisan: r.artisan || '', note: r.note || '', variante: variante, usage: r.usage ? 'oui' : '',
+        artisan: r.artisan || '', note: r.note || '', variante: variante, usage: r.usage ? 'oui' : '', livre: r.livre || '',
       };
     });
     var nouvelles = objets.map(function (x) { return enLigne(p, x); });
@@ -852,6 +867,51 @@ var ECRITURES = {
     return { ok: false, erreur: 'unknown article ' + d.fr };
   },
 
+  /**
+   * Which book shows an article and its recipe(s): « Livre » set to `valeur` (« Ombre » or empty) on the
+   * article's Catalogues row (the column added at the end of row 1 if missing) and on every Recettes row of
+   * the product (v3l). Either may be absent (an article without recipe, a recipe not for sale).
+   */
+  livre: function (corps) {
+    var l = corps.livre;
+    if (!l || !l.fr) return { ok: false, erreur: 'no article' };
+    var valeur = l.valeur || '';
+    var k = cleEntete(l.fr);
+    var trouve = 0;
+    var def = ONGLETS.catalogue;
+    var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+    if (feuille && feuille.getLastRow() >= 2) {
+      var tout = feuille.getDataRange().getValues();
+      var idx = indexColonnes(tout[0], def);
+      if (idx.fr >= 0) {
+        for (var r = 1; r < tout.length; r++) {
+          if (cleEntete(tout[r][idx.fr]) !== k) continue;
+          if (idx.livre < 0) idx.livre = colonneLivre(feuille);
+          feuille.getRange(r + 1, idx.livre + 1).setValue(valeur);
+          trouve++;
+        }
+      }
+    }
+    var o = ouvrir(ONGLETS.recettes);
+    var p = o.p;
+    var lignes = o.lignes;
+    var touchees = 0;
+    lignes.forEach(function (ligne) {
+      if (cleEntete(ligne[p.cols.produit - 1]) !== k) return;
+      ligne[p.cols.livre - 1] = valeur;
+      touchees++;
+    });
+    if (touchees) p.feuille.getRange(2, 1, lignes.length, p.largeur).setValues(lignes);
+    if (!trouve && !touchees) return { ok: false, erreur: 'unknown article ' + l.fr };
+    return {
+      ok: true, article: l.fr, catalogue: trouve, recettes: touchees,
+      maj: function (o) {
+        (o.catalogue || []).forEach(function (x) { if (cleEntete(x.fr) === k) x.livre = valeur; });
+        (o.recettes || []).forEach(function (x) { if (cleEntete(x.produit) === k) x.livre = valeur; });
+      },
+    };
+  },
+
   /** An article taken out of the catalogue: its Catalogues row deleted, found by its name (v3k). */
   retirer: function (corps) {
     var d = corps.retrait;
@@ -890,7 +950,8 @@ var ECRITURES = {
       if (vus.some(function (v) { return v && noms.indexOf(v) >= 0; })) return { ok: false, erreur: 'already in catalogue' };
     }
     var nombre = function (v) { return v === null || v === undefined ? '' : v; };
-    var valeurs = { chapitre: a.chapitre || '', fr: a.fr, en: a.en || '', prod: nombre(a.prod), min: nombre(a.min), max: nombre(a.max), artisan: a.artisan || '', note: a.note || '' };
+    var valeurs = { chapitre: a.chapitre || '', fr: a.fr, en: a.en || '', prod: nombre(a.prod), min: nombre(a.min), max: nombre(a.max), artisan: a.artisan || '', note: a.note || '', livre: a.livre || '' };
+    if (a.livre && idx.livre < 0) idx.livre = colonneLivre(feuille);
     var largeur = Math.max(feuille.getLastColumn(), 1);
     var ligne = [];
     for (var c = 0; c < largeur; c++) ligne.push('');
