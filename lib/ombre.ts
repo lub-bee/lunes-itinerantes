@@ -22,7 +22,7 @@ export const estOmbre = (v: unknown) => /ombre|shadow/i.test(String(v ?? ''))
  * Writes to the shadow book. The sheet's script does not yet know the « Livre » column (it would write a
  * regular row, shown in the day book): until it does (v3l), the server refuses them in character.
  */
-export const OMBRE_ECRITURE = false
+export const OMBRE_ECRITURE = true
 
 export const TEXTES = {
   surtitre: 'Livre d’ombre',
