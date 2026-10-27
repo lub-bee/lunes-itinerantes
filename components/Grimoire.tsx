@@ -12,7 +12,7 @@ import { artisanDe, metierDe } from '@/lib/metiers'
 import CHAPITRES from '@/content/chapitres.json'
 import { cle, type Recette } from '@/lib/missives'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
-import { CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
+import { Action, CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
 import { ICONE_COPIE } from '@/lib/copie'
@@ -1078,6 +1078,14 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       </header>
 
       <main className={`livre-zone ${etroit === null ? 'en-attente' : ''}`}>
+        {/* Out of the shadow book, from any of its pages: where the day book's ribbons were. */}
+        {ombre === 'ombre' && (
+          <div className="sortie-ombres">
+            <Action icone="lumiere" className="quitter-ombres" onClick={fermerOmbre}>
+              {OMBRE_TEXTES.sortir.toLowerCase()}
+            </Action>
+          </div>
+        )}
         <nav className="rubans" aria-label="Livres du grimoire">
           {parties.map((p) =>
             // The Sommaire ribbon is bare: only its shape and its forked end.

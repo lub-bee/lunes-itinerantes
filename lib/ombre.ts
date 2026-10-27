@@ -31,7 +31,8 @@ export const TEXTES = {
   maxime: 'Celui qui voit dans l’ombre est puissant à la lumière.',
   intro:
     'Ce que le jour achète au prix du marché, l’ombre le revend au prix du silence. Ce livre ne s’ouvre qu’à qui a su lire la devise à l’envers.',
-  sortir: 'Touche le sceau renversé pour rendre le livre à la lumière.',
+  /** The way out of the shadow book (a link at the foot of its first page and above the book; the inverted emblem too). */
+  sortir: 'Quitter les ombres',
   enseignements: {
     titre: 'Ombre',
     intro:

@@ -3492,3 +3492,14 @@ strong.a-verser { font-weight: 400; }
       radial-gradient(ellipse at 50% 48%, rgba(30, 2, 0, 0.12), rgba(0, 0, 0, 0.32) 70%, rgba(0, 0, 0, 0.5));
   }
 }
+
+/* « Quitter les ombres »: the book's action link, in the shadow red; at the foot of « Caravane de l'Ombre »
+   and above the book, where the day book's ribbons were (they are hidden in the shadow). */
+.scene.ombre .lien-encre.action.quitter-ombres { color: #e3192a; border-bottom-color: rgba(227, 25, 42, 0.7); }
+.scene.ombre .lien-encre.action.quitter-ombres .action-icone { color: #e3192a; opacity: 1; }
+.section-ombre .quitter-ombres { align-self: center; margin-top: 10px; }
+.sortie-ombres { position: absolute; z-index: 31; top: -44px; left: 7%; }
+.sortie-ombres .quitter-ombres { padding: 4px 8px; border-radius: 3px; background: rgba(20, 6, 4, 0.75); color: #f3dcb2 !important; }
+@media (max-width: 860px) {
+  .sortie-ombres { position: relative; top: auto; left: auto; display: flex; justify-content: center; margin: 0 0 8px; }
+}

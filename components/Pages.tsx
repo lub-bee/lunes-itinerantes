@@ -728,6 +728,9 @@ function SectionOmbre({ compact }: { compact: boolean }) {
       </button>
       <Devise />
       {!compact && <p className="intro lettrine">{OMBRE.intro}</p>}
+      <Action icone="lumiere" className="quitter-ombres" onClick={o.fermer}>
+        {OMBRE.sortir.toLowerCase()}
+      </Action>
     </div>
   )
 }
