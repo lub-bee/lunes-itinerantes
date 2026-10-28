@@ -582,6 +582,14 @@ to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane
   transformations pro rata to their effort (quantity × weight); *part fabrication* (5 %) over the crafting
   missions pro rata to their objects. Whole points, sums exact. Credited when the mission is completed
   (a row in the Points tab).
+- **Two mission types** (2026-10-28): *récolte* and *fabrication*; crafting an intermediate (Cuir from Peaux)
+  is a fabrication too, still paid from the resources' share by effort (the final product's crafts share the
+  crafting part). A sheet row typed « Transformation » reads as fabrication.
+- **Lots per mission**: « lot » rows of the Pondération tab (`Genre` lot, `Nom` the item, the number in
+  `Poids`) set how many units one mission holds (Blé par 40, Bière par 20); the demand's note can change it
+  line by line before sealing. A lot set by hand cuts full packs, the rest last (250 by 40 → 40 ×6 + 10).
+- Every form (the demand, the settings, the classes, one item's class / weight / lot) is a note laid over the
+  left page; the pages only show.
 - **Lifecycle**: ouverte → en cours (who, when; at most *max en cours* per member, checked by the server
   and again by the script under its lock) → accomplie, or rendue (open again; the « Journal » cell keeps
   each gesture).

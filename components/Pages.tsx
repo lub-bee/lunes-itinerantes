@@ -41,9 +41,6 @@ export type Ctx = {
   invoquer?: (divinite: string) => void
 }
 
-/** The day book's price chapters (for the missions' demands). */
-const chapitresDe = (ctx: Ctx) => ctx.livre.pages.filter((p): p is PageChapitre => p.type === 'chapitre')
-
 /** Pages without a folio: the ex-libris and a god's pages (not part of the book proper). */
 const sansFolio = (p: Page) => p.type === 'exlibris' || p.type === 'divinite' || p.type === 'poemes'
 
@@ -224,7 +221,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       case 'patriarche':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GauchePatriarche page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} chapitres={chapitresDe(ctx)} />
+            <GauchePatriarche page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'atelier':
@@ -490,7 +487,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'points':
         return <DroitePoints reg={ctx.registre} />
       case 'patriarche':
-        return <DroitePatriarche page={page} reg={ctx.registre} icones={ctx.livre.icones} chapitres={chapitresDe(ctx)} />
+        return <DroitePatriarche page={page} reg={ctx.registre} />
       case 'atelier':
         return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} requetes={[ctx.requete, ctx.locale]} />
       case 'caravane':

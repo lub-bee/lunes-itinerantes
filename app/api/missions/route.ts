@@ -17,6 +17,7 @@ import {
   type ActionMission,
   type Classe,
   type Assignation,
+  type LotMission,
   type DonneesMissions,
   type Ponderation,
   type Reglages,
@@ -87,7 +88,7 @@ const MAX_MISSIONS = 300
 
 /** The pondération the page sends, checked (classes with a code, resources in a known class). */
 function ponderationLue(b: Record<string, unknown>): Ponderation {
-  const brut = (b.ponderation ?? {}) as { classes?: unknown; ressources?: unknown; reglages?: unknown }
+  const brut = (b.ponderation ?? {}) as { classes?: unknown; ressources?: unknown; lots?: unknown; reglages?: unknown }
   if (!Array.isArray(brut.classes) || !Array.isArray(brut.ressources)) non('La pondération est illisible : rien n’a été gravé.')
   const classes: Classe[] = []
   for (const c of (brut.classes as Record<string, unknown>[]).slice(0, 40)) {
@@ -106,6 +107,12 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
     if (ressources.some((x) => cle(x.nom) === cle(nom))) continue
     ressources.push({ nom, classe: classes.find((c) => cle(c.code) === cle(classe))!.code, poids: poidsOuVide(r?.poids, `Poids de ${nom}`), note: mot(r?.note, 120) })
   }
+  const lots: LotMission[] = []
+  for (const l of (Array.isArray(brut.lots) ? (brut.lots as Record<string, unknown>[]) : []).slice(0, 600)) {
+    const nom = mot(l?.nom, 120)
+    if (!nom || lots.some((x) => cle(x.nom) === cle(nom))) continue
+    lots.push({ nom, lot: entier(l?.lot, 1, 100000, `Lot par mission de ${nom}`) })
+  }
   const reglagesBruts = (brut.reglages ?? {}) as Record<string, unknown>
   const reglages = {} as Reglages
   for (const def of REGLAGES) {
@@ -113,7 +120,7 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
     if (!Number.isFinite(n) || n < def.min || n > def.max) non(`${def.libelle} : de ${def.min} à ${def.max}.`)
     reglages[def.cle] = def.cle === 'poidsRepli' ? Math.round(n * 100) / 100 : Math.round(n)
   }
-  return { classes, ressources, reglages, source: 'registre' }
+  return { classes, ressources, lots, reglages, source: 'registre' }
 }
 
 /* ───────────────────────── Writes ───────────────────────── */
@@ -139,7 +146,10 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
       if (!article || lu.catalogue.some((a) => a.ombre && cle(a.fr) === cle(nom))) non(`« ${nom} » n’est pas une marchandise du livre de jour.`)
       if (!recetteDe(lu.recettes, article!.fr)) non(TEXTES.sansRecette(article!.fr))
       const quantite = entier(b.quantite, 1, 100000, 'La quantité')
-      const t = traduire({ fr: article!.fr, min: article!.min }, quantite, lu.recettes, m.ponderation)
+      // The units per mission chosen on the demand's note, line by line (key `cleLigne`).
+      const lots: Record<string, number> = {}
+      for (const [k, v] of Object.entries((b.lots && typeof b.lots === 'object' ? b.lots : {}) as Record<string, unknown>).slice(0, 200)) lots[mot(k, 160)] = entier(v, 1, 100000, 'Une quantité par mission')
+      const t = traduire({ fr: article!.fr, min: article!.min }, quantite, lu.recettes, m.ponderation, lots)
       if (!t.ok) non(t.erreur)
       if (!t.ok) throw new Error('unreachable')
       if (t.missions.length > MAX_MISSIONS) non(`Cette demande ferait ${t.missions.length} missions : c’est trop pour un seul feuillet (${MAX_MISSIONS} au plus). Demande moins à la fois.`)
@@ -152,7 +162,7 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
         poids: x.poids ?? '',
         effort: Math.round(x.effort * 100) / 100,
         points: x.points,
-        note: x.type !== 'fabrication' && x.poids === null ? TEXTES.aFixer : '',
+        note: (x.type === 'récolte' || x.intermediaire) && x.poids === null ? TEXTES.aFixer : '',
       }))
       return {
         action,

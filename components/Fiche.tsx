@@ -33,6 +33,8 @@ import {
 import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
 import { Action, En, Icone, Septims } from './Ornements'
+import { contenuMission } from './Missions'
+import type { Action as Droit } from '@/lib/droits'
 
 /*
  * A loose slip laid on the left page (on the whole screen on mobile): a recipe's tree, or the form
@@ -302,6 +304,13 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       return { surtitre: 'Journal du coffre', titre: TITRES_MOUVEMENT[f.lignes[0]?.type] ?? 'Écriture', corps: <DetailMouvement lignes={f.lignes} env={env} /> }
     case 'abandonner':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Abandonner la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer={false} /></Signe> }
+    case 'demande':
+    case 'reglages-missions':
+    case 'classes-missions':
+    case 'matiere-mission': {
+      const c = contenuMission(f, { reg: env.reg, articles: env.articles, chapitres: env.chapitres, icones: env.icones, fermer: env.fermer })
+      return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
+    }
   }
 }
 
@@ -414,7 +423,7 @@ function DetailMouvement({ lignes, env }: { lignes: Mouvement[]; env: Env }) {
 }
 
 /** Forms need a signed member allowed to take the action. */
-function Signe({ env, action, children }: { env: Env; action: ActionRegistre; children: ReactNode }) {
+function Signe({ env, action, children }: { env: Env; action: Droit; children: ReactNode }) {
   const m = env.reg.r.marchand
   if (!m?.identite) {
     return (

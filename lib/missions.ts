@@ -1,5 +1,5 @@
 // Missions (prototype, branch `missions`): a demand for merchandise is translated into small missions —
-// harvests of raw resources, transformations of intermediate products, crafts of the final product —
+// harvests of raw resources, crafts of the intermediate products and of the final product —
 // put out to the caravan as an internal call for tenders. A member takes a mission, gives it back or
 // completes it; completed, its points are credited to them (ledger « Points »).
 //
@@ -12,9 +12,10 @@ import { cle, Cycle, recetteUsage, repartir, type Onglets, type Recette } from '
 
 /* ───────────────────────── Types ───────────────────────── */
 
-export type TypeMission = 'récolte' | 'transformation' | 'fabrication'
+/** Two kinds only (Ludo, 2026-10-28): crafting an intermediate (Cuir from Peaux) is a « fabrication » too. */
+export type TypeMission = 'récolte' | 'fabrication'
 export type StatutMission = 'ouverte' | 'en cours' | 'accomplie'
-export const TYPES_MISSION: TypeMission[] = ['récolte', 'transformation', 'fabrication']
+export const TYPES_MISSION: TypeMission[] = ['récolte', 'fabrication']
 
 /** An effort class: a weight per unit (effort units); null = « à fixer ». */
 export type Classe = { code: string; nom: string; poids: number | null; note: string }
@@ -28,7 +29,7 @@ export type Reglages = {
   maxEnCours: number
   /** Objects per crafting mission of the final product. */
   objetsParFabrication: number
-  /** Share of the article's floor price × quantity paid to harvests and transformations (%). */
+  /** Share of the article's floor price × quantity paid to harvests and intermediates' crafts (%). */
   partRessources: number
   /** Share of the floor price × quantity paid to the final crafts (%). */
   partFabrication: number
@@ -36,8 +37,15 @@ export type Reglages = {
   poidsRepli: number
 }
 
+/**
+ * How many units one mission holds for an item, set by hand (« Blé par 40 », « Bière par 20 »): it
+ * overrides the effort-budget sizing of a harvest or of an intermediate's craft, and the « objets par
+ * mission » of the final product's craft. Rows « lot » of the Pondération tab (the number in its « Poids » column).
+ */
+export type LotMission = { nom: string; lot: number }
+
 /** `source`: read from the registre, or the built-in defaults (tab empty, or a script before v3m). */
-export type Ponderation = { classes: Classe[]; ressources: Assignation[]; reglages: Reglages; source: 'registre' | 'defaut' }
+export type Ponderation = { classes: Classe[]; ressources: Assignation[]; lots: LotMission[]; reglages: Reglages; source: 'registre' | 'defaut' }
 
 export type Demande = {
   numero: string
@@ -149,14 +157,14 @@ export const REGLAGES: { cle: keyof Reglages; libelle: string; defaut: number; m
   { cle: 'budget', libelle: 'Effort par mission', defaut: 120, min: 1, max: 100000, note: 'unités d’effort d’une courte session de jeu' },
   { cle: 'maxEnCours', libelle: 'Missions en cours par membre', defaut: 5, min: 1, max: 99, note: 'au-delà, il faut en accomplir ou en rendre' },
   { cle: 'objetsParFabrication', libelle: 'Objets par mission de fabrication', defaut: 10, min: 1, max: 10000, note: 'pour le produit final' },
-  { cle: 'partRessources', libelle: 'Part ressources (% du plancher)', defaut: 75, min: 0, max: 100, note: 'récoltes et transformations, au prorata de l’effort' },
-  { cle: 'partFabrication', libelle: 'Part fabrication (% du plancher)', defaut: 5, min: 0, max: 100, note: 'missions de fabrication du produit final' },
+  { cle: 'partRessources', libelle: 'Part ressources (% du plancher)', defaut: 75, min: 0, max: 100, note: 'récoltes et fabrications d’intermédiaires, au prorata de l’effort' },
+  { cle: 'partFabrication', libelle: 'Part fabrication (% du plancher)', defaut: 5, min: 0, max: 100, note: 'fabrications du produit final' },
   { cle: 'poidsRepli', libelle: 'Poids de repli (poids à fixer)', defaut: 4, min: 0.1, max: 1000, note: 'taille les missions des ressources sans poids' },
 ]
 
 export const REGLAGES_DEFAUT = Object.fromEntries(REGLAGES.map((r) => [r.cle, r.defaut])) as Reglages
 
-export const PONDERATION_DEFAUT: Ponderation = { classes: CLASSES_DEFAUT, ressources: ASSIGNATIONS_DEFAUT, reglages: REGLAGES_DEFAUT, source: 'defaut' }
+export const PONDERATION_DEFAUT: Ponderation = { classes: CLASSES_DEFAUT, ressources: ASSIGNATIONS_DEFAUT, lots: [], reglages: REGLAGES_DEFAUT, source: 'defaut' }
 
 /* ───────────────────────── In-character texts ───────────────────────── */
 
@@ -172,8 +180,8 @@ export const TEXTES = {
   pasLaTienne: 'Cette mission n’est pas entre tes pattes.',
 }
 
-export const VERBES: Record<TypeMission, string> = { récolte: 'Récolter', transformation: 'Façonner', fabrication: 'Fabriquer' }
-export const ICONES_TYPES: Record<TypeMission, string> = { récolte: 'sickle', transformation: 'hammer-drop', fabrication: 'anvil-impact' }
+export const VERBES: Record<TypeMission, string> = { récolte: 'Récolter', fabrication: 'Fabriquer' }
+export const ICONES_TYPES: Record<TypeMission, string> = { récolte: 'sickle', fabrication: 'anvil-impact' }
 /** game-icons.net glyphs of the missions (loaded with the book's other icons). */
 export const ICONES_MISSIONS = ['hunting-horn', 'laurel-crown', 'throne-king', 'podium', 'weight-scale', 'treasure-map', 'sickle', 'hammer-drop', 'anvil-impact', 'hand', 'return-arrow', 'check-mark']
 
@@ -207,26 +215,30 @@ function reglagesLus(lignes: Record<string, unknown>[]): Reglages {
 }
 
 /**
- * The pondération from the Pondération tab (rows `{ genre, code, nom, poids, note }`: « classe » rows and
- * « ressource » rows) and the « Réglages missions » tab. An empty tab: the defaults. A class « T »
- * (Transformation) is always there.
+ * The pondération from the Pondération tab (rows `{ genre, code, nom, poids, note }`: « classe » rows,
+ * « ressource » rows, and « lot » rows — an item's units per mission, in the « Poids » column) and the
+ * « Réglages missions » tab. An empty tab: the defaults. A class « T » (Transformation) is always there.
  */
 export function ponderationLue(lignes: Record<string, unknown>[] = [], reglages: Record<string, unknown>[] = []): Ponderation {
   const classes: Classe[] = []
   const ressources: Assignation[] = []
+  const lots: LotMission[] = []
   for (const l of lignes) {
     const genre = cle(texte(l.genre))
     const code = texte(l.code)
     const nom = texte(l.nom)
-    if (genre.startsWith('class')) {
+    if (genre.startsWith('lot')) {
+      const n = Math.round(nombre(l.poids) ?? nombre(l.code) ?? 0)
+      if (nom && n >= 1 && !lots.some((x) => cle(x.nom) === cle(nom))) lots.push({ nom, lot: Math.min(100000, n) })
+    } else if (genre.startsWith('class')) {
       if (code && !classes.some((c) => cle(c.code) === cle(code))) classes.push({ code, nom: nom || code, poids: nombre(l.poids), note: texte(l.note) })
     } else if (nom && !ressources.some((r) => cle(r.nom) === cle(nom))) {
       ressources.push({ nom, classe: code, poids: nombre(l.poids), note: texte(l.note) })
     }
   }
-  if (!classes.length && !ressources.length) return { ...PONDERATION_DEFAUT, reglages: reglagesLus(reglages) }
+  if (!classes.length && !ressources.length) return { ...PONDERATION_DEFAUT, lots, reglages: reglagesLus(reglages), source: lots.length ? 'registre' : 'defaut' }
   if (!classes.some((c) => cle(c.code) === cle(CODE_TRANSFORMATION))) classes.push(CLASSES_DEFAUT.find((c) => c.code === CODE_TRANSFORMATION)!)
-  return { classes, ressources, reglages: reglagesLus(reglages), source: 'registre' }
+  return { classes, ressources, lots, reglages: reglagesLus(reglages), source: 'registre' }
 }
 
 /** The pondération as the tabs' rows (what 'ponderation' writes, and the seed of a first demand). */
@@ -235,6 +247,7 @@ export function ponderationEnLignes(p: Ponderation) {
     lignes: [
       ...p.classes.map((c) => ({ genre: 'classe', code: c.code, nom: c.nom, poids: c.poids ?? '', note: c.note })),
       ...p.ressources.map((r) => ({ genre: 'ressource', code: r.classe, nom: r.nom, poids: r.poids ?? '', note: r.note })),
+      ...p.lots.map((l) => ({ genre: 'lot', code: '', nom: l.nom, poids: l.lot, note: 'par mission' })),
     ],
     reglages: REGLAGES.map((r) => ({ reglage: r.libelle, valeur: p.reglages[r.cle], note: r.note })),
   }
@@ -270,7 +283,32 @@ export type MissionPrevue = {
   points: number
   /** The class's code (null: none, « à fixer »). */
   classe: string | null
+  /** Its line of the demand (`cleLigne`): the missions of one item and one type. */
+  ligne: string
+  /** A craft of an intermediate product (paid from the resources' share, by effort), not of the final one. */
+  intermediaire?: boolean
 }
+
+/** One line of a demand: every mission of one item and one type, and how many units each one holds. */
+export type LigneDemande = {
+  cle: string
+  type: TypeMission
+  objet: string
+  /** Units in all (whole crafts × yield for a craft). */
+  total: number
+  /** Units per mission used; `defaut`: what the pondération (or the effort budget) gives. */
+  lot: number
+  defaut: number
+  /** Where the lot comes from: chosen on the demand, the pondération's « lot », the effort budget, the settings. */
+  source: 'demande' | 'ponderation' | 'effort' | 'reglage'
+  /** Units per craft (1 for a harvest): a lot is rounded down to whole crafts. */
+  rendement: number
+  /** A craft of an intermediate product. */
+  intermediaire: boolean
+}
+
+/** A demand's line key: « récolte|ble ». */
+export const cleLigne = (type: TypeMission, objet: string) => `${type}|${cle(objet)}`
 
 export type Traduction =
   | {
@@ -286,6 +324,8 @@ export type Traduction =
       aFixer: string[]
       /** Every raw resource needed, in all (before splitting). */
       brut: { nom: string; quantite: number }[]
+      /** One line per item and type, with its lot per mission (editable on the demand). */
+      lignes: LigneDemande[]
     }
   | { ok: false; erreur: string }
 
@@ -318,14 +358,27 @@ export function decouper(total: number, lot: number, arrondir = true): number[] 
   return Array.from({ length: k }, (_, i) => base + (i < plus ? 1 : 0))
 }
 
+/** Exact packs: as many full lots as fit, then the rest (250 by 40 → 40 ×6, 10). */
+export function paquets(total: number, lot: number): number[] {
+  const t = Math.max(0, Math.round(total))
+  const l = Math.max(1, Math.floor(lot))
+  const n = Math.floor(t / l)
+  return [...Array(n).fill(l), ...(t % l ? [t % l] : [])]
+}
+
 /**
  * Translates a demand (`quantite` of `article`) into missions. The final product follows its recipe;
  * every ingredient that has a recipe of its own (and is not put in a raw class by the pondération) is an
- * intermediate product, made by transformation missions; the rest are raw resources, harvested. Needs are
+ * intermediate product, made by fabrication missions of its own; the rest are raw resources, harvested. Needs are
  * summed over the whole tree before whole crafts are counted (Cuir needed by the gloves and by their
  * leather strips is tanned once). Throws nothing: a loop of recipes or a missing recipe is an `erreur`.
  */
-export function traduire(article: { fr: string; min: number | null }, quantite: number, recettes: Recette[], p: Ponderation): Traduction {
+/**
+ * `lots`: units per mission chosen on the demand for some lines (key `cleLigne`), over the pondération's
+ * « lot » of the item, over the effort budget (harvest, intermediate) or the settings (final craft). A lot
+ * set by hand cuts exact packs (250 Blé by 40 → 40 ×6 + 10); the computed sizing keeps its even split.
+ */
+export function traduire(article: { fr: string; min: number | null }, quantite: number, recettes: Recette[], p: Ponderation, lots: Record<string, number> = {}): Traduction {
   const Q = Math.max(0, Math.round(quantite))
   const racine = recetteDe(recettes, article.fr)
   if (!racine) return { ok: false, erreur: TEXTES.sansRecette(article.fr) }
@@ -380,7 +433,25 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
   const missions: MissionPrevue[] = []
   const aFixer = new Set<string>()
   const brut: { nom: string; quantite: number }[] = []
+  const lignes: LigneDemande[] = []
   const budget = reglages.budget
+  const lotsPonderation = new Map((p.lots ?? []).map((l) => [cle(l.nom), l.lot]))
+  /**
+   * The units per mission of a line, and how it is cut: a lot set by hand (on the demand, or in the
+   * pondération) cuts exact packs, the computed one splits evenly. Lots are whole crafts (at least one).
+   */
+  const couper = (type: TypeMission, nom: string, total: number, rend: number, calcule: number, sourceCalcul: LigneDemande['source']): number[] => {
+    const k = cleLigne(type, nom)
+    const parCraft = (u: number) => Math.max(1, Math.floor(u / rend)) * rend
+    const pond = lotsPonderation.get(cle(nom))
+    const defaut = parCraft(pond ?? calcule)
+    const choisi = lots[k] && lots[k] >= 1 ? parCraft(lots[k]) : null
+    const lot = choisi ?? defaut
+    lignes.push({ cle: k, type, objet: nom, total, lot, defaut, source: choisi ? 'demande' : pond ? 'ponderation' : sourceCalcul, rendement: rend, intermediaire: type === 'fabrication' && cle(nom) !== kRacine })
+    const crafts = Math.round(total / rend)
+    const parts = choisi || pond ? paquets(crafts, lot / rend) : decouper(crafts, lot / rend, rend === 1)
+    return parts.map((n) => n * rend)
+  }
   for (const k of ordre) {
     if (k === kRacine) continue
     const nom = noms.get(k)!
@@ -392,37 +463,40 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
     if (r) {
       // Whole crafts: a mission holds as many crafts as its effort allows (at least one).
       const rend = Math.max(1, r.rendement)
-      const parMission = Math.max(1, Math.floor(Math.floor(budget / w) / rend))
-      for (const n of decouper(fournees.get(k) ?? 0, parMission, rend === 1)) missions.push({ type: 'transformation', objet: nom, quantite: n * rend, poids, effort: n * rend * w, points: 0, classe })
+      for (const q of couper('fabrication', nom, (fournees.get(k) ?? 0) * rend, rend, Math.floor(budget / w), 'effort'))
+        missions.push({ type: 'fabrication', intermediaire: true, objet: nom, quantite: q, poids, effort: q * w, points: 0, classe, ligne: cleLigne('fabrication', nom) })
     } else {
       const total = Math.ceil((besoin.get(k) ?? 0) - 1e-9)
       if (total <= 0) continue
       brut.push({ nom, quantite: total })
-      for (const n of decouper(total, Math.max(1, Math.floor(budget / w)))) missions.push({ type: 'récolte', objet: nom, quantite: n, poids, effort: n * w, points: 0, classe })
+      for (const q of couper('récolte', nom, total, 1, Math.max(1, Math.floor(budget / w)), 'effort'))
+        missions.push({ type: 'récolte', objet: nom, quantite: q, poids, effort: q * w, points: 0, classe, ligne: cleLigne('récolte', nom) })
     }
   }
   const rend0 = Math.max(1, racine.rendement)
-  const parFabrication = Math.max(1, Math.floor(reglages.objetsParFabrication / rend0))
-  for (const n of decouper(fournees.get(kRacine) ?? 0, parFabrication, rend0 === 1))
-    missions.push({ type: 'fabrication', objet: racine.produit, quantite: n * rend0, poids: null, effort: 0, points: 0, classe: null })
+  for (const q of couper('fabrication', racine.produit, (fournees.get(kRacine) ?? 0) * rend0, rend0, reglages.objetsParFabrication, 'reglage'))
+    missions.push({ type: 'fabrication', objet: racine.produit, quantite: q, poids: null, effort: 0, points: 0, classe: null, ligne: cleLigne('fabrication', racine.produit) })
 
   // Points: the floor price × quantity, the resources' share split by effort, the crafting share by objects.
   const plancher = article.min
   const pointsRessources = plancher ? Math.round((plancher * Q * reglages.partRessources) / 100) : 0
   const pointsFabrication = plancher ? Math.round((plancher * Q * reglages.partFabrication) / 100) : 0
-  const amont = missions.filter((m) => m.type !== 'fabrication')
+  // Harvests and the crafts of intermediates share the resources' part by effort; the final crafts, the crafting part.
+  const amont = missions.filter((m) => m.type === 'récolte' || m.intermediaire)
   repartir(pointsRessources, amont.map((m) => m.effort)).forEach((v, i) => (amont[i].points = v))
-  const aval = missions.filter((m) => m.type === 'fabrication')
+  const aval = missions.filter((m) => m.type === 'fabrication' && !m.intermediaire)
   repartir(pointsFabrication, aval.map((m) => m.quantite)).forEach((v, i) => (aval[i].points = v))
 
-  const rang: Record<TypeMission, number> = { récolte: 0, transformation: 1, fabrication: 2 }
-  missions.sort((a, b) => rang[a.type] - rang[b.type])
-  return { ok: true, article: article.fr, quantite: Q, plancher, recette: racine, missions, pointsRessources, pointsFabrication, aFixer: [...aFixer], brut }
+  const rang = (m: MissionPrevue) => (m.type === 'récolte' ? 0 : m.intermediaire ? 1 : 2)
+  missions.sort((a, b) => rang(a) - rang(b))
+  lignes.sort((a, b) => (a.type === 'récolte' ? 0 : a.intermediaire ? 1 : 2) - (b.type === 'récolte' ? 0 : b.intermediaire ? 1 : 2))
+  return { ok: true, article: article.fr, quantite: Q, plancher, recette: racine, missions, pointsRessources, pointsFabrication, aFixer: [...aFixer], brut, lignes }
 }
 
 /* ───────────────────────── Rows read from the sheet ───────────────────────── */
 
-const TYPES: Record<string, TypeMission> = { recolte: 'récolte', transformation: 'transformation', fabrication: 'fabrication' }
+// « Transformation » (the prototype's first wording) reads as a fabrication.
+const TYPES: Record<string, TypeMission> = { recolte: 'récolte', transformation: 'fabrication', fabrication: 'fabrication' }
 const statutLu = (s: unknown): StatutMission => {
   const k = cle(texte(s))
   return k.startsWith('encours') || k.startsWith('prise') ? 'en cours' : k.startsWith('accompli') ? 'accomplie' : 'ouverte'

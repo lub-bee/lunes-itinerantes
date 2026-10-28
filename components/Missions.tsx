@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
-import type { Article, PageChapitre, PageMissions, PagePatriarche, PagePoints } from '@/lib/types'
+import type { Article, PageMissions, PagePatriarche, PagePoints } from '@/lib/types'
 import { dateTamrielique, prix } from '@/lib/format'
 import { cle, type Recette } from '@/lib/missives'
 import {
@@ -18,12 +18,13 @@ import {
   TEXTES,
   traduire,
   TYPES_MISSION,
+  VERBES,
+  type LigneDemande,
   type ActionMission,
   type Assignation,
   type Classe,
   type DonneesMissions,
   type Mission,
-  type MissionPrevue,
   type Ponderation,
   type TypeMission,
 } from '@/lib/missions'
@@ -33,16 +34,20 @@ import { Sceller } from './Fiche'
 
 /*
  * The book of Missions (prototype): the call for missions (open ones to take, the member's own to give
- * back or complete), the member's points, and the Patriarch's table — demands for merchandise with a live
- * preview of the missions they make, every member's points, the pondération's editor. One hook holds the
- * missions' data and the state the left and right pages share (filter, draft demand, pondération edited).
+ * back or complete), the member's points, and the Patriarch's table — demands for merchandise, every
+ * member's points, the pondération. The pages only show; every form is a note laid over the left page
+ * (components/Fiche.tsx): the demand with its live, line-by-line preview, the settings, the classes, one
+ * item's class / weight / lot. One hook holds the missions' data, the filter and the demand's draft.
  */
 
 /* ───────────────────────── The hook ───────────────────────── */
 
 type Reponse = { ok: boolean; message: string; numero?: string }
 type Prevision = { id: number; prevoir: (d: DonneesMissions) => DonneesMissions }
-export type Brouillon = { article: string; quantite: string; note: string }
+/** The demand being written on its note; `lots`: the units per mission typed for some lines (key `cleLigne`). */
+export type Brouillon = { article: string; quantite: string; note: string; lots: Record<string, string> }
+
+export const BROUILLON_VIDE: Brouillon = { article: '', quantite: '', note: '', lots: {} }
 
 const ECHEC = "Le coursier n'est pas revenu. Rien n'a été consigné : réessaie."
 const FERME = "Le registre des missions ne répond pas : le coursier n'a pu l'ouvrir. Réessaie dans un moment."
@@ -54,10 +59,7 @@ export function useMissions(signe: string | null) {
   /** The last answer of the registre to a gesture (shown on the missions' pages). */
   const [message, setMessage] = useState<{ ok: boolean; texte: string; n: number } | null>(null)
   const [filtre, setFiltre] = useState<TypeMission | 'toutes'>('toutes')
-  const [brouillon, setBrouillon] = useState<Brouillon>({ article: '', quantite: '', note: '' })
-  /** The pondération being edited (null: not touched, the registre's is shown). */
-  const [edition, setEdition] = useState<Ponderation | null>(null)
-  const [scelle, setScelle] = useState<'repos' | 'ecrit' | 'scelle'>('repos')
+  const [brouillon, setBrouillon] = useState<Brouillon>(BROUILLON_VIDE)
   const compteur = useRef(0)
   const version = useRef(0)
 
@@ -126,7 +128,7 @@ export function useMissions(signe: string | null) {
     }, base)
   }, [base, previsions])
 
-  return { donnees, erreur, message, relire: lire, agir, filtre, setFiltre, brouillon, setBrouillon, edition, setEdition, scelle, setScelle }
+  return { donnees, erreur, message, relire: lire, agir, filtre, setFiltre, brouillon, setBrouillon }
 }
 
 export type EtatMissions = ReturnType<typeof useMissions>
@@ -182,9 +184,10 @@ function GlypheType({ type, icones }: { type: TypeMission; icones: Record<string
 const pts = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} pt${Math.abs(n) > 1 ? 's' : ''}`
 
 /** The weight a mission was sized with: « poids 2 », or « poids à fixer » (none for a craft of the final product). */
-function poids(m: Pick<Mission, 'type' | 'poids'>): ReactNode {
-  if (m.type === 'fabrication') return null
-  return m.poids === null ? <span className="a-fixer">{TEXTES.aFixer}</span> : <span>poids {prix(m.poids)}</span>
+function poids(m: Pick<Mission, 'type' | 'poids'> & { intermediaire?: boolean; note?: string }): ReactNode {
+  if (m.poids !== null) return <span>poids {prix(m.poids)}</span>
+  // A harvest (or an intermediate's craft) without weight; the final product's crafts have none.
+  return m.type === 'récolte' || m.intermediaire || m.note === TEXTES.aFixer ? <span className="a-fixer">{TEXTES.aFixer}</span> : null
 }
 
 /** A mission's small line: its parts, the empty ones left out, separated by a middle dot. */
@@ -283,7 +286,7 @@ function FiltreMissions({ reg }: { reg: CtxRegistre }) {
   const m = reg.m!
   const ouvertes = m.donnees!.missions.filter((x) => x.statut === 'ouverte')
   const choix: (TypeMission | 'toutes')[] = ['toutes', ...TYPES_MISSION]
-  const nom = { toutes: 'Toutes', récolte: 'Récoltes', transformation: 'Transformations', fabrication: 'Fabrications' } as const
+  const nom = { toutes: 'Toutes', récolte: 'Récoltes', fabrication: 'Fabrications' } as const
   return (
     <div className="filtre-missions" role="group" aria-label="Filtrer les missions ouvertes">
       {choix.map((c) => (
@@ -336,7 +339,7 @@ export function DroiteMissions({ reg, icones, interactif, citation }: { reg?: Ct
                 <span className="mission-texte">
                   <span className="mission-intitule">
                     {intitule(x)}
-                    {g.length > 1 && <span className="mission-fois" title={`${g.length} missions pareilles`}> ×{g.length}</span>}
+                    {g.length > 1 && <span className="mission-fois"> · {g.length} missions pareilles</span>}
                   </span>
                   <Meta parts={[dm && `pour ${quantite(dm.quantite)} ${dm.article}`, poids(x)]} />
                 </span>
@@ -441,33 +444,19 @@ export function DroitePoints({ reg }: { reg?: CtxRegistre }) {
 
 /* ───────────────────────── The Patriarch's table ───────────────────────── */
 
-type Marchandise = Article & { chapitre: string }
+/** A catalogue chapter of the day book and the ids of its articles (as the slips receive them). */
+type Chapitre = { id: string; titre: string; ids: string[] }
 
 /** The day book's merchandise that has a recipe (what a demand can ask for), by chapter. */
-function marchandises(chapitres: PageChapitre[], recettes: Recette[]): { titre: string; articles: Marchandise[] }[] {
+function marchandises(chapitres: Chapitre[], articles: Article[], recettes: Recette[]): { titre: string; articles: Article[] }[] {
   return chapitres
-    .filter((c) => c.partie === 'marchandises')
-    .map((c) => ({ titre: c.titre, articles: c.articles.filter((a) => !a.ombre && recetteDe(recettes, a.fr)).map((a) => ({ ...a, chapitre: c.id })) }))
+    .map((c) => ({ titre: c.titre, articles: articles.filter((a) => c.ids.includes(a.id) && !a.ombre && recetteDe(recettes, a.fr)) }))
     .filter((g) => g.articles.length)
 }
 
-/** The preview of the draft demand (null: nothing chosen yet). */
-function useApercu(reg: CtxRegistre | undefined, chapitres: PageChapitre[]) {
-  const m = reg?.m
-  const recettes = reg?.r.donnees?.recettes
-  const ponderation = m?.donnees?.ponderation
-  const b = m?.brouillon
-  return useMemo(() => {
-    if (!b || !recettes || !ponderation || !b.article) return null
-    const article = chapitres.flatMap((c) => c.articles).find((a) => cle(a.fr) === cle(b.article))
-    const q = Number(b.quantite)
-    if (!article || !Number.isInteger(q) || q <= 0) return null
-    return traduire(article, q, recettes, ponderation)
-  }, [b, recettes, ponderation, chapitres])
-}
-
-export function GauchePatriarche({ page, reg, icones, compact, chapitres }: { page: PagePatriarche; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; chapitres: PageChapitre[] }) {
+export function GauchePatriarche({ page, reg, icones, compact }: { page: PagePatriarche; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
   const d = reg?.m?.donnees
+  const droits = reg?.r.marchand?.droits
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
@@ -477,124 +466,38 @@ export function GauchePatriarche({ page, reg, icones, compact, chapitres }: { pa
           <Signature reg={reg} />
           <Inactif reg={reg} />
           <Message reg={reg} />
-          {page.vue === 'demandes' && <FormDemande reg={reg} icones={icones} chapitres={chapitres} />}
+          {page.vue === 'demandes' && (
+            <>
+              {droits?.demande !== false && (
+                <div className="gestes">
+                  <Geste icone={icones['throne-king']} onClick={() => reg.ouvrir({ genre: 'demande' })}>
+                    Demander une marchandise
+                  </Geste>
+                </div>
+              )}
+              <p className="decompte">
+                {d.demandes.length
+                  ? `${d.demandes.length} demande${d.demandes.length > 1 ? 's' : ''} scellée${d.demandes.length > 1 ? 's' : ''}, ${d.missions.filter((x) => x.statut === 'ouverte').length} mission${d.missions.filter((x) => x.statut === 'ouverte').length > 1 ? 's' : ''} ouverte${d.missions.filter((x) => x.statut === 'ouverte').length > 1 ? 's' : ''}`
+                  : 'Nulle demande encore : la caravane attend la parole du Patriarche.'}
+              </p>
+            </>
+          )}
           {page.vue === 'points' && <ResumePoints reg={reg} />}
-          {page.vue === 'ponderation' && <Reglages reg={reg} icones={icones} />}
+          {page.vue === 'ponderation' && <ResumeReglages reg={reg} icones={icones} />}
         </>
       )}
     </>
   )
 }
 
-export function DroitePatriarche({ page, reg, icones, chapitres }: { page: PagePatriarche; reg?: CtxRegistre; icones: Record<string, string>; chapitres: PageChapitre[] }) {
+export function DroitePatriarche({ page, reg }: { page: PagePatriarche; reg?: CtxRegistre }) {
   if (!reg?.m?.donnees?.relie) return null
-  if (page.vue === 'demandes') return <Demandes reg={reg} icones={icones} chapitres={chapitres} />
+  if (page.vue === 'demandes') return <Demandes reg={reg} />
   if (page.vue === 'points') return <TableauPoints reg={reg} />
-  return <Classes reg={reg} />
+  return <VuePonderation reg={reg} />
 }
 
-/* ── Demands ── */
-
-function FormDemande({ reg, icones, chapitres }: { reg: CtxRegistre; icones: Record<string, string>; chapitres: PageChapitre[] }) {
-  const m = reg.m!
-  const d = m.donnees!
-  const recettes = reg.r.donnees?.recettes ?? []
-  const groupes = useMemo(() => marchandises(chapitres, recettes), [chapitres, recettes])
-  const apercu = useApercu(reg, chapitres)
-  const b = m.brouillon
-  const changer = (x: Partial<typeof b>) => m.setBrouillon({ ...b, ...x })
-  const peutDemander = reg.r.marchand?.droits?.demande !== false && Boolean(moiDe(reg))
-  const sceller = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!apercu?.ok || m.scelle !== 'repos') return
-    m.setScelle('ecrit')
-    const r = await m.agir('demande', { article: b.article, quantite: Number(b.quantite), note: b.note })
-    if (r.ok) {
-      m.setScelle('scelle')
-      setTimeout(() => m.setScelle('repos'), 1100)
-      m.setBrouillon({ article: '', quantite: '', note: '' })
-    } else m.setScelle('repos')
-  }
-  if (!reg.r.donnees) return <p className="registre-ferme attente-encre">Le scribe déroule le Livre des Recettes…</p>
-  return (
-    <form className="fiche-form demande-form" onSubmit={sceller}>
-      <h3 className="titre-section">Demander une marchandise</h3>
-      <label className="fiche-champ">
-        <span>Marchandise</span>
-        <select value={b.article} onChange={(e) => changer({ article: e.target.value })}>
-          <option value="">— choisir dans le catalogue —</option>
-          {groupes.map((g) => (
-            <optgroup key={g.titre} label={g.titre}>
-              {g.articles.map((a) => (
-                <option key={a.id} value={a.fr}>
-                  {a.fr}
-                  {a.min !== null ? ` (plancher ${prix(a.min)})` : ''}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      <div className="fiche-deux">
-        <label className="fiche-champ">
-          <span>Quantité</span>
-          <input type="text" inputMode="numeric" value={b.quantite} placeholder="50" onChange={(e) => changer({ quantite: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
-        </label>
-        <label className="fiche-champ">
-          <span>Note</span>
-          <input type="text" value={b.note} placeholder="pour la foire de Blancherive" maxLength={200} onChange={(e) => changer({ note: e.target.value })} />
-        </label>
-      </div>
-      {apercu && !apercu.ok && <p className="message-encre erreur">{apercu.erreur}</p>}
-      {apercu?.ok && (
-        <div className="fiche-partage demande-resume">
-          <p>
-            <strong>{apercu.missions.length}</strong> mission{apercu.missions.length > 1 ? 's' : ''} : {apercu.missions.filter((x) => x.type === 'récolte').length} de récolte,{' '}
-            {apercu.missions.filter((x) => x.type === 'transformation').length} de transformation, {apercu.missions.filter((x) => x.type === 'fabrication').length} de fabrication.
-          </p>
-          {apercu.plancher !== null ? (
-            <p>
-              Plancher {prix(apercu.plancher)} × {quantite(apercu.quantite)} : <strong>{pts(apercu.pointsRessources)}</strong> pour les ressources ({d.ponderation.reglages.partRessources} %),{' '}
-              <strong>{pts(apercu.pointsFabrication)}</strong> pour la fabrication ({d.ponderation.reglages.partFabrication} %).
-            </p>
-          ) : (
-            <p className="a-fixer">Cette marchandise n’a pas de plancher : ses missions ne rapportent aucun point.</p>
-          )}
-          {apercu.aFixer.length > 0 && (
-            <p className="a-fixer">
-              Poids à fixer : {apercu.aFixer.join(', ')} (taillées au poids de repli, {prix(d.ponderation.reglages.poidsRepli)}).
-            </p>
-          )}
-        </div>
-      )}
-      {peutDemander && (
-        <div className="fiche-pied">
-          <Sceller etat={m.scelle} icones={icones} disabled={!apercu?.ok}>
-            Sceller la demande
-          </Sceller>
-        </div>
-      )}
-    </form>
-  )
-}
-
-function LigneApercu({ x, n, icones }: { x: MissionPrevue; n: number; icones: Record<string, string> }) {
-  return (
-    <li className="mission apercu">
-      <GlypheType type={x.type} icones={icones} />
-      <span className="mission-texte">
-        <span className="mission-intitule">
-          {intitule(x)}
-          {n > 1 && <span className="mission-fois" title={`${n} missions pareilles`}> ×{n}</span>}
-        </span>
-        <Meta parts={[poids(x), x.type !== 'fabrication' && `effort ${prix(Math.round(x.effort))}`]} />
-      </span>
-      <strong className="mission-points">{pts(x.points)}</strong>
-    </li>
-  )
-}
-
-/** Identical missions in a row, together (« ×5 »). */
+/** Identical missions in a row, together (« 5 missions »). */
 function pareilles<T extends Pick<Mission, 'type' | 'objet' | 'quantite' | 'points'>>(xs: T[]): T[][] {
   const res: T[][] = []
   for (const x of xs) {
@@ -605,29 +508,13 @@ function pareilles<T extends Pick<Mission, 'type' | 'objet' | 'quantite' | 'poin
   return res
 }
 
-function Demandes({ reg, icones, chapitres }: { reg: CtxRegistre; icones: Record<string, string>; chapitres: PageChapitre[] }) {
+/* ── Demands ── */
+
+function Demandes({ reg }: { reg: CtxRegistre }) {
   const d = reg.m!.donnees!
-  const apercu = useApercu(reg, chapitres)
   const demandes = [...d.demandes].sort((a, b) => b.horodatage.localeCompare(a.horodatage))
   return (
     <div className="demandes-droite">
-      {apercu?.ok && (
-        <>
-          <h3 className="titre-section">Aperçu des missions</h3>
-          <p className="note-encre">
-            {quantite(apercu.quantite)} {apercu.article}, par la recette n° {apercu.recette.variante}
-            {apercu.brut.length > 0 && <> — matières en tout : {apercu.brut.map((x) => `${quantite(x.quantite)} ${x.nom}`).join(', ')}</>}.
-          </p>
-          <ul className="missions-liste apercu-missions">
-            {pareilles(apercu.missions).map((g, i) => (
-              <LigneApercu key={i} x={g[0]} n={g.length} icones={icones} />
-            ))}
-          </ul>
-          <p className="apercu-total">
-            En tout <strong>{pts(apercu.missions.reduce((t, x) => t + x.points, 0))}</strong>
-          </p>
-        </>
-      )}
       <h3 className="titre-section">Demandes scellées</h3>
       {demandes.length ? (
         <ul className="liste-demandes">
@@ -660,15 +547,184 @@ function Demandes({ reg, icones, chapitres }: { reg: CtxRegistre; icones: Record
   )
 }
 
+/** The sealing of a note: the scribe writes, the seal is stamped, the note goes. */
+function useScelle(fermer: () => void) {
+  const [etat, setEtat] = useState<'repos' | 'ecrit' | 'scelle'>('repos')
+  const [erreur, setErreur] = useState<string | null>(null)
+  const envoyer = async (f: () => Promise<Reponse>, apres?: () => void) => {
+    if (etat !== 'repos') return
+    setEtat('ecrit')
+    setErreur(null)
+    const r = await f()
+    if (!r.ok) {
+      setEtat('repos')
+      setErreur(r.message)
+      return
+    }
+    setEtat('scelle')
+    setTimeout(() => {
+      apres?.()
+      fermer()
+    }, 1100)
+  }
+  return { etat, erreur, envoyer }
+}
+
+const SOURCES: Record<LigneDemande['source'], string> = { demande: 'choisi ici', ponderation: 'lot de la pondération', effort: 'selon l’effort', reglage: 'réglage' }
+
+/** The demand note: merchandise, quantity, and every line of missions with its lot per mission, live. */
+function FicheDemande({ reg, articles, chapitres, icones, fermer }: EnvMission) {
+  const m = reg.m!
+  const d = m.donnees
+  const recettes = useMemo(() => reg.r.donnees?.recettes ?? [], [reg.r.donnees?.recettes])
+  const groupes = useMemo(() => marchandises(chapitres, articles, recettes), [chapitres, articles, recettes])
+  const b = m.brouillon
+  const changer = (x: Partial<Brouillon>) => m.setBrouillon({ ...b, ...x })
+  const lots = useMemo(() => {
+    const res: Record<string, number> = {}
+    for (const [k, v] of Object.entries(b.lots)) {
+      const n = Number(v)
+      if (Number.isInteger(n) && n >= 1) res[k] = n
+    }
+    return res
+  }, [b.lots])
+  const apercu = useMemo(() => {
+    const article = articles.find((a) => !a.ombre && cle(a.fr) === cle(b.article))
+    const q = Number(b.quantite)
+    if (!article || !d || !Number.isInteger(q) || q <= 0) return null
+    return traduire(article, q, recettes, d.ponderation, lots)
+  }, [articles, b.article, b.quantite, d, recettes, lots])
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  if (!d) return null
+  const sceller = (e: FormEvent) => {
+    e.preventDefault()
+    if (!apercu?.ok) return
+    envoyer(
+      () => m.agir('demande', { article: b.article, quantite: Number(b.quantite), note: b.note, lots }),
+      () => m.setBrouillon(BROUILLON_VIDE),
+    )
+  }
+  return (
+    <form className="fiche-form demande-form" onSubmit={sceller}>
+      <label className="fiche-champ">
+        <span>Marchandise</span>
+        <select value={b.article} onChange={(e) => changer({ article: e.target.value, lots: {} })}>
+          <option value="">— choisir dans le catalogue —</option>
+          {groupes.map((g) => (
+            <optgroup key={g.titre} label={g.titre}>
+              {g.articles.map((a) => (
+                <option key={a.id} value={a.fr}>
+                  {a.fr}
+                  {a.min !== null ? ` (plancher ${prix(a.min)})` : ''}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <div className="fiche-deux">
+        <label className="fiche-champ">
+          <span>Quantité</span>
+          <input type="text" inputMode="numeric" value={b.quantite} placeholder="50" onChange={(e) => changer({ quantite: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
+        </label>
+        <label className="fiche-champ">
+          <span>Note</span>
+          <input type="text" value={b.note} placeholder="pour la foire de Blancherive" maxLength={200} onChange={(e) => changer({ note: e.target.value })} />
+        </label>
+      </div>
+      {apercu && !apercu.ok && <p className="message-encre erreur">{apercu.erreur}</p>}
+      {apercu?.ok && (
+        <>
+          <h3 className="fiche-sous-titre">Les missions, ligne par ligne</h3>
+          <p className="fiche-aide">« Par mission » : ce que tient une mission ; change-le, la ligne se redécoupe.</p>
+          <ul className="lignes-demande">
+            {apercu.lignes.map((l) => {
+              const ms = apercu.missions.filter((x) => x.ligne === l.cle)
+              const choisi = b.lots[l.cle]
+              return (
+                <li key={l.cle} className="ligne-demande">
+                  <GlypheType type={l.type} icones={icones} />
+                  <span className="ligne-demande-nom">
+                    <span className="mission-intitule">
+                      {VERBES[l.type]} {l.objet}
+                    </span>
+                    <span className="mission-meta">
+                      {quantite(l.total)} en tout{l.intermediaire ? ' · intermédiaire' : ''}
+                      {ms[0] && poids(ms[0]) && <> · {poids(ms[0])}</>}
+                    </span>
+                  </span>
+                  <label className="ligne-demande-lot">
+                    <span>par mission</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={choisi ?? String(l.lot)}
+                      aria-label={`${l.objet} : quantité par mission`}
+                      onChange={(e) => changer({ lots: { ...b.lots, [l.cle]: e.target.value.replace(/\D/g, '').slice(0, 6) } })}
+                    />
+                    <em title={`par défaut : ${quantite(l.defaut)}`}>
+                      {l.source === 'demande' ? (
+                        <button type="button" className="lien-encre" onClick={() => { const { [l.cle]: _, ...reste } = b.lots; changer({ lots: reste }) }}>
+                          revenir à {quantite(l.defaut)}
+                        </button>
+                      ) : (
+                        SOURCES[l.source]
+                      )}
+                    </em>
+                  </label>
+                  <span className="ligne-demande-decoupe">
+                    {pareilles(ms).map((g, i) => (
+                      <span key={i}>
+                        {g.length > 1 ? `${g.length} missions` : '1 mission'} de {quantite(g[0].quantite)} <strong>{pts(g[0].points)}</strong>
+                        {g.length > 1 ? ' chacune' : ''}
+                      </span>
+                    ))}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="fiche-partage demande-resume">
+            <p>
+              <strong>{apercu.missions.length}</strong> mission{apercu.missions.length > 1 ? 's' : ''} : {apercu.missions.filter((x) => x.type === 'récolte').length} de récolte,{' '}
+              {apercu.missions.filter((x) => x.type === 'fabrication').length} de fabrication.
+            </p>
+            {apercu.plancher !== null ? (
+              <p>
+                Plancher {prix(apercu.plancher)} × {quantite(apercu.quantite)} : <strong>{pts(apercu.pointsRessources)}</strong> pour les ressources ({d.ponderation.reglages.partRessources} %),{' '}
+                <strong>{pts(apercu.pointsFabrication)}</strong> pour la fabrication ({d.ponderation.reglages.partFabrication} %).
+              </p>
+            ) : (
+              <p className="a-fixer">Cette marchandise n’a pas de plancher : ses missions ne rapportent aucun point.</p>
+            )}
+            {apercu.aFixer.length > 0 && (
+              <p className="a-fixer">
+                Poids à fixer : {apercu.aFixer.join(', ')} (taillées au poids de repli, {prix(d.ponderation.reglages.poidsRepli)}).
+              </p>
+            )}
+          </div>
+        </>
+      )}
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!apercu?.ok}>
+          Sceller la demande
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
 /* ── Every member's points ── */
 
 function ResumePoints({ reg }: { reg: CtxRegistre }) {
   const d = reg.m!.donnees!
   const total = d.points.reduce((t, p) => t + p.points, 0)
   const enJeu = d.missions.filter((m) => m.statut !== 'accomplie').reduce((t, m) => t + m.points, 0)
+  const n = new Set(d.points.map((p) => cle(p.membre))).size
   return (
     <p className="missive-resume">
-      {pts(total)} crédités à {new Set(d.points.map((p) => cle(p.membre))).size} membre{new Set(d.points.map((p) => cle(p.membre))).size > 1 ? 's' : ''}
+      {pts(total)} crédités à {n} membre{n > 1 ? 's' : ''}
       <br />
       {pts(enJeu)} encore en jeu
     </p>
@@ -699,9 +755,9 @@ function TableauPoints({ reg }: { reg: CtxRegistre }) {
   )
 }
 
-/* ── The pondération ── */
+/* ── The pondération: shown on the page, changed on notes ── */
 
-/** Every item the recipes use (raw or intermediate) and every raw material, for the editor. */
+/** Every item the recipes use (raw or intermediate) and every raw material; then the final products. */
 function matieres(reg: CtxRegistre, p: Ponderation) {
   const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
   const noms = new Map<string, string>()
@@ -709,8 +765,291 @@ function matieres(reg: CtxRegistre, p: Ponderation) {
   ;(reg.r.donnees?.ressources ?? []).forEach((r) => ajouter(r.nom))
   recettes.forEach((r) => r.ingredients.forEach((i) => ajouter(i.nom)))
   p.ressources.forEach((r) => ajouter(r.nom))
-  const produits = new Set(recettes.map((r) => cle(r.produit)))
-  return [...noms.values()].map((nom) => ({ nom, intermediaire: produits.has(cle(nom)) })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+  const produits = new Map(recettes.map((r) => [cle(r.produit), r.produit]))
+  const liste = [...noms.values()].map((nom) => ({ nom, intermediaire: produits.has(cle(nom)) })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+  const finis = [...produits.values()].filter((n) => !noms.has(cle(n))).sort((a, b) => a.localeCompare(b, 'fr'))
+  return { liste, finis }
+}
+
+/** A pondération written whole (one call): the registre's, with one change. */
+const graver = (reg: CtxRegistre, p: Ponderation) =>
+  reg.m!.agir('ponderation', { ponderation: { classes: p.classes, ressources: p.ressources, lots: p.lots, reglages: p.reglages } })
+
+const lotDe = (p: Ponderation, nom: string) => p.lots.find((l) => cle(l.nom) === cle(nom))?.lot ?? null
+
+function ResumeReglages({ reg, icones }: { reg: CtxRegistre; icones: Record<string, string> }) {
+  const d = reg.m!.donnees!
+  const p = d.ponderation
+  const peut = reg.r.marchand?.droits?.ponderation !== false && Boolean(moiDe(reg))
+  return (
+    <>
+      <p className="note-encre">
+        {p.source === 'registre'
+          ? 'Lue au registre (onglets Pondération et Réglages missions, cachés dans la feuille ; on peut aussi les corriger à la main).'
+          : 'Les valeurs par défaut du grimoire : rien n’est encore gravé au registre.'}{' '}
+        Seule l’alchimie est éprouvée ; le reste est une première estimation. Touche une ressource, à droite, pour la ranger.
+      </p>
+      <h3 className="titre-section">Réglages</h3>
+      <ul className="inventaire reglages-missions">
+        {REGLAGES.map((r) => (
+          <li key={r.cle}>
+            <span>{r.libelle}</span>
+            <span className="points" />
+            <strong>{prix(p.reglages[r.cle])}</strong>
+          </li>
+        ))}
+      </ul>
+      {peut && (
+        <div className="gestes">
+          <Geste icone={icones['weight-scale']} onClick={() => reg.ouvrir({ genre: 'reglages-missions' })}>
+            Changer les réglages
+          </Geste>
+        </div>
+      )}
+    </>
+  )
+}
+
+function VuePonderation({ reg }: { reg: CtxRegistre }) {
+  const p = reg.m!.donnees!.ponderation
+  const peut = reg.r.marchand?.droits?.ponderation !== false && Boolean(moiDe(reg))
+  const { assignee, poidsDe } = peser(p)
+  const { liste, finis } = matieres(reg, p)
+  const groupe = (x: { nom: string; intermediaire: boolean }) => {
+    const a = assignee(x.nom)
+    if (!a) return x.intermediaire ? CODE_TRANSFORMATION : ''
+    return poidsDe(x.nom) === null ? '' : a.classe
+  }
+  const groupes = [{ code: '', titre: 'À fixer' }, ...p.classes.map((c) => ({ code: c.code, titre: `${c.code} · ${c.nom}` }))]
+  const ligne = (nom: string, classe: ReactNode, w: ReactNode, lot: number | null, defautLot: string) => (
+    <button key={nom} type="button" className="ressource-ponderee" disabled={!peut} onClick={() => reg.ouvrir({ genre: 'matiere-mission', nom })} title={peut ? `Ranger ${nom}` : undefined}>
+      <span className="ressource-nom">{nom}</span>
+      <span className="ressource-classe">{classe}</span>
+      <span className="ressource-poids">{w}</span>
+      <span className={`ressource-lot ${lot ? 'fixe' : ''}`}>{lot ? `par ${quantite(lot)}` : defautLot}</span>
+    </button>
+  )
+  return (
+    <div className="ponderation-droite">
+      <h3 className="titre-section">Classes d’effort</h3>
+      <div className="classes-ponderation" role="table">
+        <div className="classes-entete" role="row">
+          <span>Code</span>
+          <span>Classe</span>
+          <span>Poids</span>
+          <span>Par mission</span>
+        </div>
+        {p.classes.map((c) => (
+          <div key={c.code} className="classes-ligne" role="row">
+            <span className="classe-code">{c.code}</span>
+            <span>{c.nom}</span>
+            <span className={c.poids === null ? 'a-fixer' : ''}>{c.poids === null ? 'à fixer' : prix(c.poids)}</span>
+            <span className="classe-lot">{c.poids ? `~${Math.floor(p.reglages.budget / c.poids)}` : '—'}</span>
+          </div>
+        ))}
+      </div>
+      {peut && (
+        <p className="ponderation-action">
+          <Action icone="peser" onClick={() => reg.ouvrir({ genre: 'classes-missions' })}>
+            corriger les classes
+          </Action>
+        </p>
+      )}
+      <div className="ponderation-entete">
+        <span>Ressource</span>
+        <span>Classe</span>
+        <span>Poids</span>
+        <span>Par mission</span>
+      </div>
+      {groupes.map((g) => {
+        const membres = liste.filter((x) => groupe(x) === g.code)
+        if (!membres.length) return null
+        return (
+          <section key={g.code || 'a-fixer'} className={`groupe-ressources ${g.code ? '' : 'a-fixer-groupe'}`}>
+            <h4 className="fiche-sous-titre">
+              {g.titre} <span className="compte-missions">{membres.length}</span>
+            </h4>
+            {!g.code && <p className="note-encre">Sans classe ou sans poids : leurs missions sont taillées au poids de repli ({prix(p.reglages.poidsRepli)}) et marquées « {TEXTES.aFixer} ».</p>}
+            {membres.map((x) => {
+              const a = assignee(x.nom)
+              const w = poidsDe(x.nom, x.intermediaire)
+              return ligne(
+                x.nom,
+                a ? a.classe : x.intermediaire ? <em>T (défaut)</em> : <em className="a-fixer">aucune</em>,
+                w === null ? <em className="a-fixer">à fixer</em> : `${prix(w)}${a?.poids ? ' (propre)' : ''}`,
+                lotDe(p, x.nom),
+                w ? `~${Math.floor(p.reglages.budget / w)}` : '—',
+              )
+            })}
+          </section>
+        )
+      })}
+      {finis.length > 0 && (
+        <section className="groupe-ressources">
+          <h4 className="fiche-sous-titre">
+            Produits finis <span className="compte-missions">{finis.length}</span>
+          </h4>
+          <p className="note-encre">Leurs fabrications : {prix(p.reglages.objetsParFabrication)} objets par mission, sauf lot propre.</p>
+          {finis.map((nom) => ligne(nom, '—', '—', lotDe(p, nom), `${prix(p.reglages.objetsParFabrication)} (réglage)`))}
+        </section>
+      )}
+    </div>
+  )
+}
+
+/** The settings' note. */
+function FicheReglages({ reg, icones, fermer }: EnvMission) {
+  const p = reg.m!.donnees!.ponderation
+  const [r, setR] = useState(p.reglages)
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  return (
+    <form
+      className="fiche-form ponderation-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => graver(reg, { ...p, reglages: r }))
+      }}
+    >
+      {REGLAGES.map((x) => (
+        <label key={x.cle} className="fiche-champ reglage">
+          <span>{x.libelle}</span>
+          <ChampNombre valeur={r[x.cle]} changer={(v) => setR({ ...r, [x.cle]: v ?? 0 })} />
+          <em className="fiche-aide">{x.note}</em>
+        </label>
+      ))}
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones}>
+          Graver les réglages
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/** The classes' note: names and weights per unit. */
+function FicheClasses({ reg, icones, fermer }: EnvMission) {
+  const p = reg.m!.donnees!.ponderation
+  const [classes, setClasses] = useState<Classe[]>(p.classes)
+  const changer = (i: number, x: Partial<Classe>) => setClasses(classes.map((c, k) => (k === i ? { ...c, ...x } : c)))
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  return (
+    <form
+      className="fiche-form ponderation-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => graver(reg, { ...p, classes }))
+      }}
+    >
+      <p className="fiche-aide">Le poids d’une unité ; vide : « à fixer ». Une mission tient {prix(p.reglages.budget)} d’effort.</p>
+      <div className="classes-ponderation classes-fiche">
+        {classes.map((c, i) => (
+          <div key={c.code} className="classes-ligne">
+            <span className="classe-code">{c.code}</span>
+            <input type="text" value={c.nom} aria-label={`Nom de la classe ${c.code}`} onChange={(e) => changer(i, { nom: e.target.value.slice(0, 60) })} />
+            <ChampNombre valeur={c.poids} placeholder="à fixer" aria-label={`Poids de la classe ${c.code}`} changer={(v) => changer(i, { poids: v })} />
+            <span className="classe-lot">{c.poids ? `~${Math.floor(p.reglages.budget / c.poids)}` : '—'}</span>
+          </div>
+        ))}
+      </div>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones}>
+          Graver les classes
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/** One item's note: its class, its own weight, its lot per mission. */
+function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }) {
+  const p = reg.m!.donnees!.ponderation
+  const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
+  const intermediaire = recettes.some((r) => cle(r.produit) === cle(nom))
+  const fini = intermediaire && !recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(nom))) && !(reg.r.donnees?.ressources ?? []).some((r) => cle(r.nom) === cle(nom))
+  const a = p.ressources.find((r) => cle(r.nom) === cle(nom))
+  const [classe, setClasse] = useState(a?.classe ?? '')
+  const [w, setW] = useState<number | null>(a?.poids ?? null)
+  const [lot, setLot] = useState<number | null>(lotDe(p, nom))
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  const nouvelle = (): Ponderation => {
+    const ressources: Assignation[] = [...p.ressources.filter((r) => cle(r.nom) !== cle(nom)), ...(classe ? [{ nom, classe, poids: w, note: a?.note ?? '' }] : [])]
+    const lots = [...p.lots.filter((l) => cle(l.nom) !== cle(nom)), ...(lot ? [{ nom, lot: Math.round(lot) }] : [])]
+    return { ...p, ressources, lots }
+  }
+  const essai = peser(nouvelle())
+  const poidsVu = essai.poidsDe(nom, intermediaire)
+  return (
+    <form
+      className="fiche-form ponderation-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => graver(reg, nouvelle()))
+      }}
+    >
+      {!fini && (
+        <>
+          <label className="fiche-champ">
+            <span>Classe d’effort</span>
+            <select value={classe} onChange={(e) => setClasse(e.target.value)}>
+              <option value="">{intermediaire ? 'Transformation (par défaut : se fabrique)' : 'sans classe (à fixer)'}</option>
+              {p.classes.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} · {c.nom}
+                  {c.poids === null ? ' (à fixer)' : ` (poids ${prix(c.poids)})`}
+                </option>
+              ))}
+            </select>
+          </label>
+          {intermediaire && <p className="fiche-aide">Rangé dans une autre classe que T, il se récolte ou s’achète au lieu de se fabriquer.</p>}
+          <label className="fiche-champ">
+            <span>Poids propre</span>
+            <ChampNombre valeur={w} placeholder={classe ? 'celui de la classe' : '—'} disabled={!classe} changer={setW} />
+          </label>
+          <p className="fiche-aide">
+            Poids retenu : {poidsVu === null ? <span className="a-fixer">à fixer (repli {prix(p.reglages.poidsRepli)})</span> : prix(poidsVu)}
+            {poidsVu ? ` · ~${Math.floor(p.reglages.budget / poidsVu)} par mission selon l’effort` : ''}
+          </p>
+        </>
+      )}
+      <label className="fiche-champ">
+        <span>Lot par mission</span>
+        <ChampNombre valeur={lot} placeholder={fini ? `${prix(p.reglages.objetsParFabrication)} (réglage)` : 'selon l’effort'} changer={(v) => setLot(v === null ? null : Math.round(v))} />
+      </label>
+      <p className="fiche-aide">
+        {fini || intermediaire
+          ? 'Combien en fabrique une mission (ex. Bière par 20) ; vide : '
+          : 'Combien en récolte une mission (ex. Blé par 40) ; vide : '}
+        {fini ? 'le réglage « objets par mission de fabrication ».' : 'la taille donnée par l’effort.'} Les missions sont alors des paquets pleins, le reste en dernier.
+      </p>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones}>
+          Graver
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/* ── The notes of the missions, laid over the left page (components/Fiche.tsx) ── */
+
+type EnvMission = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; fermer: () => void }
+export type FicheMission = { genre: 'demande' } | { genre: 'reglages-missions' } | { genre: 'classes-missions' } | { genre: 'matiere-mission'; nom: string }
+
+export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: string; titre: string; corps: ReactNode; action: ActionMission } {
+  if (!env.reg.m?.donnees) return { surtitre: 'Livre des Missions', titre: 'Missions', corps: <p className="registre-ferme attente-encre">Le scribe déroule le registre des missions…</p>, action: 'demande' }
+  switch (f.genre) {
+    case 'demande':
+      return { surtitre: 'Les demandes du Patriarche', titre: 'Demander une marchandise', corps: <FicheDemande {...env} />, action: 'demande' }
+    case 'reglages-missions':
+      return { surtitre: 'La pondération des efforts', titre: 'Les réglages', corps: <FicheReglages {...env} />, action: 'ponderation' }
+    case 'classes-missions':
+      return { surtitre: 'La pondération des efforts', titre: 'Les classes d’effort', corps: <FicheClasses {...env} />, action: 'ponderation' }
+    case 'matiere-mission':
+      return { surtitre: 'La pondération des efforts', titre: f.nom, corps: <FicheMatiere {...env} nom={f.nom} />, action: 'ponderation' }
+  }
 }
 
 const nombreSaisi = (s: string) => {
@@ -739,136 +1078,5 @@ function ChampNombre({ valeur, changer, ...props }: { valeur: number | null; cha
       }}
       {...props}
     />
-  )
-}
-
-function Reglages({ reg, icones }: { reg: CtxRegistre; icones: Record<string, string> }) {
-  const m = reg.m!
-  const d = m.donnees!
-  const p = m.edition ?? d.ponderation
-  const peut = reg.r.marchand?.droits?.ponderation !== false && Boolean(moiDe(reg))
-  const graver = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!m.edition || m.scelle !== 'repos') return
-    m.setScelle('ecrit')
-    const r = await m.agir('ponderation', { ponderation: { classes: m.edition.classes, ressources: m.edition.ressources, reglages: m.edition.reglages } })
-    if (r.ok) {
-      m.setScelle('scelle')
-      setTimeout(() => m.setScelle('repos'), 1100)
-      m.setEdition(null)
-    } else m.setScelle('repos')
-  }
-  return (
-    <form className="fiche-form ponderation-form" onSubmit={graver}>
-      <p className="note-encre">
-        {d.ponderation.source === 'registre'
-          ? 'Lue au registre (onglets Pondération et Réglages missions, cachés dans la feuille ; on peut aussi les corriger à la main).'
-          : 'Les valeurs par défaut du grimoire : rien n’est encore gravé au registre. La première demande scellée les y inscrit.'}
-        {' '}Seule l’alchimie est éprouvée ; le reste est une première estimation.
-      </p>
-      <h3 className="titre-section">Réglages</h3>
-      {REGLAGES.map((r) => (
-        <label key={r.cle} className="fiche-champ reglage">
-          <span>{r.libelle}</span>
-          <ChampNombre valeur={p.reglages[r.cle]} disabled={!peut} changer={(v) => m.setEdition({ ...p, reglages: { ...p.reglages, [r.cle]: v ?? 0 } })} />
-          <em className="fiche-aide">{r.note}</em>
-        </label>
-      ))}
-      {peut && (
-        <div className="fiche-pied">
-          {m.edition && m.scelle === 'repos' && (
-            <Action icone="annuler" onClick={() => m.setEdition(null)}>
-              oublier les changements
-            </Action>
-          )}
-          <Sceller etat={m.scelle} icones={icones} disabled={!m.edition || !d.actif}>
-            Graver la pondération
-          </Sceller>
-        </div>
-      )}
-      {m.edition && <p className="note-encre">Changements non gravés : l’aperçu des demandes suit la pondération du registre tant qu’elle n’est pas gravée.</p>}
-    </form>
-  )
-}
-
-function Classes({ reg }: { reg: CtxRegistre }) {
-  const m = reg.m!
-  const d = m.donnees!
-  const p = m.edition ?? d.ponderation
-  const peut = reg.r.marchand?.droits?.ponderation !== false && Boolean(moiDe(reg))
-  const { assignee, poidsDe } = peser(p)
-  const liste = matieres(reg, p)
-  const changerClasse = (i: number, x: Partial<Classe>) => m.setEdition({ ...p, classes: p.classes.map((c, k) => (k === i ? { ...c, ...x } : c)) })
-  const ranger = (nom: string, classe: string, poids: number | null) => {
-    const autres = p.ressources.filter((r) => cle(r.nom) !== cle(nom))
-    const a: Assignation[] = classe ? [...autres, { nom, classe, poids, note: assignee(nom)?.note ?? '' }] : autres
-    m.setEdition({ ...p, ressources: a })
-  }
-  // Groups: « à fixer » first (no class, or a class without weight), then each class, then the intermediates left to Transformation.
-  const groupe = (x: { nom: string; intermediaire: boolean }) => {
-    const a = assignee(x.nom)
-    if (!a) return x.intermediaire ? CODE_TRANSFORMATION : ''
-    return poidsDe(x.nom) === null ? '' : a.classe
-  }
-  const groupes = [{ code: '', titre: 'À fixer' }, ...p.classes.map((c) => ({ code: c.code, titre: `${c.code} · ${c.nom}` }))]
-  return (
-    <div className="ponderation-droite">
-      <h3 className="titre-section">Classes d’effort</h3>
-      <div className="classes-ponderation" role="table">
-        <div className="classes-entete" role="row">
-          <span>Code</span>
-          <span>Classe</span>
-          <span>Poids</span>
-          <span>Par mission</span>
-        </div>
-        {p.classes.map((c, i) => (
-          <div key={i} className="classes-ligne" role="row">
-            <span className="classe-code">{c.code}</span>
-            <input type="text" value={c.nom} disabled={!peut} aria-label={`Nom de la classe ${c.code}`} onChange={(e) => changerClasse(i, { nom: e.target.value.slice(0, 60) })} />
-            <ChampNombre valeur={c.poids} placeholder="à fixer" disabled={!peut} aria-label={`Poids de la classe ${c.code}`} changer={(v) => changerClasse(i, { poids: v })} />
-            <span className="classe-lot">{c.poids ? `~${Math.floor(p.reglages.budget / c.poids)}` : '—'}</span>
-          </div>
-        ))}
-      </div>
-      {groupes.map((g) => {
-        const membres = liste.filter((x) => groupe(x) === g.code)
-        if (!membres.length) return null
-        return (
-          <section key={g.code || 'a-fixer'} className={`groupe-ressources ${g.code ? '' : 'a-fixer-groupe'}`}>
-            <h4 className="fiche-sous-titre">
-              {g.titre} <span className="compte-missions">{membres.length}</span>
-            </h4>
-            {!g.code && <p className="note-encre">Sans classe ou sans poids : leurs missions sont taillées au poids de repli ({prix(p.reglages.poidsRepli)}) et marquées « {TEXTES.aFixer} ».</p>}
-            {membres.map((x) => {
-              const a = assignee(x.nom)
-              return (
-                <div key={x.nom} className="ressource-ponderee">
-                  <span className="ressource-nom">
-                    {x.nom}
-                    {x.intermediaire && <em className="ressource-inter"> intermédiaire</em>}
-                  </span>
-                  <select value={a?.classe ?? ''} disabled={!peut} aria-label={`Classe de ${x.nom}`} onChange={(e) => ranger(x.nom, e.target.value, a?.poids ?? null)}>
-                    <option value="">{x.intermediaire ? 'Transformation (par défaut)' : 'sans classe (à fixer)'}</option>
-                    {p.classes.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.code} · {c.nom}
-                      </option>
-                    ))}
-                  </select>
-                  <ChampNombre
-                    valeur={a?.poids ?? null}
-                    placeholder={poidsDe(x.nom, x.intermediaire) === null ? 'à fixer' : `${prix(poidsDe(x.nom, x.intermediaire))}`}
-                    title="Poids propre à cette ressource (vide : celui de sa classe)"
-                    disabled={!peut || !a}
-                    aria-label={`Poids propre de ${x.nom}`}
-                    changer={(v) => ranger(x.nom, a?.classe ?? '', v)}
-                  />
-                </div>
-              )
-            })}
-          </section>
-        )
-      })}
-    </div>
   )
 }
