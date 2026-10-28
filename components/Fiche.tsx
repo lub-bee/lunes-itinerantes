@@ -484,7 +484,7 @@ function Message({ m }: { m: { ok: boolean; texte: string } | null }) {
  * The slip's seal button; while the registre writes, a scribe's quill runs along a line of fresh
  * ink (« Le scribe consigne… »), then a wax seal is stamped (« Consigné. »). Transforms and opacity only.
  */
-function Sceller({ etat = 'repos', children, icones, confirmer, disabled }: { etat?: Etat; children: ReactNode; icones: Record<string, string>; confirmer?: boolean; disabled?: boolean }) {
+export function Sceller({ etat = 'repos', children, icones, confirmer, disabled }: { etat?: Etat; children: ReactNode; icones: Record<string, string>; confirmer?: boolean; disabled?: boolean }) {
   if (etat !== 'repos') {
     return (
       <div className={`scribe ${etat}`} role="status">

@@ -556,6 +556,44 @@ Code: `lib/missives.ts` (types, needs, stock, contributions, split, material cos
 `components/ExLibris.tsx`, `components/Missives.tsx` (pages), `components/Fiche.tsx` (slip, recipe tree,
 forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
 
+## Missions (prototype, branch `missions`)
+
+A demand for merchandise is cut into small missions put out to the caravan (an internal call for
+tenders); a member takes one, gives it back or completes it, and a completed mission credits its points
+to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane/economie/`). Code:
+`lib/missions.ts` (pure logic, shared by the page's preview and the server), `app/api/missions/route.ts`,
+`components/Missions.tsx`; the permission rules are in `lib/droits.ts` (`demande`, `prendre`, `rendre`,
+`accomplir`, `ponderation`: all open for now).
+
+- **Livre des Missions** (its own ribbon): « L’appel aux missions » (open missions, filtered by type,
+  identical ones shown once « ×N »; the member's missions « en cours » with *rendre* / *accomplie*),
+  « Mes points » (total and history), then the Patriarch's table — « Les demandes du Patriarche » (a
+  demand with its live preview, the demands with their progress), « Les points de la caravane » (every
+  member), « La pondération des efforts » (classes, resources, settings). Everyone may use every page.
+- **Translation of a demand** (`traduire`): the article's recipe (« recette d'usage », else variant 1;
+  the day book's recipes first) is expanded down to raw resources. An ingredient that has a recipe is an
+  intermediate product (class *Transformation*) unless the pondération puts it in another class (then it
+  is harvested or bought like a raw resource). Needs are summed over the whole tree before whole crafts
+  are counted. Missions: one harvest series per raw resource (lot = ⌊effort budget ÷ weight⌋, the total
+  split into parts of at most one lot, round parts when lots are large), one transformation series per
+  intermediate (whole crafts), crafting missions of the final product (*objects per crafting mission*).
+  A resource with no weight (« à fixer ») is sized with the fallback weight and its missions say so.
+- **Points**: *part ressources* (75 %) of the floor price × quantity, split over the harvests and
+  transformations pro rata to their effort (quantity × weight); *part fabrication* (5 %) over the crafting
+  missions pro rata to their objects. Whole points, sums exact. Credited when the mission is completed
+  (a row in the Points tab).
+- **Lifecycle**: ouverte → en cours (who, when; at most *max en cours* per member, checked by the server
+  and again by the script under its lock) → accomplie, or rendue (open again; the « Journal » cell keeps
+  each gesture).
+
+Sheet tabs (written by the Apps Script **v3m**, created hidden when missing, editable by hand):
+`Pondération` (`Genre` classe/ressource, `Code`, `Nom`, `Poids`, `Note`), `Réglages missions`
+(`Réglage`, `Valeur`, `Note`), `Demandes`, `Missions`, `Points`. An empty Pondération tab reads as the
+defaults of `lib/missions.ts`; the first demand seeds it. The grimoire asks for these tabs with
+`missions: true`; without it the script answers exactly as v3l did, so the production site (v3.3) is
+unaffected. With an older script the missions' pages show the defaults and every write is refused in
+character.
+
 ## The Livre d'ombre (shadow book)
 
 A secret: the caravan's motto « Fidélité, Honnêteté, Septims » (on the title page and on the memo

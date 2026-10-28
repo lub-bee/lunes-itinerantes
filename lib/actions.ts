@@ -19,5 +19,10 @@ export const ICONES_ACTIONS = {
   retirer: 'burning-book',
   lumiere: 'sunrise',
   matiere: 'wheat',
+  // The missions (lib/missions.ts).
+  prendre: 'hand',
+  rendre: 'return-arrow',
+  accomplir: 'check-mark',
+  peser: 'weight-scale',
 } as const
 

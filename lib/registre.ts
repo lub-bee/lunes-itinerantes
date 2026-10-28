@@ -10,6 +10,7 @@
 
 import { revalidateTag, unstable_cache } from 'next/cache'
 import { lireOnglets, type Onglets } from './missives'
+import { lireMissions } from './missions'
 
 export const ETIQUETTE_REGISTRE = 'registre'
 /** Seconds a read of the sheet is reused. */
@@ -49,13 +50,14 @@ type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: bo
 /** The last script call's own execution time, for Server-Timing. */
 export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: null, cache: null }
 
+// `missions: true` asks a v3m script for the missions' tabs too (lib/missions.ts); an older script ignores it.
 async function lireScript(): Promise<Lecture> {
-  const r = await appelerScript<ReponseLire>({ action: 'lire' })
+  const r = await appelerScript<ReponseLire>({ action: 'lire', missions: true })
   dernierScript = { ms: r.ms ?? null, cache: r.cache ?? null }
   return { onglets: r.onglets, version: r.version ?? 0 }
 }
 
-const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3m'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
@@ -84,15 +86,15 @@ export async function lireRegistre(versionVue = 0) {
       garder(l)
     }
   }
-  return { ...lireOnglets(l.onglets), version: l.version }
+  return { ...lireOnglets(l.onglets), missions: lireMissions(l.onglets), version: l.version }
 }
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
-  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, ...charge })
+  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, missions: true, ...charge })
   dernierScript = { ms: r.ms ?? null, cache: null }
   if (!r.onglets) return { ...r, lu: null }
   const l = { onglets: r.onglets, version: r.version ?? 0 }
   garder(l)
-  return { ...r, lu: { ...lireOnglets(l.onglets), version: l.version } }
+  return { ...r, lu: { ...lireOnglets(l.onglets), missions: lireMissions(l.onglets), version: l.version } }
 }

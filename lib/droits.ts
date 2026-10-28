@@ -4,12 +4,16 @@
 // The server checks it on every write; the page only uses it to hide what a member may not do.
 
 import type { ActionRegistre } from './missives'
+import type { ActionMission } from './missions'
+
+/** Every action a member can take: the registre's and the missions' (lib/missions.ts). */
+export type Action = ActionRegistre | ActionMission
 
 /** Role names are compared like member names (lib/missives.ts `cle`): "Maître artisan" → 'maitreartisan'. */
 export type Role = 'patriarche' | 'maitreartisan' | (string & {})
 
 /** null = every member of the caravan; otherwise the roles allowed (any one is enough). */
-export const ROLES_REQUIS: Record<ActionRegistre, Role[] | null> = {
+export const ROLES_REQUIS: Record<Action, Role[] | null> = {
   missive: null, // later perhaps ['patriarche']
   releve: null,
   depot: null,
@@ -24,13 +28,19 @@ export const ROLES_REQUIS: Record<ActionRegistre, Role[] | null> = {
   livre: null, // an article and its recipe moved to the Livre d'ombre (or back); later perhaps ['patriarche']
   retirer: null, // an article taken out of the catalogue; later perhaps ['patriarche']
   versement: null, // the caravan's share of a sale marked as handed over; later ['patriarche']
+  // The missions (prototype, 2026-10-28): no roles yet, everyone may do everything.
+  demande: null, // a demand for merchandise turned into missions; later perhaps ['patriarche']
+  prendre: null, // take an open mission (within the limit of missions « en cours »)
+  rendre: null, // give a mission one holds back (it opens again)
+  accomplir: null, // a mission one holds completed: its points credited; later perhaps validated by an officer
+  ponderation: null, // the effort classes, weights and settings; later perhaps ['patriarche']
 }
 
-export function peut(action: ActionRegistre, roles: Role[]): boolean {
+export function peut(action: Action, roles: Role[]): boolean {
   const requis = ROLES_REQUIS[action]
   return requis === null || requis.some((r) => roles.includes(r))
 }
 
-export function droitsDe(roles: Role[]): Record<ActionRegistre, boolean> {
-  return Object.fromEntries(Object.keys(ROLES_REQUIS).map((a) => [a, peut(a as ActionRegistre, roles)])) as Record<ActionRegistre, boolean>
+export function droitsDe(roles: Role[]): Record<Action, boolean> {
+  return Object.fromEntries(Object.keys(ROLES_REQUIS).map((a) => [a, peut(a as Action, roles)])) as Record<Action, boolean>
 }

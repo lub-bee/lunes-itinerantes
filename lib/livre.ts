@@ -13,6 +13,7 @@ import { COLOPHON } from './credits'
 import { normaliser, slug } from './recherche'
 import { artisanDe } from './metiers'
 import { estOmbre, ICONES_OMBRE } from './ombre'
+import { ICONES_MISSIONS } from './missions'
 import type { Article, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
 const CONTENU = path.join(process.cwd(), 'content')
@@ -24,6 +25,8 @@ export const PARTIES: Partie[] = [
   // id kept 'atelier' (links, saved state); shown as the Livre des Recettes.
   { id: 'atelier', titre: 'Livre des Recettes', court: 'Recettes', couleur: '#2f5b3a', icone: 'cauldron' },
   { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
+  // The missions (prototype, branch `missions`).
+  { id: 'missions', titre: 'Livre des Missions', court: 'Missions', couleur: '#8a4b12', icone: 'treasure-map' },
   { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
 ]
 
@@ -219,6 +222,28 @@ export async function chargerLivre(): Promise<Livre> {
       type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', titreEn: 'The Missive Chest', court: 'Le coffre', icone: 'open-chest',
       intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
     },
+    // The missions (prototype): the call for missions and the member's points, then the Patriarch's table.
+    {
+      type: 'missions', id: 'missions', partie: 'missions', titre: 'L’appel aux missions', titreEn: 'The Call for Missions', court: 'Missions', icone: 'hunting-horn',
+      intro: 'Ce dont la caravane a besoin, coupé en petites missions qu’on boucle en une courte veillée : une récolte, un tannage, une fournée. Prends-en une, rapporte le butin à un officier, et les points tombent dans ta bourse.',
+      citation: 'Mille pattes qui portent chacune un sac vont plus loin qu’un mammouth qui porte tout.',
+    },
+    {
+      type: 'points', id: 'mes-points', partie: 'missions', titre: 'Mes points', titreEn: 'My Points', court: 'Mes points', icone: 'laurel-crown',
+      intro: 'Chaque mission accomplie inscrit ses points à ton nom. À la clôture de la semaine, la caisse se partage au prorata des points : ce qui est écrit ici, c’est ta part du butin.',
+    },
+    {
+      type: 'patriarche', vue: 'demandes', id: 'demandes', partie: 'missions', titre: 'Les demandes du Patriarche', titreEn: 'Requests for Goods', court: 'Demandes', icone: 'throne-king',
+      intro: 'Demande une marchandise, et le grimoire la découpe en missions : les matières à récolter, ce qu’il faut tanner ou distiller, les fournées à façonner. Chaque mission dit d’avance ce qu’elle rapporte.',
+    },
+    {
+      type: 'patriarche', vue: 'points', id: 'points-caravane', partie: 'missions', titre: 'Les points de la caravane', titreEn: 'The Caravan’s Tally', court: 'Points', icone: 'podium',
+      intro: 'Les points de chaque membre, ce qu’il a accompli et ce qu’il tient encore entre ses pattes. La renommée viendra plus tard ; ici, on compte.',
+    },
+    {
+      type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'missions', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',
+      intro: 'Combien pèse une unité de chaque ressource : un brin de blé ne vaut pas une peau d’ours. Le poids taille les missions (une veillée = un budget d’effort) et partage les points des ressources au prorata de l’effort.',
+    },
     {
       type: 'caravane', id: 'caravane', partie: 'caravane', titre: 'La Caravane', titreEn: 'The Caravan', court: 'Caravane', icone: 'lynx-head',
       intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rang que chacun tient sur la route. Touche un sceau pour lire les noms de ceux qui le portent.',
@@ -234,7 +259,7 @@ export async function chargerLivre(): Promise<Livre> {
   // say where an article is and offer to move it to a chapter of the book.
   const caches = articles.filter((a) => defs.some((d) => d.masque && d.id === a.chapitre))
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE, ...ICONES_MISSIONS]
   // The shadow book's goods, whatever their chapter (shown only in the Livre d'ombre).
   const ombre = articles.filter((a) => a.ombre)
   return { parties: PARTIES, pages, caches, ombre, consigneLe: new Date().toISOString(), icones: icones(noms) }

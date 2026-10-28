@@ -9,6 +9,7 @@ import { TEXTES as OMBRE } from '@/lib/ombre'
 import { quantiteLue } from '@/lib/commande'
 import { anglaisDe, arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
+import type { EtatMissions } from './Missions'
 import { Action, En, Icone, Plume, Septims } from './Ornements'
 
 /*
@@ -36,6 +37,8 @@ export type Fiche =
 
 export type CtxRegistre = {
   r: EtatRegistre
+  /** The missions (prototype, components/Missions.tsx). */
+  m?: EtatMissions
   ouvrir: (f: Fiche) => void
   /** Turns to the page of that id. */
   allerA: (id: string) => void

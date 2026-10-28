@@ -126,9 +126,11 @@ function SommaireCopie({ livre }: { livre: Livre }) {
                 <p className="copie-avenir">
                   {partie.id === 'missives'
                     ? 'Les missives vivent dans le grimoire : leur encre bouge trop pour être copiée.'
-                    : partie.id === 'atelier'
-                      ? 'Recettes et matières vivent dans le grimoire, où les artisans les corrigent.'
-                      : <>L&apos;encre de ce livre n&apos;est pas encore sèche.</>}
+                    : partie.id === 'missions'
+                      ? 'Les missions vivent dans le grimoire : elles se prennent et se rendent trop vite pour être copiées.'
+                      : partie.id === 'atelier'
+                        ? 'Recettes et matières vivent dans le grimoire, où les artisans les corrigent.'
+                        : <>L&apos;encre de ce livre n&apos;est pas encore sèche.</>}
                 </p>
               ) : (
                 <ol>

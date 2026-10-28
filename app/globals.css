@@ -3503,3 +3503,133 @@ strong.a-verser { font-weight: 400; }
 @media (max-width: 860px) {
   .sortie-ombres { position: relative; top: auto; left: auto; display: flex; justify-content: center; margin: 0 0 8px; }
 }
+
+/* ═══════════════════════════ The book of Missions (prototype, components/Missions.tsx) ═══════════════════════════ */
+
+.missions-droite > .titre-section:first-child, .points-droite > .titre-section:first-child, .demandes-droite > .titre-section:first-child, .ponderation-droite > .titre-section:first-child { margin-top: 2px; }
+.missions-inactif {
+  margin: 10px 0;
+  padding: 7px 10px;
+  border: 1px dashed rgba(138, 75, 18, 0.55);
+  background: rgba(255, 248, 228, 0.3);
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--encre-douce);
+  text-align: left;
+}
+.a-fixer { font-style: italic; color: var(--encre-rouge); }
+.compte-missions { font-family: var(--f-texte); font-style: italic; font-size: 0.8em; letter-spacing: 0; color: var(--encre-pale); }
+
+/* One mission: its glyph, what to do, what it pays, the gestures. */
+.missions-liste { list-style: none; margin: 0; padding: 0; text-align: left; }
+.mission {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas: 'glyphe texte cote';
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 2px 4px;
+  border-bottom: 1px solid rgba(110, 80, 45, 0.14);
+}
+.mission .glyphe-mission { grid-area: glyphe; }
+.mission-texte { grid-area: texte; display: flex; flex-direction: column; min-width: 0; }
+.mission-intitule { font-size: 17px; line-height: 1.2; }
+.mission-meta { font-size: 13.5px; font-style: italic; color: var(--encre-pale); }
+.mission-cote { grid-area: cote; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.mission-fois { font-family: var(--f-capitales); font-size: 14px; color: #8a4b12; }
+.mission-points { grid-area: cote; font-family: var(--f-capitales); font-weight: 400; font-size: 15px; letter-spacing: 0.03em; color: #2f5b3a; white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
+.mission-gestes { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 2px 14px; }
+.mission-gestes:empty { display: none; }
+.mission.en-attente { opacity: 0.6; }
+.mission.en-attente .mission-intitule { color: var(--encre-douce); }
+.mission.tenue { background: linear-gradient(90deg, rgba(201, 162, 78, 0.16), transparent 75%); }
+.mission.apercu { padding: 3px 2px; }
+.mission.apercu .mission-intitule { font-size: 16px; }
+.glyphe-mission { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(120, 60, 30, 0.35); color: rgba(52, 30, 12, 0.85); background: radial-gradient(circle, rgba(255, 248, 228, 0.5) 30%, transparent 72%); }
+.glyphe-mission .icone { width: 18px; height: 18px; }
+.glyphe-recolte { color: #2f5b3a; }
+.glyphe-transformation { color: #8a4b12; }
+.glyphe-fabrication { color: var(--encre-rouge); }
+.lien-encre:disabled { opacity: 0.45; cursor: not-allowed; border-bottom-color: transparent; }
+.lien-encre.actif { color: var(--encre-rouge); border-bottom: 1.5px solid var(--encre-rouge); }
+
+.filtre-missions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin: 12px 0 4px; }
+.missions-ailleurs em { font-size: 15px; color: var(--encre-douce); }
+
+/* My points. */
+.points-total { margin: 14px auto 4px; text-align: center; }
+.points-total .points-nom { display: block; font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.08em; color: var(--encre-pale); }
+.points-total strong { display: block; font-family: var(--f-gothique); font-weight: 400; font-size: 64px; line-height: 1; color: #8a4b12; text-shadow: 0 1px 0 rgba(255, 248, 228, 0.6); }
+.points-total > span:not(.points-nom) { font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.1em; color: var(--encre-douce); }
+.points-detail { margin: 8px 0 0; font-style: italic; color: var(--encre-douce); line-height: 1.4; }
+.historique-points li { flex-wrap: wrap; }
+.historique-points li.en-attente { opacity: 0.6; }
+.historique-quand { flex-basis: 100%; font-family: var(--f-capitales); font-size: 12.5px; color: var(--encre-pale); }
+.historique-raison { min-width: 0; }
+.historique-points strong { color: #2f5b3a; font-family: var(--f-capitales); font-size: 15px; white-space: nowrap; }
+
+/* The Patriarch's demands. */
+.demande-form { text-align: left; }
+.demande-form .titre-section { margin-top: 8px; }
+.demande-form .fiche-champ input, .ponderation-form .fiche-champ input { width: 100%; }
+.demande-resume p { margin: 3px 0; }
+.apercu-total { margin: 4px 0 8px; text-align: right; font-family: var(--f-capitales); color: var(--encre-douce); }
+.apercu-total strong { font-weight: 400; color: #2f5b3a; }
+.liste-demandes { list-style: none; margin: 0; padding: 0; text-align: left; }
+.demande { display: flex; flex-direction: column; gap: 1px; padding: 6px 2px 7px; border-bottom: 1px solid rgba(110, 80, 45, 0.15); }
+.demande-titre { font-family: var(--f-capitales); font-size: 17px; color: var(--encre); }
+.demande-meta { font-size: 13.5px; font-style: italic; color: var(--encre-pale); }
+.demande-avance { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 14px; color: var(--encre-douce); }
+
+/* Every member's points. */
+.tableau-points { text-align: left; }
+.tableau-points-entete, .tableau-points-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 70px 82px 92px; column-gap: 8px; align-items: baseline; }
+.tableau-points-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.tableau-points-entete span:not(:first-child), .tableau-points-ligne > :not(:first-child) { text-align: right; }
+.tableau-points-ligne { padding: 4px 2px; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 16px; font-variant-numeric: tabular-nums lining-nums; }
+.tableau-points-ligne > span:first-child { font-family: var(--f-capitales); }
+.tableau-points-ligne strong { font-weight: 400; color: #2f5b3a; font-size: 17px; }
+
+/* The pondération. */
+.ponderation-form { text-align: left; }
+.reglage .fiche-aide { font-size: 12.5px; }
+.ponderation-droite input, .ponderation-droite select {
+  min-width: 0;
+  width: 100%;
+  padding: 1px 3px;
+  border: 0;
+  border-bottom: 1px solid rgba(90, 64, 41, 0.4);
+  border-radius: 0;
+  background: transparent;
+  color: var(--encre);
+  font: inherit;
+  font-size: 15.5px;
+  outline: none;
+}
+.ponderation-droite input:focus, .ponderation-droite select:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.3); }
+.ponderation-droite input:disabled, .ponderation-droite select:disabled { opacity: 0.7; }
+.classes-ponderation { text-align: left; }
+.classes-entete, .classes-ligne { display: grid; grid-template-columns: 34px minmax(0, 1fr) 70px 78px; column-gap: 8px; align-items: baseline; }
+.classes-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.classes-ligne { padding: 3px 0; border-bottom: 1px solid rgba(110, 80, 45, 0.1); }
+.classes-ligne input:last-of-type, .classe-lot, .classes-entete span:nth-child(n + 3) { text-align: right; }
+.classe-code { font-family: var(--f-capitales); color: #8a4b12; }
+.classe-lot { font-size: 14px; font-style: italic; color: var(--encre-pale); }
+.groupe-ressources { margin-top: 10px; text-align: left; }
+.groupe-ressources .fiche-sous-titre { margin-bottom: 2px; }
+.a-fixer-groupe .fiche-sous-titre { color: var(--encre-rouge); border-bottom-color: rgba(142, 31, 20, 0.35); }
+.ressource-ponderee { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 150px) 64px; column-gap: 8px; align-items: baseline; padding: 2px 0; border-bottom: 1px dotted rgba(110, 80, 45, 0.18); }
+.ressource-ponderee input { text-align: right; }
+.ressource-nom { font-size: 15.5px; min-width: 0; overflow-wrap: anywhere; }
+.ressource-inter { font-size: 12.5px; color: var(--encre-pale); }
+
+@media (max-width: 860px) {
+  .mission { grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 8px; }
+  .mission-intitule { font-size: 16px; }
+  .points-total strong { font-size: 52px; }
+  .demande-avance { grid-template-columns: 80px minmax(0, 1fr); }
+  .tableau-points-entete, .tableau-points-ligne { grid-template-columns: minmax(0, 1fr) 56px 64px 76px; column-gap: 5px; font-size: 14.5px; }
+  .tableau-points-entete { font-size: 11.5px; }
+  .classes-entete, .classes-ligne { grid-template-columns: 30px minmax(0, 1fr) 56px 62px; column-gap: 6px; }
+  .ressource-ponderee { grid-template-columns: minmax(0, 1fr) minmax(0, 120px) 52px; column-gap: 6px; }
+}

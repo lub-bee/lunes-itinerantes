@@ -14,6 +14,7 @@ import { Devise, useOmbre } from './Ombre'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
+import { DroiteMissions, DroitePatriarche, DroitePoints, GaucheMissions, GauchePatriarche, GauchePoints } from './Missions'
 import { Geste, DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -39,6 +40,9 @@ export type Ctx = {
   /** A god's name was signed on the ex-libris (an egg): the book turns to that god's pages. */
   invoquer?: (divinite: string) => void
 }
+
+/** The day book's price chapters (for the missions' demands). */
+const chapitresDe = (ctx: Ctx) => ctx.livre.pages.filter((p): p is PageChapitre => p.type === 'chapitre')
 
 /** Pages without a folio: the ex-libris and a god's pages (not part of the book proper). */
 const sansFolio = (p: Page) => p.type === 'exlibris' || p.type === 'divinite' || p.type === 'poemes'
@@ -203,6 +207,24 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheCoffre page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'missions':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheMissions page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'points':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GauchePoints page={page} reg={ctx.registre} compact={compact} />
+          </EnTete>
+        )
+      case 'patriarche':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GauchePatriarche page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} chapitres={chapitresDe(ctx)} />
           </EnTete>
         )
       case 'atelier':
@@ -463,6 +485,12 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
         return <DroiteMissive page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} />
       case 'coffre':
         return <DroiteCoffre reg={ctx.registre} />
+      case 'missions':
+        return <DroiteMissions reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} citation={<CitationFin texte={page.citation} />} />
+      case 'points':
+        return <DroitePoints reg={ctx.registre} />
+      case 'patriarche':
+        return <DroitePatriarche page={page} reg={ctx.registre} icones={ctx.livre.icones} chapitres={chapitresDe(ctx)} />
       case 'atelier':
         return <DroiteAtelier page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} requetes={[ctx.requete, ctx.locale]} />
       case 'caravane':
