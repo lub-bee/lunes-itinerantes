@@ -37,6 +37,9 @@ export const ROLES_REQUIS: Record<Action, Role[] | null> = {
   confirmer: null, // another member than the holder confirms the loot: its points credited; later ['officier', 'patriarche']
   refuser: null, // another member refuses the loot (not received, incomplete): back « en cours »; later the same as confirmer
   ponderation: null, // the effort classes, weights and settings; later perhaps ['patriarche']
+  permanente: null, // a standing mission opened, corrected, paused or closed; later perhaps ['patriarche']
+  prendrePermanente: null, // a take of a standing mission (an ordinary mission for the taker)
+  don: null, // a free donation declared (confirmed by another member like a mission's loot)
   // The pay (prototype, 2026-10-30): open to all for now; later surely ['patriarche'].
   reglagesPaie: null, // the shares, the rent, the week's first day, the Patriarchs
   facture: null, // an invoice written, corrected or struck out

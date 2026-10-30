@@ -596,6 +596,20 @@ to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane
   Mine, Achat…) is a tag, display and filter only. The first layout (C1…C7 with weights) is read into the
   levels without losing the tab's edits, and written in the new layout (« Par mission », « Origine »
   columns, v3n) at the next engraving.
+- **Quantité de référence** (2026-10-30): one number per item, what one gathers in a solid session; by
+  default its rarity level's, a per-item value overrides it (« Par mission » of its ressource row). Weight =
+  effort budget ÷ reference. The « lot par mission » and the « don minimum » (rows `lot` and `don`) override
+  their defaults (reference, reference × « multiple minimum pour un don ») without touching the weight.
+- **Standing missions** (« missions permanentes », v3n, tab `Missions permanentes`): a fixed quantity and
+  points per take (default: what that quantity earns in the usual recipes using it — the average over those
+  recipes of 75 % × floor ÷ yield × the item's share of the recipe's effort ÷ its quantity per craft, × the
+  quantity; a final product: 5 % × floor × quantity), an optional weekly ceiling (takes running or confirmed
+  in the week), open / en pause / close. A take is an ordinary mission (« N° demande » = P-…); given up, it is
+  dropped (« abandonnée »).
+- **Free donations** (v3n): declared as handed over (« DON »), confirmed by another member like a loot; the
+  confirmation writes a `dépôt` row of Mouvements. Points at the missions' rate per unit, only from the
+  item's donation minimum (below: 0 points, said before declaring); optional big-donation bonus (settings).
+  No per-item stock ceiling exists yet, so none is checked.
 - **Confirmation by a receiver** (2026-10-30, v3n): the holder marks the loot « remise »; another member
   confirms it (« accomplie », points credited then, in the week of the confirmation, with who confirmed) or
   refuses it (back « en cours », with a word). A mission « remise » no longer counts against the limit.

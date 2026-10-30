@@ -72,7 +72,14 @@
  *                                 membre, quand, max?, raison?, note? } }
  *                                                                            v3n: 'remettre' (the holder) → « remise »;
  *                                                                              'confirmer' (another member) → « accomplie »,
- *                                                                              its Points row then; 'refuser' → « en cours »
+ *                                                                              its Points row then; 'refuser' → « en cours »;
+ *                                                                              'instancier' { demande, type, objet, quantite,
+ *                                                                              poids, effort, points, max }: a take of a standing
+ *                                                                              mission, a new row « en cours »; 'rendre' on
+ *                                                                              such a take → « abandonnée »; with statut
+ *                                                                              'remise': a free donation (« DON »), waiting for
+ *                                                                              its confirmation (confirmed: a 'dépôt' row of
+ *                                                                              Mouvements; refused: « refusée »)
  *                                                                            → the mission's row: taken (refused when
  *                                                                              not open, or when the member already
  *                                                                              holds `max`), given back (open again) or
@@ -254,6 +261,17 @@ var ONGLETS_MISSIONS = {
   points: {
     nom: 'Points',
     colonnes: [['Date', 'horodatage'], ['Membre', 'membre'], ['Points', 'points'], ['Raison', 'raison'], ['N° mission', 'mission'], ['Confirmée par', 'confirmePar']],
+  },
+  /**
+   * v3n: standing missions (« missions permanentes »): always open, each take an ordinary Missions row
+   * (« N° demande » = the standing mission's id, « P-… »). Written by 'paie' (onglet 'permanentes').
+   */
+  permanentes: {
+    nom: 'Missions permanentes',
+    colonnes: [
+      ['N° permanente', 'id'], ['Type', 'type'], ['Objet', 'objet'], ['Quantité', 'quantite'], ['Points', 'points'], ['Poids', 'poids'],
+      ['Plafond par semaine', 'plafond'], ['Statut', 'statut'], ['Créée par', 'par'], ['Créée le', 'date'], ['Note', 'note'],
+    ],
   },
 };
 
@@ -1153,6 +1171,28 @@ var ECRITURES = {
     var p = o.p;
     var lignes = o.lignes;
     var cellule = function (l, champ) { return p.cols[champ] ? l[p.cols[champ] - 1] : ''; };
+    if (g.geste === 'instancier') {
+      // v3n: a take of a standing mission: a new row « en cours », for that member (within his limit).
+      var membreI = cleEntete(g.membre);
+      var tenuesI = lignes.filter(function (l) {
+        return cleEntete(cellule(l, 'statut')) === 'encours' && cleEntete(cellule(l, 'prisPar')) === membreI;
+      }).length;
+      // A free donation (statut « remise ») is declared already handed over: no limit.
+      var don = g.statut === 'remise';
+      if (!don && g.max && tenuesI >= Number(g.max)) return { ok: false, erreur: 'too many missions' };
+      var quandI = new Date(g.quand || Date.now());
+      var rang = {
+        numero: g.numero, demande: g.demande, type: g.type, objet: g.objet, quantite: g.quantite, poids: nombreOuVide(g.poids), effort: g.effort || '',
+        points: g.points, statut: don ? 'remise' : 'en cours', prisPar: g.membre, prisLe: quandI, accomplieLe: '', note: g.note || '',
+        remiseLe: don ? quandI : '',
+        journal: (don ? 'don déclaré par ' : 'prise par ') + g.membre + ' le ' + Utilities.formatDate(quandI, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm'),
+      };
+      ajouter(M.missions, [rang], p);
+      return {
+        ok: true, numero: g.numero, geste: g.geste,
+        maj: function (o2) { (o2.missions = o2.missions || []).push(complet(M.missions, rang)); },
+      };
+    }
     var i = -1;
     for (var r = 0; r < lignes.length; r++) {
       if (cleEntete(cellule(lignes[r], 'numero')) === cleEntete(g.numero)) { i = r; break; }
@@ -1168,6 +1208,7 @@ var ECRITURES = {
     var noter = function (mot) { return (journal ? journal + ' · ' : '') + mot + ' par ' + g.membre + ' le ' + jour; };
     var valeurs;
     var point = null;
+    var depot = null;
     if (g.geste === 'prendre') {
       if (statut !== 'ouverte' && statut !== '') return { ok: false, erreur: 'mission taken ' + g.numero };
       var tenues = lignes.filter(function (l) {
@@ -1177,7 +1218,9 @@ var ECRITURES = {
       valeurs = { statut: 'en cours', prisPar: g.membre, prisLe: quand, journal: noter('prise') };
     } else if (g.geste === 'rendre') {
       if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
-      valeurs = { statut: 'ouverte', prisPar: '', prisLe: '', journal: noter('rendue') };
+      // v3n: a take of a standing mission given up is dropped (the standing mission stays open).
+      var prise = /^p-/i.test(String(cellule(ligne, 'demande')));
+      valeurs = prise ? { statut: 'abandonnée', journal: noter('abandonnée') } : { statut: 'ouverte', prisPar: '', prisLe: '', journal: noter('rendue') };
     } else if (g.geste === 'remettre') {
       // v3n: the holder hands the loot over; the mission waits for another member's confirmation.
       if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
@@ -1186,9 +1229,18 @@ var ECRITURES = {
       // v3n: another member than the holder confirms the loot (points credited now) or refuses it (back to « en cours »).
       if (statut !== 'remise') return { ok: false, erreur: 'mission not handed over ' + g.numero };
       if (cleEntete(cellule(ligne, 'prisPar')) === membre) return { ok: false, erreur: 'own mission ' + g.numero };
+      var estDon = /^don/i.test(String(cellule(ligne, 'demande')));
       if (g.geste === 'refuser') {
-        valeurs = { statut: 'en cours', remiseLe: '', journal: noter('refusée' + (g.note ? ' (' + g.note + ')' : '')) };
+        // A donation refused is gone (« refusée »); a mission's loot goes back « en cours ».
+        valeurs = estDon
+          ? { statut: 'refusée', journal: noter('refusée' + (g.note ? ' (' + g.note + ')' : '')) }
+          : { statut: 'en cours', remiseLe: '', journal: noter('refusée' + (g.note ? ' (' + g.note + ')' : '')) };
       } else {
+        // A donation confirmed enters the chest (a 'dépôt' row of the ledger, no missive).
+        if (estDon) {
+          depot = { horodatage: quand, action: '', missive: '', membre: cellule(ligne, 'prisPar'), type: 'dépôt', objet: cellule(ligne, 'objet'), quantite: Number(cellule(ligne, 'quantite')) || 0, note: 'don confirmé par ' + g.membre };
+          ajouter(ONGLETS.mouvements, [depot]);
+        }
         valeurs = { statut: 'accomplie', accomplieLe: quand, confirmePar: g.membre, journal: noter('confirmée') };
         point = { horodatage: quand, membre: cellule(ligne, 'prisPar'), points: Number(cellule(ligne, 'points')) || 0, raison: g.raison || '', mission: cellule(ligne, 'numero'), confirmePar: g.membre };
       }
@@ -1210,6 +1262,7 @@ var ECRITURES = {
           Object.keys(valeurs).forEach(function (k) { x[k] = valeurs[k]; });
         });
         if (point) (o.points = o.points || []).push(complet(M.points, point));
+        if (depot) (o.mouvements = o.mouvements || []).push(complet(ONGLETS.mouvements, depot));
       },
     };
   },
@@ -1244,7 +1297,8 @@ function daterPaie(o) {
 
 ECRITURES.paie = function (corps) {
   var c = corps.paie;
-  var def = c && ONGLETS_PAIE[c.onglet];
+  // The pay's tabs, and the standing missions' (v3n).
+  var def = c && (ONGLETS_PAIE[c.onglet] || (c.onglet === 'permanentes' ? ONGLETS_MISSIONS.permanentes : null));
   if (!def) return { ok: false, erreur: 'unknown tab' };
   var lignes = (c.lignes || []).map(daterPaie);
   if (c.remplacer) {

@@ -316,6 +316,8 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
     case 'reglages-missions':
     case 'classes-missions':
     case 'refus-mission':
+    case 'permanente':
+    case 'don':
     case 'matiere-mission': {
       const c = contenuMission(f, { reg: env.reg, articles: env.articles, chapitres: env.chapitres, icones: env.icones, fermer: env.fermer })
       return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }

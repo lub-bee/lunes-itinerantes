@@ -3722,3 +3722,8 @@ strong.a-verser { font-weight: 400; }
 .ressource-desc em { font-size: 12.5px; color: var(--encre-pale); }
 .niveaux-rarete li { font-size: 16px; }
 .classes-fiche .niveau-ligne { grid-template-columns: minmax(0, 1fr) 70px 80px; }
+
+/* Standing missions and free donations (v3n). */
+.mission.permanente { background: linear-gradient(90deg, rgba(31, 90, 86, 0.1), transparent 75%); }
+.mission.permanente .toujours { font-family: var(--f-capitales); font-style: normal; font-size: 12px; letter-spacing: 0.05em; color: #1f5a56; }
+.mission.permanente.fermee { opacity: 0.6; }

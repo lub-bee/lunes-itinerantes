@@ -4,8 +4,14 @@ import { peut } from '@/lib/droits'
 import { chargerArticles } from '@/lib/livre'
 import { cle } from '@/lib/missives'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
+import { bornes, semaineDe } from '@/lib/paie'
 import {
   ACTIONS_MISSION,
+  peser,
+  pointsDon,
+  pointsParPrise,
+  prisesDeLaSemaine,
+  poidsRepli,
   enCoursDe,
   PONDERATION_DEFAUT,
   ponderationEnLignes,
@@ -15,6 +21,7 @@ import {
   REGLAGES_DEFAUT,
   TEXTES,
   traduire,
+  VERBES,
   type ActionMission,
   type Classe,
   type Assignation,
@@ -36,12 +43,24 @@ type Lu = Awaited<ReturnType<typeof lireRegistre>>
 const refus = (message: string, status = 400) => NextResponse.json({ ok: false, message }, { status })
 
 function vide(relie: boolean): DonneesMissions {
-  return { relie, actif: false, ponderation: PONDERATION_DEFAUT, demandes: [], missions: [], points: [], moi: null, version: 0 }
+  return { relie, actif: false, ponderation: PONDERATION_DEFAUT, demandes: [], missions: [], points: [], permanentes: [], prises: {}, moi: null, version: 0 }
 }
 
 function vue(lu: Lu, qui: Identite | null): DonneesMissions {
   const m = lu.missions
-  return { relie: true, actif: m.actif, ponderation: m.ponderation, demandes: m.demandes, missions: m.missions, points: m.points, moi: qui?.nom ?? null, version: lu.version }
+  const b = bornes(semaineDe(Date.now(), lu.paie.reglages.jour))
+  return {
+    relie: true,
+    actif: m.actif,
+    ponderation: m.ponderation,
+    demandes: m.demandes,
+    missions: m.missions,
+    points: m.points,
+    permanentes: m.permanentes,
+    prises: prisesDeLaSemaine(m.missions, b.debut, b.fin),
+    moi: qui?.nom ?? null,
+    version: lu.version,
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -69,12 +88,6 @@ function entier(v: unknown, min: number, max: number, quoi: string): number {
   return n
 }
 
-function poidsOuVide(v: unknown, quoi: string): number | null {
-  if (v === null || v === undefined || String(v).trim() === '') return null
-  const n = Number(String(v).replace(',', '.'))
-  if (!Number.isFinite(n) || n <= 0 || n > 1000) non(`${quoi} : un poids plus grand que zéro (1000 au plus), ou rien pour « à fixer ».`)
-  return Math.round(n * 100) / 100
-}
 
 function numero(prefixe: string): string {
   const jour = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: '2-digit', month: '2-digit', day: '2-digit' })
@@ -89,7 +102,7 @@ const MAX_MISSIONS = 300
 
 /** The pondération the page sends, checked (classes with a code, resources in a known class). */
 function ponderationLue(b: Record<string, unknown>): Ponderation {
-  const brut = (b.ponderation ?? {}) as { classes?: unknown; ressources?: unknown; lots?: unknown; reglages?: unknown }
+  const brut = (b.ponderation ?? {}) as { classes?: unknown; ressources?: unknown; lots?: unknown; donsMin?: unknown; reglages?: unknown }
   if (!Array.isArray(brut.classes) || !Array.isArray(brut.ressources)) non('La pondération est illisible : rien n’a été gravé.')
   const classes: Classe[] = []
   for (const c of (brut.classes as Record<string, unknown>[]).slice(0, 40)) {
@@ -106,16 +119,23 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
     const classe = mot(r?.classe, 12)
     const origine = mot(r?.origine, 60)
     // A resource is kept when it has a level or an origin (« à fixer » with its origin is a row too).
-    if (!nom || (!classe && !origine)) continue
+    if (!nom || (!classe && !origine && !r?.reference)) continue
     if (classe && !classes.some((c) => cle(c.code) === cle(classe))) non(`${nom} est rangé dans un niveau inconnu (${classe}).`)
     if (ressources.some((x) => cle(x.nom) === cle(nom))) continue
-    ressources.push({ nom, classe: classe ? classes.find((c) => cle(c.code) === cle(classe))!.code : '', origine, poids: poidsOuVide(r?.poids, `Poids de ${nom}`), note: mot(r?.note, 120) })
+    const reference = r?.reference === null || r?.reference === undefined || String(r.reference).trim() === '' ? null : entier(r.reference, 1, 100000, `Quantité de référence de ${nom}`)
+    ressources.push({ nom, classe: classe ? classes.find((c) => cle(c.code) === cle(classe))!.code : '', origine, reference, note: mot(r?.note, 120) })
   }
   const lots: LotMission[] = []
   for (const l of (Array.isArray(brut.lots) ? (brut.lots as Record<string, unknown>[]) : []).slice(0, 600)) {
     const nom = mot(l?.nom, 120)
     if (!nom || lots.some((x) => cle(x.nom) === cle(nom))) continue
     lots.push({ nom, lot: entier(l?.lot, 1, 100000, `Lot par mission de ${nom}`) })
+  }
+  const donsMin: LotMission[] = []
+  for (const l of (Array.isArray(brut.donsMin) ? (brut.donsMin as Record<string, unknown>[]) : []).slice(0, 600)) {
+    const nom = mot(l?.nom, 120)
+    if (!nom || donsMin.some((x) => cle(x.nom) === cle(nom))) continue
+    donsMin.push({ nom, lot: entier(l?.lot, 1, 1000000, `Don minimum de ${nom}`) })
   }
   const reglagesBruts = (brut.reglages ?? {}) as Record<string, unknown>
   const reglages = { ...REGLAGES_DEFAUT } as Reglages
@@ -124,7 +144,17 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
     if (!Number.isFinite(n) || n < def.min || n > def.max) non(`${def.libelle} : de ${def.min} à ${def.max}.`)
     reglages[def.cle] = Math.round(n)
   }
-  return { classes, ressources, lots, reglages, source: 'registre' }
+  return { classes, ressources, lots, donsMin, reglages, source: 'registre' }
+}
+
+/** An item's name as the registre spells it (raw material, recipe product or ingredient, day-book merchandise). */
+function nomConnu(lu: Lu, articles: { fr: string; ombre?: boolean }[], nom: string): string {
+  const connus = new Map<string, string>()
+  const ajouter = (n: string) => n && !connus.has(cle(n)) && connus.set(cle(n), n)
+  lu.ressources.forEach((r) => ajouter(r.nom))
+  lu.recettes.filter((r) => !r.ombre).forEach((r) => (ajouter(r.produit), r.ingredients.forEach((i) => ajouter(i.nom))))
+  articles.forEach((a) => !a.ombre && ajouter(a.fr))
+  return connus.get(cle(nom)) ?? non(`Khajiit ne connaît nulle ressource ni marchandise nommée « ${nom} ».`)
 }
 
 /* ───────────────────────── Writes ───────────────────────── */
@@ -229,6 +259,64 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
             message: `Butin reçu : ${x.points} point${x.points > 1 ? 's' : ''} au crédit de ${x.prisPar}.`,
           }
         : { action: 'mission', charge: { mission: { numero: x.numero, geste: 'refuser', membre: qui.nom, quand, note } }, message: `Butin refusé : la mission retourne entre les pattes de ${x.prisPar}.` }
+    }
+
+    case 'permanente': {
+      // A standing mission opened or changed (v3n): objet, quantity and points per take, weekly ceiling, state.
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const id = mot(b.id, 40)
+      const avant = id ? (m.permanentes.find((x) => x.id === id) ?? non('Cette mission permanente est introuvable.')) : null
+      const articles = [...(await chargerArticles()), ...lu.catalogue]
+      const objet = nomConnu(lu, articles, mot(b.objet, 120) || non('Quelle ressource, ou quel ouvrage ?'))
+      const recette = recetteDe(lu.recettes, objet)
+      const type = recette ? 'fabrication' : 'récolte'
+      const fini = Boolean(recette) && articles.some((a) => !a.ombre && cle(a.fr) === cle(objet)) && !lu.recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(objet)))
+      const quantite = entier(b.quantite, 1, 100000, 'La quantité par prise')
+      const points = b.points === '' || b.points === undefined || b.points === null ? pointsParPrise(objet, quantite, lu.recettes, articles, m.ponderation, fini) : entier(b.points, 0, 1000000, 'Les points par prise')
+      const plafond = b.plafond === '' || b.plafond === undefined || b.plafond === null ? '' : entier(b.plafond, 1, 1000, 'Le plafond par semaine')
+      const statut = (['ouverte', 'en pause', 'close'] as const).find((x) => x === b.statut) ?? 'ouverte'
+      const w = peser(m.ponderation).poidsDe(objet, Boolean(recette))
+      const ligne = { id: id || numero('P'), type, objet, quantite, points, poids: w ?? '', plafond, statut, par: avant?.par ?? qui.nom, date: avant?.date ?? quand, note: mot(b.note, 200) }
+      return { action: 'paie', charge: { paie: { onglet: 'permanentes', lignes: [ligne] } }, message: `Mission permanente ${id ? 'corrigée' : 'ouverte'} : ${VERBES[type]} ${quantite} ${objet}, ${points} points la prise.` }
+    }
+
+    case 'prendrePermanente': {
+      // A take: an ordinary mission « en cours » for the taker (within his limit and the weekly ceiling).
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const x = m.permanentes.find((y) => y.id === mot(b.id, 40)) ?? non('Cette mission permanente est introuvable.')
+      if (x.statut !== 'ouverte') non('Cette mission permanente est fermée pour l’heure.')
+      const sem = bornes(semaineDe(Date.now(), lu.paie.reglages.jour))
+      if (x.plafond && (prisesDeLaSemaine(m.missions, sem.debut, sem.fin)[x.id] ?? 0) >= x.plafond) non('Cette mission permanente a son compte pour la semaine : elle rouvre la semaine prochaine.')
+      const max = m.ponderation.reglages.maxEnCours
+      if (enCoursDe(m.missions, qui.nom).length >= max) non(TEXTES.limite(max))
+      const w = x.poids ?? (x.type === 'récolte' ? poidsRepli(m.ponderation.reglages) : null)
+      return {
+        action: 'mission',
+        charge: { mission: { geste: 'instancier', numero: numero(x.id), demande: x.id, type: x.type, objet: x.objet, quantite: x.quantite, poids: x.poids ?? '', effort: w ? x.quantite * w : '', points: x.points, membre: qui.nom, quand, max, note: 'mission permanente' } },
+        message: `Mission prise : ${VERBES[x.type]} ${x.quantite} ${x.objet}. Elle reste ouverte aux autres.`,
+      }
+    }
+
+    case 'don': {
+      // A free donation (v3n): declared handed over, confirmed by another member; points only from its minimum.
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const articles = [...(await chargerArticles()), ...lu.catalogue]
+      const objet = nomConnu(lu, articles, mot(b.objet, 120) || non('Que donnes-tu ?'))
+      const quantite = entier(b.quantite, 1, 1000000, 'La quantité')
+      const recette = recetteDe(lu.recettes, objet)
+      const type = recette ? 'fabrication' : 'récolte'
+      const fini = Boolean(recette) && articles.some((a) => !a.ombre && cle(a.fr) === cle(objet)) && !lu.recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(objet)))
+      const d = pointsDon(objet, quantite, lu.recettes, articles, m.ponderation, fini)
+      const w = peser(m.ponderation).poidsDe(objet, Boolean(recette))
+      return {
+        action: 'mission',
+        charge: {
+          mission: { geste: 'instancier', statut: 'remise', numero: numero('DON'), demande: 'DON', type, objet, quantite, poids: w ?? '', effort: w ? quantite * w : '', points: d.points, membre: qui.nom, quand, note: mot(b.note, 120) || 'don libre' },
+        },
+        message: d.points
+          ? `Don déclaré : ${quantite} ${objet}. Qu’une autre patte le reçoive, et les ${d.points} points tomberont.`
+          : `Don déclaré : ${quantite} ${objet}, sous le minimum de ${d.minimum} : il sera reçu au coffre, sans point.`,
+      }
     }
 
     case 'ponderation': {

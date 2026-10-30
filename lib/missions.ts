@@ -25,9 +25,10 @@ export const TYPES_MISSION: TypeMission[] = ['récolte', 'fabrication']
 export type Classe = { code: string; nom: string; quantite: number | null; note: string }
 /**
  * A resource put in a rarity level, with its origin (a tag, display and filter only: Ferme, Chasse…) and an
- * optional weight of its own (an older override, still honoured; no longer edited).
+ * optional « quantité de référence » of its own (what one gathers in a solid session): it overrides the
+ * level's, and sets the weight (effort budget ÷ it), the lot per mission and the donation minimum by default.
  */
-export type Assignation = { nom: string; classe: string; origine: string; poids: number | null; note: string }
+export type Assignation = { nom: string; classe: string; origine: string; reference: number | null; note: string }
 
 /** A level's weight per unit (effort units), from its quantity per mission; null: « à fixer ». */
 export const poidsClasse = (c: Pick<Classe, 'quantite'> | null | undefined, budget: number) => (c?.quantite && c.quantite > 0 ? budget / c.quantite : null)
@@ -45,6 +46,11 @@ export type Reglages = {
   partFabrication: number
   /** Quantity per mission of a resource whose rarity is « à fixer » (its weight: budget ÷ it). */
   quantiteRepli: number
+  /** A free donation earns points from this many times the item's quantity per mission (its default minimum). */
+  multipleDon: number
+  /** Bonus (%) on a donation from `seuilBonusDon` times the quantity per mission (0: none). */
+  bonusDon: number
+  seuilBonusDon: number
 }
 
 /** The weight of a resource « à fixer ». */
@@ -58,7 +64,8 @@ export const poidsRepli = (r: Reglages) => r.budget / Math.max(0.01, r.quantiteR
 export type LotMission = { nom: string; lot: number }
 
 /** `source`: read from the registre, or the built-in defaults (tab empty, or a script before v3m). */
-export type Ponderation = { classes: Classe[]; ressources: Assignation[]; lots: LotMission[]; reglages: Reglages; source: 'registre' | 'defaut' }
+/** `donsMin`: an item's own minimum for a free donation to earn points (« don minimum : N »). */
+export type Ponderation = { classes: Classe[]; ressources: Assignation[]; lots: LotMission[]; donsMin: LotMission[]; reglages: Reglages; source: 'registre' | 'defaut' }
 
 export type Demande = {
   numero: string
@@ -99,6 +106,12 @@ export type Mission = {
 
 export type LignePoints = { horodatage: string; membre: string; points: number; raison: string; mission: string; confirmePar?: string; enAttente?: boolean }
 
+/**
+ * A standing mission (« mission permanente », v3n): always open, a fixed quantity and points per take; each
+ * take is an ordinary mission (its « demande » is this id). `plafond`: takes per week at most (null: none).
+ */
+export type Permanente = { id: string; type: TypeMission; objet: string; quantite: number; points: number; poids: number | null; plafond: number | null; statut: 'ouverte' | 'en pause' | 'close'; par: string; date: string; note: string }
+
 /** What the page receives. `moi`: the signed member (their missions and points). */
 export type DonneesMissions = {
   relie: boolean
@@ -108,14 +121,17 @@ export type DonneesMissions = {
   demandes: Demande[]
   missions: Mission[]
   points: LignePoints[]
+  permanentes: Permanente[]
+  /** Takes of each standing mission this week (taken, handed over or confirmed in it), for its weekly ceiling. */
+  prises: Record<string, number>
   moi: string | null
   version: number
 }
 
 /** Actions of the missions (each one goes through lib/droits.ts). */
 /** `rendre`: give a mission up (« renoncer »); `remettre`: hand its loot over; `confirmer` / `refuser`: another member's answer. */
-export type ActionMission = 'demande' | 'prendre' | 'rendre' | 'remettre' | 'confirmer' | 'refuser' | 'ponderation'
-export const ACTIONS_MISSION: ActionMission[] = ['demande', 'prendre', 'rendre', 'remettre', 'confirmer', 'refuser', 'ponderation']
+export type ActionMission = 'demande' | 'prendre' | 'rendre' | 'remettre' | 'confirmer' | 'refuser' | 'ponderation' | 'permanente' | 'prendrePermanente' | 'don'
+export const ACTIONS_MISSION: ActionMission[] = ['demande', 'prendre', 'rendre', 'remettre', 'confirmer', 'refuser', 'ponderation', 'permanente', 'prendrePermanente', 'don']
 
 /* ───────────────────────── Defaults (missions/ponderation.md, 2026-10-28) ───────────────────────── */
 
@@ -184,7 +200,7 @@ const PAR_DEFAUT: [string, string, string[]][] = [
   ['', 'Achat', ['Sucrelune', 'Morceau de Lin', 'Petit bois']],
 ]
 
-export const ASSIGNATIONS_DEFAUT: Assignation[] = PAR_DEFAUT.flatMap(([classe, origine, noms]) => noms.map((nom) => ({ nom, classe, origine, poids: null, note: '' })))
+export const ASSIGNATIONS_DEFAUT: Assignation[] = PAR_DEFAUT.flatMap(([classe, origine, noms]) => noms.map((nom) => ({ nom, classe, origine, reference: null, note: '' })))
 
 /** A resource's origin by default (by name), for rows that have none. */
 const origineDefaut = (nom: string) => ASSIGNATIONS_DEFAUT.find((a) => cle(a.nom) === cle(nom))?.origine ?? ''
@@ -195,12 +211,15 @@ export const REGLAGES: { cle: keyof Reglages; libelle: string; defaut: number; m
   { cle: 'maxEnCours', libelle: 'Missions en cours par membre', defaut: 5, min: 1, max: 99, note: 'une mission remise ne compte plus ; au-delà, il faut en remettre ou y renoncer' },
   { cle: 'objetsParFabrication', libelle: 'Objets par mission de fabrication', defaut: 10, min: 1, max: 10000, note: 'pour le produit final' },
   { cle: 'quantiteRepli', libelle: 'Quantité par mission de repli (rareté à fixer)', defaut: 30, min: 1, max: 100000, note: 'taille les missions des ressources sans rareté' },
+  { cle: 'multipleDon', libelle: 'Multiple minimum pour un don', defaut: 1, min: 1, max: 100, note: 'un don rapporte des points à partir de ce multiple de la quantité par mission' },
+  { cle: 'bonusDon', libelle: 'Bonus des gros dons (%)', defaut: 0, min: 0, max: 100, note: '0 : aucun bonus' },
+  { cle: 'seuilBonusDon', libelle: 'Gros don : à partir de (× la quantité par mission)', defaut: 3, min: 1, max: 100, note: 'seuil du bonus' },
 ]
 
 // The resources' and crafting shares are the pay's settings (lib/paie.ts, « Réglages paie »): one source.
 export const REGLAGES_DEFAUT = { ...Object.fromEntries(REGLAGES.map((r) => [r.cle, r.defaut])), partRessources: 75, partFabrication: 5 } as Reglages
 
-export const PONDERATION_DEFAUT: Ponderation = { classes: CLASSES_DEFAUT, ressources: ASSIGNATIONS_DEFAUT, lots: [], reglages: REGLAGES_DEFAUT, source: 'defaut' }
+export const PONDERATION_DEFAUT: Ponderation = { classes: CLASSES_DEFAUT, ressources: ASSIGNATIONS_DEFAUT, lots: [], donsMin: [], reglages: REGLAGES_DEFAUT, source: 'defaut' }
 
 /* ───────────────────────── In-character texts ───────────────────────── */
 
@@ -273,14 +292,25 @@ function reglagesLus(lignes: Record<string, unknown>[]): Reglages {
 export function ponderationLue(lignes: Record<string, unknown>[] = [], reglages: Record<string, unknown>[] = []): Ponderation {
   const r = reglagesLus(reglages)
   const ancienne = lignes.some((l) => cle(texte(l.genre)).startsWith('class') && /^c\d$/i.test(texte(l.code)))
+  // A resource's own reference: « Par mission »; an older own weight (« Poids ») is read as budget ÷ it.
+  const reference = (l: Record<string, unknown>): number | null => {
+    const q = nombre(l.quantite)
+    if (q && q > 0) return Math.round(q)
+    const w = nombre(l.poids)
+    return w && w > 0 ? Math.max(1, Math.round(r.budget / w)) : null
+  }
   const classes: Classe[] = []
   const ressources: Assignation[] = []
   const lots: LotMission[] = []
+  const donsMin: LotMission[] = []
   for (const l of lignes) {
     const genre = cle(texte(l.genre))
     const code = texte(l.code)
     const nom = texte(l.nom)
-    if (genre.startsWith('lot')) {
+    if (genre.startsWith('don')) {
+      const n = Math.round(nombre(l.quantite) ?? nombre(l.poids) ?? 0)
+      if (nom && n >= 1 && !donsMin.some((x) => cle(x.nom) === cle(nom))) donsMin.push({ nom, lot: Math.min(1000000, n) })
+    } else if (genre.startsWith('lot')) {
       const n = Math.round(nombre(l.quantite) ?? nombre(l.poids) ?? nombre(l.code) ?? 0)
       if (nom && n >= 1 && !lots.some((x) => cle(x.nom) === cle(nom))) lots.push({ nom, lot: Math.min(100000, n) })
     } else if (genre.startsWith('class')) {
@@ -296,14 +326,14 @@ export function ponderationLue(lignes: Record<string, unknown>[] = [], reglages:
         const a = ANCIENNES[code.toUpperCase()]
         const defaut = ASSIGNATIONS_DEFAUT.find((x) => cle(x.nom) === cle(nom))
         // Farm produce left in C1 joins « Ferme »: the default origin wins over the old class's.
-        ressources.push({ nom, classe: a ? a.classe : code, origine: defaut?.origine || a?.origine || '', poids: nombre(l.poids), note: texte(l.note) })
-      } else ressources.push({ nom, classe: code, origine: texte(l.origine) || origineDefaut(nom), poids: nombre(l.poids), note: texte(l.note) })
+        ressources.push({ nom, classe: a ? a.classe : code, origine: defaut?.origine || a?.origine || '', reference: reference(l), note: texte(l.note) })
+      } else ressources.push({ nom, classe: code, origine: texte(l.origine) || origineDefaut(nom), reference: reference(l), note: texte(l.note) })
     }
   }
-  if (!classes.length && !ressources.length) return { ...PONDERATION_DEFAUT, lots, reglages: r, source: lots.length ? 'registre' : 'defaut' }
+  if (!classes.length && !ressources.length) return { ...PONDERATION_DEFAUT, lots, donsMin, reglages: r, source: lots.length || donsMin.length ? 'registre' : 'defaut' }
   // Every default level the tab lacks joins it (its own levels untouched).
   for (const d of CLASSES_DEFAUT) if (!classes.some((c) => cle(c.code) === cle(d.code))) classes.push(d)
-  return { classes, ressources, lots, reglages: r, source: 'registre' }
+  return { classes, ressources, lots, donsMin, reglages: r, source: 'registre' }
 }
 
 /** The pondération as the tabs' rows (what 'ponderation' writes, and the seed of a first demand). */
@@ -311,8 +341,9 @@ export function ponderationEnLignes(p: Ponderation) {
   return {
     lignes: [
       ...p.classes.map((c) => ({ genre: 'classe', code: c.code, nom: c.nom, quantite: c.quantite ?? '', origine: '', poids: '', note: c.note })),
-      ...p.ressources.map((r) => ({ genre: 'ressource', code: r.classe, nom: r.nom, quantite: '', origine: r.origine, poids: r.poids ?? '', note: r.note })),
+      ...p.ressources.map((r) => ({ genre: 'ressource', code: r.classe, nom: r.nom, quantite: r.reference ?? '', origine: r.origine, poids: '', note: r.note })),
       ...p.lots.map((l) => ({ genre: 'lot', code: '', nom: l.nom, quantite: l.lot, origine: '', poids: '', note: 'par mission' })),
+      ...(p.donsMin ?? []).map((l) => ({ genre: 'don', code: '', nom: l.nom, quantite: l.lot, origine: '', poids: '', note: 'don minimum' })),
     ],
     reglages: REGLAGES.map((r) => ({ reglage: r.libelle, valeur: p.reglages[r.cle], note: r.note })),
   }
@@ -327,10 +358,10 @@ export function peser(p: Ponderation) {
     const a = assignee(nom)
     return a?.classe ? (classes.get(cle(a.classe)) ?? null) : null
   }
-  /** Weight per unit (internal): an own weight, else the level's (budget ÷ its quantity); null: « à fixer ». */
+  /** Weight per unit (internal): budget ÷ the item's own reference, else its level's quantity; null: « à fixer ». */
   const poidsDe = (nom: string, transformation = false): number | null => {
     const a = assignee(nom)
-    if (a?.poids !== null && a?.poids !== undefined && a.poids > 0) return a.poids
+    if (a?.reference && a.reference > 0) return p.reglages.budget / a.reference
     const c = a?.classe ? classes.get(cle(a.classe)) : transformation ? classes.get(cle(CODE_TRANSFORMATION)) : undefined
     return poidsClasse(c, p.reglages.budget)
   }
@@ -529,13 +560,13 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
     if (r) {
       // Whole crafts: a mission holds as many crafts as its effort allows (at least one).
       const rend = Math.max(1, r.rendement)
-      for (const q of couper('fabrication', nom, (fournees.get(k) ?? 0) * rend, rend, Math.floor(budget / w), 'effort'))
+      for (const q of couper('fabrication', nom, (fournees.get(k) ?? 0) * rend, rend, Math.floor(budget / w + 1e-9), 'effort'))
         missions.push({ type: 'fabrication', intermediaire: true, objet: nom, quantite: q, poids, effort: q * w, points: 0, classe, ligne: cleLigne('fabrication', nom) })
     } else {
       const total = Math.ceil((besoin.get(k) ?? 0) - 1e-9)
       if (total <= 0) continue
       brut.push({ nom, quantite: total })
-      for (const q of couper('récolte', nom, total, 1, Math.max(1, Math.floor(budget / w)), 'effort'))
+      for (const q of couper('récolte', nom, total, 1, Math.max(1, Math.floor(budget / w + 1e-9)), 'effort'))
         missions.push({ type: 'récolte', objet: nom, quantite: q, poids, effort: q * w, points: 0, classe, ligne: cleLigne('récolte', nom) })
     }
   }
@@ -568,7 +599,7 @@ const statutLu = (s: unknown): StatutMission => {
   return k.startsWith('encours') || k.startsWith('prise') ? 'en cours' : k.startsWith('remise') ? 'remise' : k.startsWith('accompli') ? 'accomplie' : 'ouverte'
 }
 
-export type MissionsLues = { actif: boolean; ponderation: Ponderation; demandes: Demande[]; missions: Mission[]; points: LignePoints[] }
+export type MissionsLues = { actif: boolean; ponderation: Ponderation; demandes: Demande[]; missions: Mission[]; points: LignePoints[]; permanentes: Permanente[] }
 
 /** The missions' tabs (from a v3m script, asked with `missions: true`; absent keys: an older script). */
 export function lireMissions(o: Onglets): MissionsLues {
@@ -606,11 +637,30 @@ export function lireMissions(o: Onglets): MissionsLues {
       note: texte(r.note),
       journal: texte(r.journal),
     }))
-    .filter((m) => m.numero && m.objet)
+    // A take of a standing mission given up (« abandonnée ») is gone.
+    .filter((m, i) => m.numero && m.objet && !/^(abandon|refus)/.test(cle(texte((o.missions ?? [])[i]?.statut))))
   const points: LignePoints[] = (o.points ?? [])
     .map((r) => ({ horodatage: date(r.horodatage), membre: texte(r.membre), points: nombre(r.points) ?? 0, raison: texte(r.raison), mission: texte(r.mission), confirmePar: texte(r.confirmePar) }))
     .filter((p) => p.membre)
-  return { actif, ponderation: ponderationLue(o.ponderation ?? [], o.reglagesMissions ?? []), demandes, missions, points }
+  const permanentes: Permanente[] = (o.permanentes ?? [])
+    .map((r) => {
+      const st = cle(texte(r.statut))
+      return {
+        id: texte(r.id),
+        type: TYPES[cle(texte(r.type))] ?? 'récolte',
+        objet: texte(r.objet),
+        quantite: nombre(r.quantite) ?? 0,
+        points: nombre(r.points) ?? 0,
+        poids: nombre(r.poids),
+        plafond: nombre(r.plafond),
+        statut: (st.startsWith('pause') || st.startsWith('enpause') ? 'en pause' : st.startsWith('clos') ? 'close' : 'ouverte') as Permanente['statut'],
+        par: texte(r.par),
+        date: date(r.date),
+        note: texte(r.note),
+      }
+    })
+    .filter((x) => x.id && x.objet && x.quantite > 0)
+  return { actif, ponderation: ponderationLue(o.ponderation ?? [], o.reglagesMissions ?? []), demandes, missions, points, permanentes }
 }
 
 /* ───────────────────────── Members, demands ───────────────────────── */
@@ -656,8 +706,85 @@ export function avancement(d: Demande, missions: Mission[]) {
   }
 }
 
+/**
+ * Points of one take of a standing mission, by default: what that quantity earns as part of the usual
+ * recipes that use it. For each merchandise of the day book with a floor whose usual recipe takes the
+ * item directly: its resources' share (75 % of the floor) × the item's part of the recipe's effort
+ * (quantity × weight of the item ÷ Σ over the ingredients) ÷ the item's quantity per craft — the points one
+ * unit earns there; the average over those recipes × the quantity. A product of the catalogue (a craft of
+ * the final product): its crafting share (5 % of the floor) × the quantity.
+ */
+export function pointsParPrise(objet: string, quantite: number, recettes: Recette[], articles: { fr: string; min: number | null; ombre?: boolean }[], p: Ponderation, fini: boolean): number {
+  const r = p.reglages
+  if (fini) {
+    const a = articles.find((x) => !x.ombre && cle(x.fr) === cle(objet))
+    return a?.min ? Math.round((a.min * quantite * r.partFabrication) / 100) : 0
+  }
+  const { poidsDe } = peser(p)
+  const parUnite: number[] = []
+  for (const a of articles) {
+    if (a.ombre || !a.min) continue
+    const rec = recetteDe(recettes, a.fr)
+    const ing = rec?.ingredients.find((i) => cle(i.nom) === cle(objet))
+    if (!rec || !ing) continue
+    const w = (nom: string) => poidsDe(nom, Boolean(recetteDe(recettes, nom))) ?? poidsRepli(r)
+    const total = rec.ingredients.reduce((t, i) => t + i.quantite * w(i.nom), 0)
+    if (total <= 0) continue
+    parUnite.push(((a.min / Math.max(1, rec.rendement)) * (r.partRessources / 100) * ((ing.quantite * w(ing.nom)) / total)) / ing.quantite)
+  }
+  if (!parUnite.length) return 0
+  return Math.round((parUnite.reduce((t, x) => t + x, 0) / parUnite.length) * quantite)
+}
+
+/**
+ * Takes of each standing mission in the week [debut, fin): the confirmed ones confirmed in it, and those
+ * still running (en cours, remise), so the ceiling cannot be passed.
+ */
+export function prisesDeLaSemaine(missions: Mission[], debut: number, fin: number): Record<string, number> {
+  const res: Record<string, number> = {}
+  for (const m of missions) {
+    if (!/^p-/i.test(m.demande)) continue
+    const t = Date.parse(m.accomplieLe)
+    if (m.statut === 'en cours' || m.statut === 'remise' || (m.statut === 'accomplie' && t >= debut && t < fin)) res[m.demande] = (res[m.demande] ?? 0) + 1
+  }
+  return res
+}
+
+/** An item's quantity per mission: its lot set by hand, else its rarity's (or the settings' for a final product). */
+export function quantiteParMission(p: Ponderation, nom: string, recettes: Recette[], fini = false): number {
+  const lot = p.lots.find((l) => cle(l.nom) === cle(nom))?.lot
+  if (lot) return lot
+  if (fini) return p.reglages.objetsParFabrication
+  return quantiteReference(p, nom, recettes) ?? p.reglages.quantiteRepli
+}
+
+/** An item's « quantité de référence »: its own, else its rarity level's (Fabrication intermédiaire for an intermediate); null: « à fixer ». */
+export function quantiteReference(p: Ponderation, nom: string, recettes: Recette[]): number | null {
+  const w = peser(p).poidsDe(nom, Boolean(recetteDe(recettes, nom)))
+  return w ? Math.max(1, Math.round(p.reglages.budget / w)) : null
+}
+
+/** A free donation's minimum to earn points: the item's own (« don minimum »), else its quantity per mission × the multiple. */
+export const minimumDon = (p: Ponderation, nom: string, recettes: Recette[], fini = false) =>
+  p.donsMin?.find((l) => cle(l.nom) === cle(nom))?.lot ?? quantiteParMission(p, nom, recettes, fini) * p.reglages.multipleDon
+
+/**
+ * A free donation's points: the missions' rate per unit for that item (pointsParPrise) × quantity, only from
+ * its minimum (below: 0, accepted all the same); + the big donations' bonus from the threshold, if set.
+ */
+export function pointsDon(objet: string, quantite: number, recettes: Recette[], articles: { fr: string; min: number | null; ombre?: boolean }[], p: Ponderation, fini: boolean) {
+  const minimum = minimumDon(p, objet, recettes, fini)
+  if (quantite < minimum) return { points: 0, minimum, bonus: false }
+  const base = pointsParPrise(objet, quantite, recettes, articles, p, fini)
+  const bonus = p.reglages.bonusDon > 0 && quantite >= quantiteParMission(p, objet, recettes, fini) * p.reglages.seuilBonusDon
+  return { points: bonus ? Math.round(base * (1 + p.reglages.bonusDon / 100)) : base, minimum, bonus }
+}
+
+export const estDon = (m: Pick<Mission, 'demande'>) => /^don/i.test(m.demande)
+
 /** « Récolter 120 Blé » */
 export const intitule = (m: Pick<Mission, 'type' | 'quantite' | 'objet'>) => `${VERBES[m.type]} ${new Intl.NumberFormat('fr-FR').format(m.quantite)} ${m.objet}`
 
 /** The reason written on a points row. */
-export const raisonPoints = (m: Pick<Mission, 'type' | 'quantite' | 'objet'>) => `Mission de ${m.type} : ${intitule(m)}`
+export const raisonPoints = (m: Pick<Mission, 'type' | 'quantite' | 'objet'> & { demande?: string }) =>
+  m.demande && /^don/i.test(m.demande) ? `Don : ${new Intl.NumberFormat('fr-FR').format(m.quantite)} ${m.objet}` : `Mission de ${m.type} : ${intitule(m)}`

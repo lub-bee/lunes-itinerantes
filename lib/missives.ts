@@ -576,6 +576,8 @@ export type Onglets = {
   demandes?: Record<string, unknown>[]
   missions?: Record<string, unknown>[]
   points?: Record<string, unknown>[]
+  /** Standing missions (v3n, with the missions' tabs). */
+  permanentes?: Record<string, unknown>[]
   /** The pay's tabs (lib/paie.ts), from a v3n script asked with `paie: true`. */
   reglagesPaie?: Record<string, unknown>[]
   factures?: Record<string, unknown>[]

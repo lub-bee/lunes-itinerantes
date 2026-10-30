@@ -11,6 +11,11 @@ import {
   ICONES_TYPES,
   intitule,
   ORIGINES,
+  estDon,
+  minimumDon,
+  pointsDon,
+  pointsParPrise,
+  quantiteParMission,
   peser,
   raisonPoints,
   recetteDe,
@@ -222,6 +227,23 @@ export function GaucheMissions({ page, reg, icones, compact }: { page: PageMissi
           <Signature reg={reg} />
           <Inactif reg={reg} />
           <Message reg={reg} />
+          {moiDe(reg) && (
+            <div className="gestes">
+              {reg.r.marchand?.droits?.don !== false && (
+                <Geste icone={icones['hand']} onClick={() => reg.ouvrir({ genre: 'don' })}>
+                  Déclarer un don
+                </Geste>
+              )}
+              {reg.r.marchand?.droits?.permanente !== false && (
+                <Geste icone={icones['hunting-horn']} onClick={() => reg.ouvrir({ genre: 'permanente' })}>
+                  Ouvrir une mission permanente
+                </Geste>
+              )}
+            </div>
+          )}
+          <p className="note-encre">
+            Un don libre (une grosse récolte, hors mission) se déclare ici ; une autre patte le confirme, et il rapporte au taux des missions à partir du minimum de la ressource.
+          </p>
         </>
       )}
     </>
@@ -255,8 +277,8 @@ function MesMissions({ reg, icones }: { reg: CtxRegistre; icones: Record<string,
             <li key={m.numero} className={`mission tenue ${m.statut === 'remise' ? 'remise' : ''} ${m.enAttente ? 'en-attente' : ''}`}>
               <GlypheType type={m.type} icones={icones} />
               <span className="mission-texte">
-                <span className="mission-intitule">{intitule(m)}</span>
-                <Meta parts={[m.statut === 'remise' ? m.remiseLe && `remise le ${dateTamrielique(m.remiseLe)}` : m.prisLe && `prise le ${dateTamrielique(m.prisLe)}`, poids(m)]} />
+                <span className="mission-intitule">{estDon(m) ? `Don : ${quantite(m.quantite)} ${m.objet}` : intitule(m)}</span>
+                <Meta parts={[m.statut === 'remise' ? m.remiseLe && `${estDon(m) ? 'déclaré' : 'remise'} le ${dateTamrielique(m.remiseLe)}` : m.prisLe && `prise le ${dateTamrielique(m.prisLe)}`, /^p-/i.test(m.demande) && 'mission permanente', poids(m)]} />
               </span>
               <span className="mission-cote">
                 <strong className="mission-points">{pts(m.points)}</strong>
@@ -289,6 +311,59 @@ function MesMissions({ reg, icones }: { reg: CtxRegistre; icones: Record<string,
   )
 }
 
+/** Standing missions: always open, each take an ordinary mission for the taker; a weekly ceiling, a pause. */
+function Permanentes({ reg, icones, tab }: { reg: CtxRegistre; icones: Record<string, string>; tab: number }) {
+  const m = reg.m!
+  const d = m.donnees!
+  const liste = d.permanentes.filter((x) => x.statut !== 'close')
+  if (!liste.length) return null
+  const moi = moiDe(reg)
+  const max = d.ponderation.reglages.maxEnCours
+  const pleines = moi ? enCoursDe(d.missions, moi).length >= max : false
+  const droits = reg.r.marchand?.droits
+  return (
+    <section className="permanentes">
+      <h3 className="titre-section">Missions permanentes</h3>
+      <ul className="missions-liste">
+        {liste.map((x) => {
+          const prises = d.prises[x.id] ?? 0
+          const pleine = x.plafond !== null && prises >= x.plafond
+          const fermee = x.statut !== 'ouverte' || pleine
+          return (
+            <li key={x.id} className={`mission permanente ${fermee ? 'fermee' : ''}`}>
+              <GlypheType type={x.type} icones={icones} />
+              <span className="mission-texte">
+                <span className="mission-intitule">{intitule(x)}</span>
+                <Meta
+                  parts={[
+                    x.statut === 'en pause' ? 'en pause' : pleine ? 'close jusqu’à la semaine prochaine' : <span className="toujours">toujours ouverte</span>,
+                    x.plafond !== null && `${prises} / ${x.plafond} cette semaine`,
+                  ]}
+                />
+              </span>
+              <span className="mission-cote">
+                <strong className="mission-points">{pts(x.points)}</strong>
+                <span className="mission-gestes">
+                  {moi && droits?.prendrePermanente !== false && (
+                    <Action icone="prendre" tabIndex={tab} disabled={fermee || pleines || !d.actif} title={pleines ? TEXTES.limite(max) : undefined} onClick={() => m.agir('prendrePermanente', { id: x.id })}>
+                      prendre
+                    </Action>
+                  )}
+                  {moi && droits?.permanente !== false && (
+                    <Action icone="corriger" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'permanente', id: x.id })}>
+                      régler
+                    </Action>
+                  )}
+                </span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 /** The loot others handed over: anyone but the holder confirms it (points credited then) or refuses it. */
 function AConfirmer({ reg, icones }: { reg: CtxRegistre; icones: Record<string, string> }) {
   const d = reg.m!.donnees!
@@ -314,8 +389,8 @@ function AConfirmer({ reg, icones }: { reg: CtxRegistre; icones: Record<string, 
             <li key={m.numero} className={`mission ${m.enAttente ? 'en-attente' : ''}`}>
               <GlypheType type={m.type} icones={icones} />
               <span className="mission-texte">
-                <span className="mission-intitule">{intitule(m)}</span>
-                <Meta parts={[`remis par ${m.prisPar}`, m.remiseLe && `le ${dateTamrielique(m.remiseLe)}`]} />
+                <span className="mission-intitule">{estDon(m) ? `Don : ${quantite(m.quantite)} ${m.objet}` : intitule(m)}</span>
+                <Meta parts={[estDon(m) ? `don libre de ${m.prisPar}` : `remis par ${m.prisPar}`, m.remiseLe && `le ${dateTamrielique(m.remiseLe)}`, estDon(m) && !m.points && 'sous le minimum : sans point']} />
               </span>
               <span className="mission-cote">
                 <strong className="mission-points">{pts(m.points)}</strong>
@@ -392,6 +467,7 @@ export function DroiteMissions({ reg, icones, interactif, citation }: { reg?: Ct
       {/* The member's own missions first, then the call (the same order on a phone). */}
       <MesMissions reg={reg} icones={icones} />
       <AConfirmer reg={reg} icones={icones} />
+      <Permanentes reg={reg} icones={icones} tab={tab} />
       <h3 className="titre-section">Missions ouvertes</h3>
       <FiltreMissions reg={reg} />
       {pleines && <p className="note-encre">{TEXTES.limite(max)}</p>}
@@ -840,7 +916,7 @@ function matieres(reg: CtxRegistre, p: Ponderation) {
 
 /** A pondération written whole (one call): the registre's, with one change. */
 const graver = (reg: CtxRegistre, p: Ponderation) =>
-  reg.m!.agir('ponderation', { ponderation: { classes: p.classes, ressources: p.ressources, lots: p.lots, reglages: p.reglages } })
+  reg.m!.agir('ponderation', { ponderation: { classes: p.classes, ressources: p.ressources, lots: p.lots, donsMin: p.donsMin, reglages: p.reglages } })
 
 const lotDe = (p: Ponderation, nom: string) => p.lots.find((l) => cle(l.nom) === cle(nom))?.lot ?? null
 
@@ -884,13 +960,19 @@ function descriptionMatiere(p: Ponderation, nom: string, intermediaire: boolean,
   const c = fini ? null : classeDe(nom) ?? (intermediaire && !a?.classe ? p.classes.find((x) => x.code === CODE_TRANSFORMATION) ?? null : null)
   const lot = lotDe(p, nom)
   const w = poidsDe(nom, intermediaire)
-  const parMission = lot ?? (fini ? p.reglages.objetsParFabrication : w ? Math.floor(p.reglages.budget / w) : p.reglages.quantiteRepli)
+  const reference = fini ? null : w ? Math.max(1, Math.round(p.reglages.budget / w)) : null
+  const parMission = lot ?? (fini ? p.reglages.objetsParFabrication : (reference ?? p.reglages.quantiteRepli))
+  const donMin = p.donsMin.find((x) => cle(x.nom) === cle(nom))?.lot ?? null
   return {
     niveau: fini ? 'produit fini' : (c?.nom ?? 'rareté à fixer'),
     aFixer: !fini && w === null,
     origine: a?.origine || '',
+    reference,
+    referencePropre: Boolean(a?.reference),
     parMission,
-    source: lot ? 'réglé à la main' : fini ? 'réglage' : w === null ? 'repli' : a?.poids ? 'poids propre' : '',
+    source: lot ? 'réglé à la main' : fini ? 'réglage' : w === null ? 'repli' : a?.reference ? 'référence propre' : '',
+    donMin: donMin ?? parMission * p.reglages.multipleDon,
+    donMinPropre: donMin !== null,
   }
 }
 
@@ -916,6 +998,7 @@ function VuePonderation({ reg }: { reg: CtxRegistre }) {
           <span className={x.aFixer ? 'a-fixer' : ''}>{x.niveau}</span>
           {x.origine && <> · {x.origine}</>} — <b className={x.source === 'réglé à la main' ? 'fixe' : ''}>{quantite(x.parMission)} par mission</b>
           {x.source && <em> ({x.source})</em>}
+          {x.donMinPropre && <em> · don minimum {quantite(x.donMin)}</em>}
         </span>
       </button>
     )
@@ -1037,7 +1120,7 @@ function FicheClasses({ reg, icones, fermer }: EnvMission) {
   )
 }
 
-/** One item's note: its rarity level, its origin, its lot per mission. */
+/** One item's note: rarity and origin, its « quantité de référence », and the two overrides (lot per mission, donation minimum). */
 function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }) {
   const p = reg.m!.donnees!.ponderation
   const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
@@ -1046,27 +1129,32 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
   const a = p.ressources.find((r) => cle(r.nom) === cle(nom))
   const [classe, setClasse] = useState(a?.classe ?? '')
   const [origine, setOrigine] = useState(a?.origine ?? '')
+  const [reference, setReference] = useState<number | null>(a?.reference ?? null)
   const [lot, setLot] = useState<number | null>(lotDe(p, nom))
+  const [donMin, setDonMin] = useState<number | null>(p.donsMin.find((x) => cle(x.nom) === cle(nom))?.lot ?? null)
   const { etat, erreur, envoyer } = useScelle(fermer)
   const origines = [...new Set([...ORIGINES, ...p.ressources.map((r) => r.origine).filter(Boolean)])]
-  const nouvelle = (): Ponderation => {
-    const garde = classe || origine.trim()
-    const ressources: Assignation[] = [...p.ressources.filter((r) => cle(r.nom) !== cle(nom)), ...(garde ? [{ nom, classe, origine: origine.trim(), poids: a?.poids ?? null, note: a?.note ?? '' }] : [])]
-    const lots = [...p.lots.filter((l) => cle(l.nom) !== cle(nom)), ...(lot ? [{ nom, lot: Math.round(lot) }] : [])]
-    return { ...p, ressources, lots }
+  const avec = (ref: number | null, l: number | null, dm: number | null): Ponderation => {
+    const garde = classe || origine.trim() || ref
+    const ressources: Assignation[] = [...p.ressources.filter((r) => cle(r.nom) !== cle(nom)), ...(garde ? [{ nom, classe, origine: origine.trim(), reference: ref, note: a?.note ?? '' }] : [])]
+    const lots = [...p.lots.filter((x) => cle(x.nom) !== cle(nom)), ...(l ? [{ nom, lot: Math.round(l) }] : [])]
+    const donsMin = [...p.donsMin.filter((x) => cle(x.nom) !== cle(nom)), ...(dm ? [{ nom, lot: Math.round(dm) }] : [])]
+    return { ...p, ressources, lots, donsMin }
   }
-  const x = descriptionMatiere(nouvelle(), nom, intermediaire, fini)
+  const x = descriptionMatiere(avec(reference, lot, donMin), nom, intermediaire, fini)
+  const defaut = descriptionMatiere(avec(null, null, null), nom, intermediaire, fini)
+  const sans = descriptionMatiere(avec(reference, null, null), nom, intermediaire, fini)
   return (
     <form
       className="fiche-form ponderation-form"
       onSubmit={(e) => {
         e.preventDefault()
-        envoyer(() => graver(reg, nouvelle()))
+        envoyer(() => graver(reg, avec(reference, lot, donMin)))
       }}
     >
       <p className="fiche-aide">
         {nom} — {x.niveau}
-        {x.origine && ` · ${x.origine}`} — {quantite(x.parMission)} par mission{x.source && ` (${x.source})`}
+        {x.origine && ` · ${x.origine}`} — {quantite(x.parMission)} par mission{x.source && ` (${x.source})`} · don minimum {quantite(x.donMin)}
       </p>
       {!fini && (
         <>
@@ -1077,7 +1165,7 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
               {p.classes.map((c) => (
                 <option key={c.code} value={c.code}>
                   {c.nom}
-                  {c.quantite === null ? ' (à fixer)' : ` (~${quantite(c.quantite)} par mission)`}
+                  {c.quantite === null ? ' (à fixer)' : ` (référence ~${quantite(c.quantite)})`}
                 </option>
               ))}
             </select>
@@ -1092,17 +1180,172 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
               ))}
             </datalist>
           </label>
+          <label className="fiche-champ">
+            <span>Quantité de référence</span>
+            <ChampNombre valeur={reference} placeholder={defaut.reference ? `${quantite(defaut.reference)} (sa rareté)` : 'à fixer'} changer={(v) => setReference(v === null ? null : Math.round(v))} />
+          </label>
+          <p className="fiche-aide">Ce qu’on en ramasse en une bonne session. Elle règle le poids (le partage des points), et par défaut la taille des missions et le minimum d’un don.</p>
         </>
       )}
       <label className="fiche-champ">
-        <span>Lot par mission (réglé à la main)</span>
-        <ChampNombre valeur={lot} placeholder={`${quantite(descriptionMatiere({ ...nouvelle(), lots: p.lots.filter((l) => cle(l.nom) !== cle(nom)) }, nom, intermediaire, fini).parMission)} (selon la rareté)`} changer={(v) => setLot(v === null ? null : Math.round(v))} />
+        <span>Lot par mission</span>
+        <ChampNombre valeur={lot} placeholder={`${quantite(sans.parMission)} (par défaut)`} changer={(v) => setLot(v === null ? null : Math.round(v))} />
       </label>
-      <p className="fiche-aide">Vide : la quantité de sa rareté{fini ? ' (ou le réglage « objets par mission »)' : ''}. Réglé à la main, il l’emporte : des paquets pleins, le reste en dernier.</p>
+      <p className="fiche-aide">Ce que tient une mission, s’il diffère{fini ? ' (par défaut : le réglage « objets par mission »)' : ' de la référence'} ; ne change pas le poids. Des paquets pleins, le reste en dernier.</p>
+      <label className="fiche-champ">
+        <span>Don minimum</span>
+        <ChampNombre valeur={donMin} placeholder={`${quantite(sans.donMin)} (référence × ${prix(p.reglages.multipleDon)})`} changer={(v) => setDonMin(v === null ? null : Math.round(v))} />
+      </label>
+      <p className="fiche-aide">Un don libre rapporte des points à partir de cette quantité ; en dessous, il est reçu au coffre sans point. Ne change pas le poids.</p>
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones}>
           Graver
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/** Every name a mission or a donation can be about: raw materials, recipe ingredients and products, the day book's merchandise. */
+function nomsObjets(reg: CtxRegistre, articles: Article[]) {
+  const noms = new Map<string, string>()
+  const ajouter = (n: string) => n && !noms.has(cle(n)) && noms.set(cle(n), n)
+  ;(reg.r.donnees?.ressources ?? []).forEach((r) => ajouter(r.nom))
+  ;(reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre).forEach((r) => (ajouter(r.produit), r.ingredients.forEach((i) => ajouter(i.nom))))
+  articles.filter((a) => !a.ombre).forEach((a) => ajouter(a.fr))
+  return noms
+}
+
+/** Whether an item is only a final product (a craft of it, its crafting share). */
+function estFini(reg: CtxRegistre, articles: Article[], nom: string) {
+  const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
+  return recettes.some((r) => cle(r.produit) === cle(nom)) && articles.some((a) => !a.ombre && cle(a.fr) === cle(nom)) && !recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(nom)))
+}
+
+function FichePermanente({ reg, icones, fermer, id, articles }: EnvMission & { id?: string }) {
+  const d = reg.m!.donnees!
+  const x = d.permanentes.find((y) => y.id === id)
+  const recettes = reg.r.donnees?.recettes ?? []
+  const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
+  const [v, setV] = useState({ objet: x?.objet ?? '', quantite: x ? String(x.quantite) : '', points: x ? String(x.points) : '', plafond: x?.plafond ? String(x.plafond) : '', statut: x?.statut ?? 'ouverte', note: x?.note ?? '' })
+  const objet = noms.get(cle(v.objet)) ?? ''
+  const fini = objet ? estFini(reg, articles, objet) : false
+  const qDefaut = objet ? quantiteParMission(d.ponderation, objet, recettes, fini) : 0
+  const q = Number(v.quantite) || qDefaut
+  const pDefaut = objet ? pointsParPrise(objet, q, recettes, articles, d.ponderation, fini) : 0
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  return (
+    <form
+      className="fiche-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => reg.m!.agir('permanente', { id, objet: objet || v.objet, quantite: q, points: v.points, plafond: v.plafond, statut: v.statut, note: v.note }))
+      }}
+    >
+      <label className="fiche-champ">
+        <span>Ressource ou ouvrage</span>
+        <input type="text" list="objets-permanente" value={v.objet} placeholder="Blé" onChange={(e) => setV({ ...v, objet: e.target.value })} />
+        <datalist id="objets-permanente">
+          {[...noms.values()].sort((a, b) => a.localeCompare(b, 'fr')).map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+      </label>
+      {v.objet && !objet && <p className="message-encre erreur">Khajiit ne connaît nulle ressource ni ouvrage de ce nom.</p>}
+      <div className="fiche-deux">
+        <label className="fiche-champ">
+          <span>Quantité par prise</span>
+          <input type="text" inputMode="numeric" value={v.quantite} placeholder={qDefaut ? String(qDefaut) : '40'} onChange={(e) => setV({ ...v, quantite: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
+        </label>
+        <label className="fiche-champ">
+          <span>Points par prise</span>
+          <input type="text" inputMode="numeric" value={v.points} placeholder={String(pDefaut)} onChange={(e) => setV({ ...v, points: e.target.value.replace(/\D/g, '').slice(0, 7) })} />
+        </label>
+      </div>
+      <p className="fiche-aide">Points par défaut : ce que rapporte cette quantité dans les recettes qui l’emploient ({pts(pDefaut)}).</p>
+      <div className="fiche-deux">
+        <label className="fiche-champ">
+          <span>Prises par semaine, au plus</span>
+          <input type="text" inputMode="numeric" value={v.plafond} placeholder="sans limite" onChange={(e) => setV({ ...v, plafond: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
+        </label>
+        <label className="fiche-champ">
+          <span>État</span>
+          <select value={v.statut} onChange={(e) => setV({ ...v, statut: e.target.value as typeof v.statut })}>
+            <option value="ouverte">ouverte</option>
+            <option value="en pause">en pause</option>
+            <option value="close">close</option>
+          </select>
+        </label>
+      </div>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!objet}>
+          {x ? 'Graver' : 'Ouvrir la mission'}
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+function FicheDon({ reg, icones, fermer, articles }: EnvMission) {
+  const d = reg.m!.donnees!
+  const recettes = reg.r.donnees?.recettes ?? []
+  const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
+  const [v, setV] = useState({ objet: '', quantite: '', note: '' })
+  const objet = noms.get(cle(v.objet)) ?? ''
+  const fini = objet ? estFini(reg, articles, objet) : false
+  const q = Number(v.quantite) || 0
+  const don = objet && q > 0 ? pointsDon(objet, q, recettes, articles, d.ponderation, fini) : null
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  return (
+    <form
+      className="fiche-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => reg.m!.agir('don', { objet, quantite: q, note: v.note }))
+      }}
+    >
+      <div className="fiche-deux">
+        <label className="fiche-champ">
+          <span>Ressource ou ouvrage</span>
+          <input type="text" list="objets-don" value={v.objet} placeholder="Blé" onChange={(e) => setV({ ...v, objet: e.target.value })} />
+          <datalist id="objets-don">
+            {[...noms.values()].sort((a, b) => a.localeCompare(b, 'fr')).map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        </label>
+        <label className="fiche-champ">
+          <span>Quantité</span>
+          <input type="text" inputMode="numeric" value={v.quantite} placeholder="300" onChange={(e) => setV({ ...v, quantite: e.target.value.replace(/\D/g, '').slice(0, 7) })} />
+        </label>
+      </div>
+      <label className="fiche-champ">
+        <span>Note</span>
+        <input type="text" value={v.note} maxLength={120} placeholder="une journée aux champs de Blancherive" onChange={(e) => setV({ ...v, note: e.target.value })} />
+      </label>
+      {objet && (
+        <p className="fiche-aide">
+          Minimum pour des points : {quantite(minimumDon(d.ponderation, objet, recettes, fini))} {objet}.
+        </p>
+      )}
+      {don &&
+        (don.points ? (
+          <p className="fiche-partage">
+            {quantite(q)} {objet} : <strong>{pts(don.points)}</strong>
+            {don.bonus && ` (dont le bonus des gros dons, ${prix(d.ponderation.reglages.bonusDon)} %)`}, crédités quand une autre patte aura confirmé le don.
+          </p>
+        ) : (
+          <p className="message-encre erreur">
+            Sous le minimum de {quantite(don.minimum)} : le don sera reçu au coffre, mais ne rapportera aucun point.
+          </p>
+        ))}
+      {v.objet && !objet && <p className="message-encre erreur">Khajiit ne connaît nulle ressource ni ouvrage de ce nom.</p>}
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!objet || q <= 0}>
+          Déclarer le don
         </Sceller>
       </div>
     </form>
@@ -1143,7 +1386,14 @@ function FicheRefus({ reg, icones, fermer, numero }: EnvMission & { numero: stri
 /* ── The notes of the missions, laid over the left page (components/Fiche.tsx) ── */
 
 type EnvMission = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; fermer: () => void }
-export type FicheMission = { genre: 'demande' } | { genre: 'reglages-missions' } | { genre: 'classes-missions' } | { genre: 'matiere-mission'; nom: string } | { genre: 'refus-mission'; numero: string }
+export type FicheMission =
+  | { genre: 'demande' }
+  | { genre: 'reglages-missions' }
+  | { genre: 'classes-missions' }
+  | { genre: 'matiere-mission'; nom: string }
+  | { genre: 'refus-mission'; numero: string }
+  | { genre: 'permanente'; id?: string }
+  | { genre: 'don' }
 
 export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: string; titre: string; corps: ReactNode; action: ActionMission } {
   if (!env.reg.m?.donnees) return { surtitre: 'Livre des Missions', titre: 'Missions', corps: <p className="registre-ferme attente-encre">Le scribe déroule le registre des missions…</p>, action: 'demande' }
@@ -1158,6 +1408,10 @@ export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: st
       return { surtitre: 'La pondération des efforts', titre: f.nom, corps: <FicheMatiere {...env} nom={f.nom} />, action: 'ponderation' }
     case 'refus-mission':
       return { surtitre: 'Butins à confirmer', titre: 'Pas reçu', corps: <FicheRefus {...env} numero={f.numero} />, action: 'refuser' }
+    case 'permanente':
+      return { surtitre: 'L’appel aux missions', titre: f.id ? 'Régler la mission permanente' : 'Ouvrir une mission permanente', corps: <FichePermanente {...env} id={f.id} />, action: 'permanente' }
+    case 'don':
+      return { surtitre: 'L’appel aux missions', titre: 'Déclarer un don', corps: <FicheDon {...env} />, action: 'don' }
   }
 }
 
