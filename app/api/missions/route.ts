@@ -12,6 +12,7 @@ import {
   raisonPoints,
   recetteDe,
   REGLAGES,
+  REGLAGES_DEFAUT,
   TEXTES,
   traduire,
   type ActionMission,
@@ -114,7 +115,7 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
     lots.push({ nom, lot: entier(l?.lot, 1, 100000, `Lot par mission de ${nom}`) })
   }
   const reglagesBruts = (brut.reglages ?? {}) as Record<string, unknown>
-  const reglages = {} as Reglages
+  const reglages = { ...REGLAGES_DEFAUT } as Reglages
   for (const def of REGLAGES) {
     const n = Number(String(reglagesBruts[def.cle] ?? def.defaut).replace(',', '.'))
     if (!Number.isFinite(n) || n < def.min || n > def.max) non(`${def.libelle} : de ${def.min} à ${def.max}.`)

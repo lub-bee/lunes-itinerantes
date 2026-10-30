@@ -16,7 +16,7 @@ export type Article = {
   ombre?: boolean
 }
 
-export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'missions' | 'caravane' | 'ombre'
+export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'missions' | 'tresor' | 'caravane' | 'ombre'
 
 export type Partie = { id: PartieId; titre: string; court: string; couleur: string; icone: string }
 
@@ -69,10 +69,13 @@ export type PagePoints = Base & { type: 'points'; intro: string }
 /** The Patriarch's table: the demands for merchandise, every member's points, the pondération (open to all for now). */
 export type PagePatriarche = Base & { type: 'patriarche'; vue: 'demandes' | 'points' | 'ponderation'; intro: string }
 
+/** The Livre du Trésor (the pay, lib/paie.ts): the week, the invoices, the events, the closings, the settings. */
+export type PageTresor = Base & { type: 'tresor'; vue: 'semaine' | 'factures' | 'evenements' | 'clotures' | 'reglages'; intro: string }
+
 export type PageDivinite = Base & { type: 'divinite'; divinite: string }
 export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre | PageMissions | PagePoints | PagePatriarche
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre | PageMissions | PagePoints | PagePatriarche | PageTresor
 
 /**
  * `caches`: the articles of hidden chapters (content/chapitres.json « masque »), with their chapter id.

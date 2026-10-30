@@ -602,6 +602,32 @@ defaults of `lib/missions.ts`; the first demand seeds it. The grimoire asks for 
 unaffected. With an older script the missions' pages show the defaults and every write is refused in
 character.
 
+## The Livre du Trésor: the pay (prototype, branch `missions`)
+
+The economy proposal's option B (`_atelier/caravane/economie/proposition-economie.html`): the sheet is the
+whole accounting. Code: `lib/paie.ts` (pure), `app/api/paie/route.ts`, `components/Tresor.tsx`; rules in
+`lib/droits.ts` (`reglagesPaie`, `facture`, `evenement`, `ecriture`, `clotureSemaine`, `paiement`, all open).
+
+- **Points of a sale** (the Commandes tab, day book only — the Livre d'ombre's sales are left out): trésorerie
+  10 % of the real price, vendeur 10 % of the floor + 90 % of what is above it (under the floor the shortfall
+  comes off the seller's share, never below 0). The resources' (75 %) and crafting (5 %) shares are paid by
+  the missions, credited at completion; the part of the week's sales that no mission of the week paid
+  (Σ 80 % × floor − mission points, when positive) goes to the trésorerie. A line without a known floor
+  (outside the catalogue, « à négocier ») takes its own price as floor.
+- **The week** (JST, first day a setting): sales − invoices (those not linked to an event, the weekly rent
+  unless a « loyer » invoice is written, a deficit carried from the week before) = remainder; the Patriarchs
+  take 15 % in equal parts (the settings' list, else the members whose role is Patriarche); the rest is split
+  in whole septims pro rata of the week's points, the trésorerie included. A negative remainder pays nobody
+  and is carried to the next week. **Closing** freezes the week in the Clôtures tab; each pay line is then
+  « à payer » until marked « payé » (who, when).
+- **Events**: their own ledger (entries, expenses — invoices linked to the event count here —, lots given
+  from the chest, written as `livraison` rows of Mouvements when asked, participants with a compensation,
+  payable like the pay). Their balance goes to the trésorerie, not into the week's pot.
+- **Settings** (Réglages paie tab): every share, the Patriarchs' list, the week's first day, the rent, the
+  default compensation. The missions read their 75 % / 5 % from here.
+- Tabs (Apps Script **v3n**, hidden, created on first write, sent only with `paie: true`): `Réglages paie`,
+  `Factures`, `Événements`, `Écritures événements`, `Clôtures`. Without the flag, every answer is v3m's.
+
 ## The Livre d'ombre (shadow book)
 
 A secret: the caravan's motto « Fidélité, Honnêteté, Septims » (on the title page and on the memo

@@ -34,6 +34,7 @@ import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
 import { Action, En, Icone, Septims } from './Ornements'
 import { contenuMission } from './Missions'
+import { contenuTresor } from './Tresor'
 import type { Action as Droit } from '@/lib/droits'
 
 /*
@@ -304,6 +305,13 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       return { surtitre: 'Journal du coffre', titre: TITRES_MOUVEMENT[f.lignes[0]?.type] ?? 'Écriture', corps: <DetailMouvement lignes={f.lignes} env={env} /> }
     case 'abandonner':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Abandonner la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer={false} /></Signe> }
+    case 'facture':
+    case 'evenement':
+    case 'reglages-paie':
+    case 'cloture-semaine': {
+      const c = contenuTresor(f, { reg: env.reg, icones: env.icones, fermer: env.fermer })
+      return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
+    }
     case 'demande':
     case 'reglages-missions':
     case 'classes-missions':

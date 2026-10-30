@@ -3590,8 +3590,8 @@ strong.a-verser { font-weight: 400; }
 .tableau-points-ligne strong { font-weight: 400; color: #2f5b3a; font-size: 17px; }
 
 /* The missions' pages show only: they never show a scrollbar (the wheel and the finger still scroll). */
-.page-missions .defile, .page-points .defile, .page-patriarche .defile { scrollbar-width: none; }
-.page-missions .defile::-webkit-scrollbar, .page-points .defile::-webkit-scrollbar, .page-patriarche .defile::-webkit-scrollbar { display: none; }
+.page-missions .defile, .page-points .defile, .page-patriarche .defile, .page-tresor .defile { scrollbar-width: none; }
+.page-missions .defile::-webkit-scrollbar, .page-points .defile::-webkit-scrollbar, .page-patriarche .defile::-webkit-scrollbar, .page-tresor .defile::-webkit-scrollbar { display: none; }
 
 /* The pondération, as shown (every change is made on a note). */
 .ponderation-form { text-align: left; }
@@ -3662,4 +3662,50 @@ strong.a-verser { font-weight: 400; }
   .tableau-points-entete { font-size: 11.5px; }
   .classes-entete, .classes-ligne { grid-template-columns: 30px minmax(0, 1fr) 56px 62px; column-gap: 6px; }
   .ponderation-entete, .ressource-ponderee { grid-template-columns: minmax(0, 1fr) 46px 62px 64px; column-gap: 5px; }
+}
+
+/* ═══════════════════════════ The Livre du Trésor (prototype, components/Tresor.tsx) ═══════════════════════════ */
+
+.paie-droite > .titre-section:first-child, .factures-droite > .titre-section:first-child, .evenements-droite > .titre-section:first-child, .clotures-droite > .titre-section:first-child { margin-top: 2px; }
+.navigation-semaine { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 14px; margin: 10px 0 2px; }
+.navigation-semaine strong { font-family: var(--f-capitales); font-weight: 400; font-size: 16px; color: var(--encre); }
+.compte-semaine li { font-size: 16px; }
+.compte-semaine li.total { border-top: 1px solid rgba(110, 80, 45, 0.35); font-family: var(--f-capitales); }
+.compte-semaine li.deficit { color: var(--encre-rouge); }
+.tableau-paie { text-align: left; }
+.tableau-paie-entete, .tableau-paie-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 62px 90px 128px; column-gap: 8px; align-items: baseline; }
+.tableau-paie-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.tableau-paie-entete span:nth-child(n + 2), .tableau-paie-ligne > :nth-child(4n + 2), .tableau-paie-ligne > :nth-child(4n + 3), .tableau-paie-ligne > :nth-child(4n + 4) { text-align: right; }
+.tableau-paie-ligne { padding: 4px 2px; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 15.5px; font-variant-numeric: tabular-nums lining-nums; row-gap: 2px; }
+.tableau-paie-ligne strong { font-weight: 400; color: #2f5b3a; }
+.tableau-paie-ligne.tresorerie { background: linear-gradient(90deg, rgba(31, 90, 86, 0.1), transparent 75%); }
+.paie-membre { display: flex; flex-direction: column; min-width: 0; font-family: var(--f-capitales); }
+.paie-membre b { font-weight: 400; color: var(--encre-pale); }
+.paie-membre em { font-family: var(--f-texte); font-size: 12.5px; color: var(--encre-pale); }
+.paie-patriarche { font-family: var(--f-texte); font-style: italic; font-size: 14px; color: var(--encre-douce); padding-left: 14px; }
+.statut-paie { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 2px 8px; font-size: 13.5px; }
+.statut-paie em { color: var(--encre-pale); }
+.statut-paie .lien-encre { font-size: 12px; }
+.ligne-tresor {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; width: 100%;
+  padding: 5px 2px; border: 0; border-bottom: 1px solid rgba(110, 80, 45, 0.15); background: none; font: inherit; font-size: 16.5px;
+  color: var(--encre); text-align: left; cursor: pointer;
+}
+.ligne-tresor > span { display: flex; flex-direction: column; min-width: 0; }
+.ligne-tresor em { font-size: 13.5px; color: var(--encre-pale); }
+.ligne-tresor strong { font-weight: 400; font-family: var(--f-capitales); color: #2f5b3a; white-space: nowrap; }
+.ligne-tresor strong.negatif, .ecritures-evenement .negatif { color: var(--encre-rouge); }
+.ligne-tresor:not(:disabled):hover, .ligne-tresor:focus-visible { outline: none; background: rgba(201, 162, 78, 0.16); }
+.ligne-tresor:disabled { cursor: default; }
+.facture-auto { font-size: 13px; color: var(--encre-pale); }
+.ecritures-evenement li { flex-wrap: wrap; font-size: 15.5px; }
+.ecritures-evenement li em { font-size: 12.5px; color: var(--encre-pale); }
+.ecritures-evenement li.total { border-top: 1px solid rgba(110, 80, 45, 0.35); font-family: var(--f-capitales); }
+.ecritures-evenement .statut-paie { flex-basis: 100%; }
+.choix-genre { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.fiche-coche { display: flex; align-items: baseline; gap: 6px; font-size: 14px; font-style: italic; color: var(--encre-douce); }
+@media (max-width: 860px) {
+  .tableau-paie-entete, .tableau-paie-ligne { grid-template-columns: minmax(0, 1fr) 48px 74px; column-gap: 5px; font-size: 14.5px; }
+  .tableau-paie-entete span:nth-child(4) { display: none; }
+  .tableau-paie-ligne > :nth-child(4n + 4) { grid-column: 1 / -1; }
 }

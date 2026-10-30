@@ -10,6 +10,7 @@ import { quantiteLue } from '@/lib/commande'
 import { anglaisDe, arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import type { EtatMissions, FicheMission } from './Missions'
+import type { EtatTresor, FicheTresor } from './Tresor'
 import { Action, En, Icone, Plume, Septims } from './Ornements'
 
 /*
@@ -36,11 +37,15 @@ export type Fiche =
   | { genre: 'poeme'; divinite: string; n: number }
   /** The missions' notes (components/Missions.tsx): a demand, the pondération's settings, classes, one item. */
   | FicheMission
+  /** The pay's notes (components/Tresor.tsx). */
+  | FicheTresor
 
 export type CtxRegistre = {
   r: EtatRegistre
   /** The missions (prototype, components/Missions.tsx). */
   m?: EtatMissions
+  /** The pay (prototype, components/Tresor.tsx). */
+  t?: EtatTresor
   ouvrir: (f: Fiche) => void
   /** Turns to the page of that id. */
   allerA: (id: string) => void

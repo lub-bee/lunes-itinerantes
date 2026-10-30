@@ -128,6 +128,8 @@ function SommaireCopie({ livre }: { livre: Livre }) {
                     ? 'Les missives vivent dans le grimoire : leur encre bouge trop pour être copiée.'
                     : partie.id === 'missions'
                       ? 'Les missions vivent dans le grimoire : elles se prennent et se rendent trop vite pour être copiées.'
+                      : partie.id === 'tresor'
+                        ? 'Les comptes du trésor vivent dans le grimoire : ils ne se recopient pas.'
                       : partie.id === 'atelier'
                         ? 'Recettes et matières vivent dans le grimoire, où les artisans les corrigent.'
                         : <>L&apos;encre de ce livre n&apos;est pas encore sèche.</>}

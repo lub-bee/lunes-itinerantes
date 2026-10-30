@@ -25,6 +25,8 @@
  *    carries the missions' tabs (ONGLETS_MISSIONS: ponderation, reglagesMissions, demandes, missions,
  *    points). Without it, every answer is exactly what v3l answered: the grimoire in production never
  *    sees them.
+ *    With `paie: true` (v3n, the pay) the answer also carries the pay's tabs (ONGLETS_PAIE: reglagesPaie,
+ *    factures, evenements, ecrituresEvenement, clotures). Without it, exactly what v3m answered.
  *
  *  - Writes (one writer at a time, LockService):
  *      'missive'     { missive: { numero, horodatage, titre, commanditaire, echeance, membre,
@@ -74,6 +76,16 @@
  *      'ponderation' { ponderation: { lignes: [{ genre, code, nom, poids, note }],
  *                                     reglages: [{ reglage, valeur, note }] } } → the Pondération and Réglages
  *                                                                              missions tabs rewritten
+ *    The pay (v3n; its tabs are created hidden when missing, nothing else is touched):
+ *      'paie'        { paie: { onglet ('reglagesPaie' | 'factures' | 'evenements' | 'ecrituresEvenement' | 'clotures'),
+ *                              lignes: [{ id, ...fields }], supprimer?: [id], remplacer?: true,
+ *                              mouvements?: [{ horodatage, action, missive, membre, objet, quantite, note }] } }
+ *                                                                            → rows added or updated by their id (only
+ *                                                                              the fields sent), removed, or the whole
+ *                                                                              tab rewritten; `mouvements`: chest rows
+ *                                                                              ('livraison', the lots of an event)
+ *      'clotureSemaine' { cloture: { semaine, lignes: [{ id, ... }] } }        → the week's Clôtures rows (refused if the
+ *                                                                              week is already sealed)
  *    Answer: { ok: true, ..., onglets, version } (every tab read again after the write, as for 'lire',
  *    so the grimoire needs no second call) or { ok: false, erreur }.
  *
@@ -236,14 +248,57 @@ var ONGLETS_MISSIONS = {
   },
 };
 
-/** Whether the current call asked for the missions' tabs (`missions: true`, v3m). */
-var AVEC_MISSIONS = false;
+/**
+ * THE PAY'S TABS (v3n) — read and sent only to a caller that asks for them (`paie: true`). Created hidden on
+ * their first write, editable by hand. `id` is each row's key (« F-261030-AB12 »…); the week is « S-2026-10-26 ».
+ */
+var ONGLETS_PAIE = {
+  reglagesPaie: {
+    nom: 'Réglages paie',
+    colonnes: [['Réglage', 'reglage'], ['Valeur', 'valeur'], ['Note', 'note']],
+  },
+  factures: {
+    nom: 'Factures',
+    colonnes: [
+      ['N° facture', 'id'], ['Date', 'date'], ['Libellé', 'libelle'], ['Montant', 'montant'], ['Catégorie', 'categorie'],
+      ['N° événement', 'evenement'], ['Note', 'note'], ['Inscrite par', 'par'],
+    ],
+  },
+  evenements: {
+    nom: 'Événements',
+    colonnes: [['N° événement', 'id'], ['Nom', 'nom'], ['Date', 'date'], ['Note', 'note'], ['Compensation', 'compensation'], ['Statut', 'statut']],
+  },
+  ecrituresEvenement: {
+    nom: 'Écritures événements',
+    colonnes: [
+      ['N° écriture', 'id'], ['N° événement', 'evenement'], ['Date', 'date'], ['Genre', 'genre'], ['Libellé', 'libelle'], ['Montant', 'montant'],
+      ['Membre', 'membre'], ['Objet', 'objet'], ['Quantité', 'quantite'], ['Statut', 'statut'], ['Payé par', 'payePar'], ['Payé le', 'payeLe'],
+      ['Inscrite par', 'par'],
+    ],
+  },
+  clotures: {
+    nom: 'Clôtures',
+    colonnes: [
+      ['N° ligne', 'id'], ['Semaine', 'semaine'], ['Genre', 'genre'], ['Libellé', 'libelle'], ['Membre', 'membre'], ['Points', 'points'],
+      ['Montant', 'montant'], ['Statut', 'statut'], ['Payé par', 'payePar'], ['Payé le', 'payeLe'], ['Scellée le', 'scelleeLe'],
+      ['Scellée par', 'scelleePar'],
+    ],
+  },
+};
 
-/** The tabs as the caller asked for them: without the missions' ones, exactly v3l's answer. */
+/** Whether the current call asked for the missions' tabs (`missions: true`, v3m) and the pay's (`paie: true`, v3n). */
+var AVEC_MISSIONS = false;
+var AVEC_PAIE = false;
+
+/** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
 function pourAppelant(onglets) {
-  if (AVEC_MISSIONS || !onglets) return onglets;
+  if ((AVEC_MISSIONS && AVEC_PAIE) || !onglets) return onglets;
   var res = {};
-  Object.keys(onglets).forEach(function (k) { if (!ONGLETS_MISSIONS[k]) res[k] = onglets[k]; });
+  Object.keys(onglets).forEach(function (k) {
+    if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
+    if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
+    res[k] = onglets[k];
+  });
   return res;
 }
 
@@ -278,6 +333,7 @@ function doPost(e) {
 
   var action = corps.action || (corps.commande ? 'commande' : '');
   AVEC_MISSIONS = Boolean(corps.missions);
+  AVEC_PAIE = Boolean(corps.paie);
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
@@ -355,6 +411,8 @@ function toutLire() {
   Object.keys(ONGLETS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS[cle]); });
   // The missions' tabs (v3m): kept in the cache with the others, sent only to who asks (pourAppelant).
   Object.keys(ONGLETS_MISSIONS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_MISSIONS[cle]); });
+  // The pay's tabs (v3n), the same way (sent only with `paie: true`).
+  Object.keys(ONGLETS_PAIE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_PAIE[cle]); });
   return res;
 }
 
@@ -478,7 +536,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3m';
+var CACHE = 'registre-v3n';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -1148,6 +1206,66 @@ var ECRITURES = {
   },
 };
 
+/* ───────────────────────── The pay (v3n) ───────────────────────── */
+
+/** Fields holding a date: an ISO text becomes a date cell. */
+var DATES_PAIE = ['date', 'payeLe', 'scelleeLe'];
+function daterPaie(o) {
+  var r = {};
+  Object.keys(o).forEach(function (k) {
+    var v = o[k];
+    r[k] = DATES_PAIE.indexOf(k) >= 0 && typeof v === 'string' && v ? new Date(v) : v === null || v === undefined ? '' : v;
+  });
+  return r;
+}
+
+ECRITURES.paie = function (corps) {
+  var c = corps.paie;
+  var def = c && ONGLETS_PAIE[c.onglet];
+  if (!def) return { ok: false, erreur: 'unknown tab' };
+  var lignes = (c.lignes || []).map(daterPaie);
+  if (c.remplacer) {
+    remplacer(def, lignes);
+  } else {
+    var supprimer = (c.supprimer || []).map(cleEntete);
+    var o = ouvrirMasque(def);
+    var p = o.p;
+    var vues = {};
+    var gardees = [];
+    o.lignes.forEach(function (l) {
+      var k = cleEntete(l[p.cols.id - 1]);
+      if (k && supprimer.indexOf(k) >= 0) return;
+      var maj = lignes.filter(function (x) { return cleEntete(x.id) === k; })[0];
+      if (k && maj) {
+        vues[k] = true;
+        l = enLigne(p, maj, l);
+      }
+      gardees.push(enLigne(p, {}, l).slice(0, p.largeur));
+    });
+    var nouvelles = lignes.filter(function (x) { return !vues[cleEntete(x.id)]; }).map(function (x) { return enLigne(p, x).slice(0, p.largeur); });
+    var toutes = gardees.concat(nouvelles);
+    if (o.lignes.length) p.feuille.getRange(2, 1, o.lignes.length, p.largeur).clearContent();
+    if (toutes.length) p.feuille.getRange(2, 1, toutes.length, p.largeur).setValues(toutes);
+  }
+  // The lots of an event leave the chest: 'livraison' rows of the ledger.
+  var ms = (c.mouvements || []).map(function (m) {
+    return { horodatage: new Date(m.horodatage), action: m.action || '', missive: m.missive || '', membre: m.membre, type: 'livraison', objet: m.objet, quantite: m.quantite, note: m.note || '' };
+  });
+  if (ms.length) ajouter(ONGLETS.mouvements, ms);
+  // No `maj`: the tabs are read again (these writes are rare).
+  return { ok: true, onglet: c.onglet, lignes: lignes.length };
+};
+
+ECRITURES.clotureSemaine = function (corps) {
+  var c = corps.cloture;
+  if (!c || !c.semaine || !c.lignes || !c.lignes.length) return { ok: false, erreur: 'empty closing' };
+  var def = ONGLETS_PAIE.clotures;
+  var deja = lireOnglet(def).some(function (r) { return String(r.semaine).trim() === c.semaine; });
+  if (deja) return { ok: false, erreur: 'week already sealed ' + c.semaine };
+  ajouter(def, c.lignes.map(daterPaie), preparerMasque(def));
+  return { ok: true, semaine: c.semaine, lignes: c.lignes.length };
+};
+
 /* ───────────────────────── The missions' helpers (v3m) ───────────────────────── */
 
 /** A number, or an empty cell. */
@@ -1194,6 +1312,16 @@ function ecrirePonderation(pd) {
   remplacer(ONGLETS_MISSIONS.ponderation, lignes);
   remplacer(ONGLETS_MISSIONS.reglagesMissions, reglages);
   return { lignes: lignes, reglages: reglages };
+}
+
+/** Run once from the editor to create the pay's tabs (hidden) without waiting for a first write (v3n). */
+function preparerPaie() {
+  Object.keys(ONGLETS_PAIE).forEach(function (k) {
+    var p = preparerMasque(ONGLETS_PAIE[k]);
+    Logger.log('Tab "' + ONGLETS_PAIE[k].nom + '" ready (hidden: ' + p.feuille.isSheetHidden() + '), ' + p.feuille.getLastRow() + ' row(s).');
+  });
+  viderCache();
+  nouvelleVersion();
 }
 
 /** Run once from the editor to create the missions' tabs (hidden) without waiting for a first demand. */

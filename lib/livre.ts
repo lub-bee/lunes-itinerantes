@@ -14,6 +14,7 @@ import { normaliser, slug } from './recherche'
 import { artisanDe } from './metiers'
 import { estOmbre, ICONES_OMBRE } from './ombre'
 import { ICONES_MISSIONS } from './missions'
+import { ICONES_PAIE } from './paie'
 import type { Article, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
 const CONTENU = path.join(process.cwd(), 'content')
@@ -27,6 +28,8 @@ export const PARTIES: Partie[] = [
   { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
   // The missions (prototype, branch `missions`).
   { id: 'missions', titre: 'Livre des Missions', court: 'Missions', couleur: '#8a4b12', icone: 'treasure-map' },
+  // The pay (prototype, branch `missions`).
+  { id: 'tresor', titre: 'Livre du Trésor', court: 'Trésor', couleur: '#1f5a56', icone: 'open-treasure-chest' },
   { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
 ]
 
@@ -244,6 +247,27 @@ export async function chargerLivre(): Promise<Livre> {
       type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'missions', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',
       intro: 'Combien pèse une unité de chaque ressource : un brin de blé ne vaut pas une peau d’ours. Le poids taille les missions (une veillée = un budget d’effort) et partage les points des ressources au prorata de l’effort.',
     },
+    // The pay (prototype): the Patriarchs' accounts, open to every member for now.
+    {
+      type: 'tresor', vue: 'semaine', id: 'tresor-semaine', partie: 'tresor', titre: 'La paie de la semaine', titreEn: 'The Week’s Pay', court: 'Semaine', icone: 'abacus',
+      intro: 'Ce que la semaine a vendu, ce qu’elle a payé, et ce qui reste à partager : la part des Patriarches, puis chacun au prorata de ses points. La caravane ne distribue jamais plus que ce qui est entré.',
+    },
+    {
+      type: 'tresor', vue: 'factures', id: 'factures', partie: 'tresor', titre: 'Les factures', titreEn: 'Bills', court: 'Factures', icone: 'scroll-unfurled',
+      intro: 'Le loyer du camp, les uniformes, les achats de matières : tout ce que la caravane paie avant de se payer elle-même.',
+    },
+    {
+      type: 'tresor', vue: 'evenements', id: 'evenements', partie: 'tresor', titre: 'Les événements', titreEn: 'Events', court: 'Événements', icone: 'party-flags',
+      intro: 'Tombolas, jeux, soirées : chaque événement tient son propre registre — ce qui entre, ce qui sort, les lots offerts, et une petite compensation pour qui a mis la patte à la pâte.',
+    },
+    {
+      type: 'tresor', vue: 'clotures', id: 'clotures', partie: 'tresor', titre: 'Les semaines closes', titreEn: 'Closed Weeks', court: 'Clôtures', icone: 'locked-chest',
+      intro: 'Chaque semaine close est scellée telle qu’elle était : ses comptes ne bougent plus, il ne reste qu’à payer chacun.',
+    },
+    {
+      type: 'tresor', vue: 'reglages', id: 'reglages-paie', partie: 'tresor', titre: 'Les réglages de la paie', titreEn: 'Pay Settings', court: 'Réglages', icone: 'cog',
+      intro: 'La clé de partage d’une vente, la part des Patriarches, le loyer, le premier jour de la semaine. Rien n’est gravé dans la pierre : les Patriarches l’ajustent.',
+    },
     {
       type: 'caravane', id: 'caravane', partie: 'caravane', titre: 'La Caravane', titreEn: 'The Caravan', court: 'Caravane', icone: 'lynx-head',
       intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rang que chacun tient sur la route. Touche un sceau pour lire les noms de ceux qui le portent.',
@@ -259,7 +283,7 @@ export async function chargerLivre(): Promise<Livre> {
   // say where an article is and offer to move it to a chapter of the book.
   const caches = articles.filter((a) => defs.some((d) => d.masque && d.id === a.chapitre))
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE, ...ICONES_MISSIONS]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE, ...ICONES_MISSIONS, ...ICONES_PAIE]
   // The shadow book's goods, whatever their chapter (shown only in the Livre d'ombre).
   const ombre = articles.filter((a) => a.ombre)
   return { parties: PARTIES, pages, caches, ombre, consigneLe: new Date().toISOString(), icones: icones(noms) }

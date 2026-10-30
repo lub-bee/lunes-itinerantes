@@ -5,9 +5,10 @@
 
 import type { ActionRegistre } from './missives'
 import type { ActionMission } from './missions'
+import type { ActionPaie } from './paie'
 
 /** Every action a member can take: the registre's and the missions' (lib/missions.ts). */
-export type Action = ActionRegistre | ActionMission
+export type Action = ActionRegistre | ActionMission | ActionPaie
 
 /** Role names are compared like member names (lib/missives.ts `cle`): "Maître artisan" → 'maitreartisan'. */
 export type Role = 'patriarche' | 'maitreartisan' | (string & {})
@@ -34,6 +35,13 @@ export const ROLES_REQUIS: Record<Action, Role[] | null> = {
   rendre: null, // give a mission one holds back (it opens again)
   accomplir: null, // a mission one holds completed: its points credited; later perhaps validated by an officer
   ponderation: null, // the effort classes, weights and settings; later perhaps ['patriarche']
+  // The pay (prototype, 2026-10-30): open to all for now; later surely ['patriarche'].
+  reglagesPaie: null, // the shares, the rent, the week's first day, the Patriarchs
+  facture: null, // an invoice written, corrected or struck out
+  evenement: null, // an event written or corrected
+  ecriture: null, // a line of an event's ledger (entry, expense, lot from the chest, participant)
+  clotureSemaine: null, // a week sealed (frozen from then on)
+  paiement: null, // a pay line or a compensation marked as paid (or taken back)
 }
 
 export function peut(action: Action, roles: Role[]): boolean {

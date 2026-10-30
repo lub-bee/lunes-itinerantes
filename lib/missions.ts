@@ -157,12 +157,11 @@ export const REGLAGES: { cle: keyof Reglages; libelle: string; defaut: number; m
   { cle: 'budget', libelle: 'Effort par mission', defaut: 120, min: 1, max: 100000, note: 'unités d’effort d’une courte session de jeu' },
   { cle: 'maxEnCours', libelle: 'Missions en cours par membre', defaut: 5, min: 1, max: 99, note: 'au-delà, il faut en accomplir ou en rendre' },
   { cle: 'objetsParFabrication', libelle: 'Objets par mission de fabrication', defaut: 10, min: 1, max: 10000, note: 'pour le produit final' },
-  { cle: 'partRessources', libelle: 'Part ressources (% du plancher)', defaut: 75, min: 0, max: 100, note: 'récoltes et fabrications d’intermédiaires, au prorata de l’effort' },
-  { cle: 'partFabrication', libelle: 'Part fabrication (% du plancher)', defaut: 5, min: 0, max: 100, note: 'fabrications du produit final' },
   { cle: 'poidsRepli', libelle: 'Poids de repli (poids à fixer)', defaut: 4, min: 0.1, max: 1000, note: 'taille les missions des ressources sans poids' },
 ]
 
-export const REGLAGES_DEFAUT = Object.fromEntries(REGLAGES.map((r) => [r.cle, r.defaut])) as Reglages
+// The resources' and crafting shares are the pay's settings (lib/paie.ts, « Réglages paie »): one source.
+export const REGLAGES_DEFAUT = { ...Object.fromEntries(REGLAGES.map((r) => [r.cle, r.defaut])), partRessources: 75, partFabrication: 5 } as Reglages
 
 export const PONDERATION_DEFAUT: Ponderation = { classes: CLASSES_DEFAUT, ressources: ASSIGNATIONS_DEFAUT, lots: [], reglages: REGLAGES_DEFAUT, source: 'defaut' }
 

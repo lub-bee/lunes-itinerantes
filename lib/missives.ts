@@ -576,6 +576,12 @@ export type Onglets = {
   demandes?: Record<string, unknown>[]
   missions?: Record<string, unknown>[]
   points?: Record<string, unknown>[]
+  /** The pay's tabs (lib/paie.ts), from a v3n script asked with `paie: true`. */
+  reglagesPaie?: Record<string, unknown>[]
+  factures?: Record<string, unknown>[]
+  evenements?: Record<string, unknown>[]
+  ecrituresEvenement?: Record<string, unknown>[]
+  clotures?: Record<string, unknown>[]
 }
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */

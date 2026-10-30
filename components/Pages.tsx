@@ -14,6 +14,7 @@ import { Devise, useOmbre } from './Ombre'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
+import { DroiteTresor, GaucheTresor } from './Tresor'
 import { DroiteMissions, DroitePatriarche, DroitePoints, GaucheMissions, GauchePatriarche, GauchePoints } from './Missions'
 import { Geste, DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
@@ -210,6 +211,12 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheMissions page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'tresor':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheTresor page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
           </EnTete>
         )
       case 'points':
@@ -486,6 +493,8 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
         return <DroiteMissions reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} citation={<CitationFin texte={page.citation} />} />
       case 'points':
         return <DroitePoints reg={ctx.registre} />
+      case 'tresor':
+        return <DroiteTresor page={page} reg={ctx.registre} />
       case 'patriarche':
         return <DroitePatriarche page={page} reg={ctx.registre} />
       case 'atelier':

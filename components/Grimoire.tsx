@@ -21,6 +21,7 @@ import { useRegistre } from './Registre'
 import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
 import { useMissions } from './Missions'
+import { useTresor } from './Tresor'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 import { Annule, blocsTexte, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
 import { PAGE_DEVISE, PARTIE_OMBRE, pagesOmbre, TEXTES as OMBRE_TEXTES } from '@/lib/ombre'
@@ -95,6 +96,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const registre = useRegistre(articles)
   // The missions (prototype): their data and the state their pages share.
   const missions = useMissions(registre.marchand?.identite ?? null)
+  // The pay (prototype): the Livre du Trésor's data and the week shown.
+  const tresor = useTresor(registre.marchand?.identite ?? null)
 
   // The ex-libris first (when the registre is linked), and one page per missive after the list of
   // missives: open ones (oldest first), then closed ones.
@@ -805,7 +808,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     ficheApres.current = null
   }, [destinationFiche])
 
-  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, m: missions, ouvrir: setFiche, allerA: setVersId }), [registre, missions])
+  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, m: missions, t: tresor, ouvrir: setFiche, allerA: setVersId }), [registre, missions, tresor])
 
   const refermer = async () => {
     await fetch('/api/sceau', { method: 'DELETE' })

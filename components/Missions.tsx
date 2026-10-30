@@ -42,7 +42,7 @@ import { Sceller } from './Fiche'
 
 /* ───────────────────────── The hook ───────────────────────── */
 
-type Reponse = { ok: boolean; message: string; numero?: string }
+export type Reponse = { ok: boolean; message: string; numero?: string }
 type Prevision = { id: number; prevoir: (d: DonneesMissions) => DonneesMissions }
 /** The demand being written on its note; `lots`: the units per mission typed for some lines (key `cleLigne`). */
 export type Brouillon = { article: string; quantite: string; note: string; lots: Record<string, string> }
@@ -548,7 +548,7 @@ function Demandes({ reg }: { reg: CtxRegistre }) {
 }
 
 /** The sealing of a note: the scribe writes, the seal is stamped, the note goes. */
-function useScelle(fermer: () => void) {
+export function useScelle(fermer: () => void) {
   const [etat, setEtat] = useState<'repos' | 'ecrit' | 'scelle'>('repos')
   const [erreur, setErreur] = useState<string | null>(null)
   const envoyer = async (f: () => Promise<Reponse>, apres?: () => void) => {
@@ -1060,7 +1060,7 @@ const nombreSaisi = (s: string) => {
 }
 
 /** A number typed in a cell: the text is kept as typed (« 1, » on the way to « 1,5 »), the value follows. */
-function ChampNombre({ valeur, changer, ...props }: { valeur: number | null; changer: (v: number | null) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+export function ChampNombre({ valeur, changer, ...props }: { valeur: number | null; changer: (v: number | null) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const [t, setT] = useState(valeur === null ? '' : String(valeur).replace('.', ','))
   useEffect(() => {
     if (nombreSaisi(t) !== valeur) setT(valeur === null ? '' : String(valeur).replace('.', ','))

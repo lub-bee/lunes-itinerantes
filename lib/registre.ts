@@ -11,6 +11,7 @@
 import { revalidateTag, unstable_cache } from 'next/cache'
 import { lireOnglets, type Onglets } from './missives'
 import { lireMissions } from './missions'
+import { lirePaie } from './paie'
 
 export const ETIQUETTE_REGISTRE = 'registre'
 /** Seconds a read of the sheet is reused. */
@@ -50,14 +51,15 @@ type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: bo
 /** The last script call's own execution time, for Server-Timing. */
 export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: null, cache: null }
 
-// `missions: true` asks a v3m script for the missions' tabs too (lib/missions.ts); an older script ignores it.
+// `missions: true` asks a v3m script for the missions' tabs too (lib/missions.ts), `paie: true` a v3n script
+// for the pay's (lib/paie.ts); an older script ignores them.
 async function lireScript(): Promise<Lecture> {
-  const r = await appelerScript<ReponseLire>({ action: 'lire', missions: true })
+  const r = await appelerScript<ReponseLire>({ action: 'lire', missions: true, paie: true })
   dernierScript = { ms: r.ms ?? null, cache: r.cache ?? null }
   return { onglets: r.onglets, version: r.version ?? 0 }
 }
 
-const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3m'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3n'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
@@ -86,15 +88,23 @@ export async function lireRegistre(versionVue = 0) {
       garder(l)
     }
   }
-  return { ...lireOnglets(l.onglets), missions: lireMissions(l.onglets), version: l.version }
+  return lu(l)
+}
+
+/** Every tab typed: the registre's, the missions' and the pay's (the missions read their shares from the pay's settings). */
+function lu(l: Lecture) {
+  const paie = lirePaie(l.onglets)
+  const missions = lireMissions(l.onglets)
+  if (paie.actif) missions.ponderation = { ...missions.ponderation, reglages: { ...missions.ponderation.reglages, partRessources: paie.reglages.ressources, partFabrication: paie.reglages.fabrication } }
+  return { ...lireOnglets(l.onglets), missions, paie, version: l.version }
 }
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
-  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, missions: true, ...charge })
+  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, missions: true, paie: true, ...charge })
   dernierScript = { ms: r.ms ?? null, cache: null }
   if (!r.onglets) return { ...r, lu: null }
   const l = { onglets: r.onglets, version: r.version ?? 0 }
   garder(l)
-  return { ...r, lu: { ...lireOnglets(l.onglets), missions: lireMissions(l.onglets), version: l.version } }
+  return { ...r, lu: lu(l) }
 }
