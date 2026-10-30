@@ -68,7 +68,11 @@
  *                      ponderation?: { lignes, reglages } }                  → one Demandes row, one Missions row per
  *                                                                              mission (« ouverte »); the pondération
  *                                                                              seeded when its tab is still empty
- *      'mission'     { mission: { numero, geste ('prendre' | 'rendre' | 'accomplir'), membre, quand, max?, raison? } }
+ *      'mission'     { mission: { numero, geste ('prendre' | 'rendre' | 'accomplir' | v3n: 'remettre' | 'confirmer' | 'refuser'),
+ *                                 membre, quand, max?, raison?, note? } }
+ *                                                                            v3n: 'remettre' (the holder) → « remise »;
+ *                                                                              'confirmer' (another member) → « accomplie »,
+ *                                                                              its Points row then; 'refuser' → « en cours »
  *                                                                            → the mission's row: taken (refused when
  *                                                                              not open, or when the member already
  *                                                                              holds `max`), given back (open again) or
@@ -218,9 +222,12 @@ var ONGLETS = {
 var ONGLETS_MISSIONS = {
   ponderation: {
     nom: 'Pondération',
-    // « classe » rows (Code C1…, Nom, Poids per unit, empty = à fixer) and « ressource » rows (Code = its
-    // class, Nom = the resource, Poids = its own weight, empty = the class's).
-    colonnes: [['Genre', 'genre'], ['Code', 'code'], ['Nom', 'nom'], ['Poids', 'poids'], ['Note', 'note']],
+    // « classe » rows (a rarity level: Code R1…, Nom, « Par mission »; v3m's C1… with a « Poids » per unit are
+    // read by the grimoire as the levels), « ressource » rows (Code = its level, « Origine », « Poids » an own
+    // weight) and « lot » rows (an item's units per mission).
+    colonnes: [['Genre', 'genre'], ['Code', 'code'], ['Nom', 'nom'], ['Poids', 'poids'], ['Note', 'note'],
+      // v3n: rarity levels by quantity per mission (« classe » and « lot » rows), a resource's origin (a tag).
+      ['Par mission', 'quantite'], ['Origine', 'origine']],
   },
   reglagesMissions: {
     nom: 'Réglages missions',
@@ -240,11 +247,13 @@ var ONGLETS_MISSIONS = {
       ['N° mission', 'numero'], ['N° demande', 'demande'], ['Type', 'type'], ['Objet', 'objet'], ['Quantité', 'quantite'],
       ['Poids', 'poids'], ['Effort', 'effort'], ['Points', 'points'], ['Statut', 'statut'], ['Pris par', 'prisPar'],
       ['Pris le', 'prisLe'], ['Accomplie le', 'accomplieLe'], ['Note', 'note'], ['Journal', 'journal'],
+      // v3n: the loot handed over, waiting for another member to confirm it (added at the end of row 1).
+      ['Remise le', 'remiseLe'], ['Confirmée par', 'confirmePar'],
     ],
   },
   points: {
     nom: 'Points',
-    colonnes: [['Date', 'horodatage'], ['Membre', 'membre'], ['Points', 'points'], ['Raison', 'raison'], ['N° mission', 'mission']],
+    colonnes: [['Date', 'horodatage'], ['Membre', 'membre'], ['Points', 'points'], ['Raison', 'raison'], ['N° mission', 'mission'], ['Confirmée par', 'confirmePar']],
   },
 };
 
@@ -1169,6 +1178,20 @@ var ECRITURES = {
     } else if (g.geste === 'rendre') {
       if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
       valeurs = { statut: 'ouverte', prisPar: '', prisLe: '', journal: noter('rendue') };
+    } else if (g.geste === 'remettre') {
+      // v3n: the holder hands the loot over; the mission waits for another member's confirmation.
+      if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
+      valeurs = { statut: 'remise', remiseLe: quand, journal: noter('remise') };
+    } else if (g.geste === 'confirmer' || g.geste === 'refuser') {
+      // v3n: another member than the holder confirms the loot (points credited now) or refuses it (back to « en cours »).
+      if (statut !== 'remise') return { ok: false, erreur: 'mission not handed over ' + g.numero };
+      if (cleEntete(cellule(ligne, 'prisPar')) === membre) return { ok: false, erreur: 'own mission ' + g.numero };
+      if (g.geste === 'refuser') {
+        valeurs = { statut: 'en cours', remiseLe: '', journal: noter('refusée' + (g.note ? ' (' + g.note + ')' : '')) };
+      } else {
+        valeurs = { statut: 'accomplie', accomplieLe: quand, confirmePar: g.membre, journal: noter('confirmée') };
+        point = { horodatage: quand, membre: cellule(ligne, 'prisPar'), points: Number(cellule(ligne, 'points')) || 0, raison: g.raison || '', mission: cellule(ligne, 'numero'), confirmePar: g.membre };
+      }
     } else if (g.geste === 'accomplir') {
       if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
       valeurs = { statut: 'accomplie', accomplieLe: quand, journal: noter('accomplie') };
@@ -1304,7 +1327,7 @@ function remplacer(def, objets) {
 /** Writes the Pondération and Réglages missions tabs; answers the rows written. */
 function ecrirePonderation(pd) {
   var lignes = (pd.lignes || []).map(function (l) {
-    return { genre: l.genre || '', code: l.code || '', nom: l.nom || '', poids: nombreOuVide(l.poids), note: l.note || '' };
+    return { genre: l.genre || '', code: l.code || '', nom: l.nom || '', poids: nombreOuVide(l.poids), note: l.note || '', quantite: nombreOuVide(l.quantite), origine: l.origine || '' };
   });
   var reglages = (pd.reglages || []).map(function (l) {
     return { reglage: l.reglage || '', valeur: nombreOuVide(l.valeur), note: l.note || '' };

@@ -14,13 +14,23 @@ import { cle, Cycle, recetteUsage, repartir, type Onglets, type Recette } from '
 
 /** Two kinds only (Ludo, 2026-10-28): crafting an intermediate (Cuir from Peaux) is a « fabrication » too. */
 export type TypeMission = 'récolte' | 'fabrication'
-export type StatutMission = 'ouverte' | 'en cours' | 'accomplie'
+/** « remise »: the holder handed the loot over, waiting for another member's confirmation (v3n). */
+export type StatutMission = 'ouverte' | 'en cours' | 'remise' | 'accomplie'
 export const TYPES_MISSION: TypeMission[] = ['récolte', 'fabrication']
 
-/** An effort class: a weight per unit (effort units); null = « à fixer ». */
-export type Classe = { code: string; nom: string; poids: number | null; note: string }
-/** A resource put in a class, with an optional weight of its own (overrides the class's). */
-export type Assignation = { nom: string; classe: string; poids: number | null; note: string }
+/**
+ * A rarity level (Ludo, 2026-10-30): how many units one mission gathers (« combien en ramasse-t-on en une
+ * courte session ? »); null = « à fixer ». Its weight per unit stays internal: effort budget ÷ that quantity.
+ */
+export type Classe = { code: string; nom: string; quantite: number | null; note: string }
+/**
+ * A resource put in a rarity level, with its origin (a tag, display and filter only: Ferme, Chasse…) and an
+ * optional weight of its own (an older override, still honoured; no longer edited).
+ */
+export type Assignation = { nom: string; classe: string; origine: string; poids: number | null; note: string }
+
+/** A level's weight per unit (effort units), from its quantity per mission; null: « à fixer ». */
+export const poidsClasse = (c: Pick<Classe, 'quantite'> | null | undefined, budget: number) => (c?.quantite && c.quantite > 0 ? budget / c.quantite : null)
 
 export type Reglages = {
   /** Effort units one mission holds (a short game session). */
@@ -33,9 +43,12 @@ export type Reglages = {
   partRessources: number
   /** Share of the floor price × quantity paid to the final crafts (%). */
   partFabrication: number
-  /** Weight used to size (and weigh) a resource whose weight is « à fixer ». */
-  poidsRepli: number
+  /** Quantity per mission of a resource whose rarity is « à fixer » (its weight: budget ÷ it). */
+  quantiteRepli: number
 }
+
+/** The weight of a resource « à fixer ». */
+export const poidsRepli = (r: Reglages) => r.budget / Math.max(0.01, r.quantiteRepli)
 
 /**
  * How many units one mission holds for an item, set by hand (« Blé par 40 », « Bière par 20 »): it
@@ -74,6 +87,9 @@ export type Mission = {
   prisPar: string
   prisLe: string
   accomplieLe: string
+  /** Handed over (v3n), and who confirmed it. */
+  remiseLe: string
+  confirmePar: string
   note: string
   /** Who took it and gave it back, when (one line per gesture). */
   journal: string
@@ -81,7 +97,7 @@ export type Mission = {
   enAttente?: boolean
 }
 
-export type LignePoints = { horodatage: string; membre: string; points: number; raison: string; mission: string; enAttente?: boolean }
+export type LignePoints = { horodatage: string; membre: string; points: number; raison: string; mission: string; confirmePar?: string; enAttente?: boolean }
 
 /** What the page receives. `moi`: the signed member (their missions and points). */
 export type DonneesMissions = {
@@ -97,67 +113,88 @@ export type DonneesMissions = {
 }
 
 /** Actions of the missions (each one goes through lib/droits.ts). */
-export type ActionMission = 'demande' | 'prendre' | 'rendre' | 'accomplir' | 'ponderation'
-export const ACTIONS_MISSION: ActionMission[] = ['demande', 'prendre', 'rendre', 'accomplir', 'ponderation']
+/** `rendre`: give a mission up (« renoncer »); `remettre`: hand its loot over; `confirmer` / `refuser`: another member's answer. */
+export type ActionMission = 'demande' | 'prendre' | 'rendre' | 'remettre' | 'confirmer' | 'refuser' | 'ponderation'
+export const ACTIONS_MISSION: ActionMission[] = ['demande', 'prendre', 'rendre', 'remettre', 'confirmer', 'refuser', 'ponderation']
 
 /* ───────────────────────── Defaults (missions/ponderation.md, 2026-10-28) ───────────────────────── */
 
-/** The class of intermediate products (Cuir from Peaux, Bande de cuir from Cuir, Sels…). */
+/** The level of intermediate products (Cuir from Peaux, Bande de cuir from Cuir, Sels…). */
 export const CODE_TRANSFORMATION = 'T'
 
-// Ludo vouches for the alchemy; the other classes are a first guess, to be corrected in the tab.
+// Ludo vouches for the alchemy; the other levels are a first guess, to be corrected in the tab.
 export const CLASSES_DEFAUT: Classe[] = [
-  { code: 'C1', nom: 'Cueillette commune', poids: 1, note: '~120 par mission' },
-  { code: 'C2', nom: 'Cueillette localisée', poids: 2, note: '~60 par mission' },
-  { code: 'C3', nom: 'Petit butin animal', poids: 3, note: '~40 par mission' },
-  { code: 'C4', nom: 'Chasse', poids: 4, note: '~30 par mission' },
-  { code: 'C5', nom: 'Créature dangereuse', poids: 8, note: '~15 par mission' },
-  { code: 'C6', nom: 'Rare', poids: 15, note: '~8 par mission' },
-  { code: 'C7', nom: 'Mine / achat', poids: null, note: 'à fixer' },
-  { code: CODE_TRANSFORMATION, nom: 'Transformation', poids: 2, note: 'produits intermédiaires : tanner, couper, distiller' },
+  { code: 'R1', nom: 'Abondant', quantite: 120, note: '' },
+  { code: 'R2', nom: 'Commun', quantite: 60, note: '' },
+  { code: 'R3', nom: 'Peu commun', quantite: 40, note: '' },
+  { code: 'R4', nom: 'Rare', quantite: 30, note: '' },
+  { code: 'R5', nom: 'Très rare', quantite: 15, note: '' },
+  { code: 'R6', nom: 'Exceptionnel', quantite: 8, note: '' },
+  { code: CODE_TRANSFORMATION, nom: 'Fabrication intermédiaire', quantite: 60, note: 'tanner, couper, distiller' },
 ]
 
-const PAR_CLASSE: Record<string, string[]> = {
-  C1: [
-    'Blé', 'Lavande', 'Lys Bleu', 'Lys jaune', 'Lys rouge', 'Lys violet', "Cosse d'herbe", 'Cloquerille', 'Chapeau blanc',
-    'Champignon luminescent', 'Branche de chardon', 'Coton de toundra', 'Langue de dragon', 'Lichen géant', 'Baies de genièvre',
-    'Genièvres', 'Hivernelle', 'Griveboise', 'Sel', 'Ail', 'Carotte', 'Tomate', 'Poireau', 'Pomme de terre',
-  ],
-  C2: [
-    'Pied de lutin', "Oreille d'elfe", 'Couronne sanglante', 'Mousse pendante', 'Grappe rampante', 'Campanule mortelle',
-    'Racine de canis', 'Pulpe de racine', 'Fronde de somnalius', 'Tapinelle mora', 'Coupe de tache verte', 'Obscurcine',
-    'Raisins Jazbay', 'Morelle noire', 'Myrrhe givrée', 'Amanite tue-mouches', 'Pholiotes à écailles', 'Mycènes des marais',
-    'Amanites jaunes',
-  ],
-  C3: [
-    'Oeuf de Fauvette', 'Œuf de poisson carnassier', 'Écailles de poisson carnassier', 'Chitine de crabe de vase', 'Rayon de miel',
-    'Miel', 'Peau de ragnard carbonisée', 'Lapin cru',
-  ],
-  C4: [
-    'Peau de loup', 'Peau de loup des neiges', "Peau d'ours", "Peau d'ours des neiges", 'Peau de Smilodon', 'Peau de Smilodon des neiges',
-    "Griffes d'ours", 'Croc de smilodon', 'Venaison', 'Horqueur cru', 'Bœuf cru', 'Grands bois',
-  ],
-  C5: [
-    'Graisse de troll', 'Œufs de chaurus', 'Chitine de chaurus', 'Venin de givre', 'Ectoplasme', 'Dents de spectre de glace',
-    'Défense de mammouth', 'Plumes de harfreuse', "Poudre d'os",
-  ],
-  C6: ['Coeur de Daedra', 'Huile dwemer'],
-  C7: [
-    'Lingot de fer', "Lingot d'acier", "Lingot d'or", "Lingot d'argent", 'Minerai de fer', 'Gemme spirituelle insignifiante', 'Rubis',
-    'Saphir', 'Améthyste', 'Sucrelune', 'Morceau de Lin', 'Fil', 'Petit bois', 'Corindon',
-  ],
+/** Origins of a resource (a tag, no effect on points); the list is free, these are proposed. */
+export const ORIGINES = ['Ferme', 'Cueillette', 'Cueillette / récolte localisée', 'Chasse', 'Créature', 'Mine', 'Achat']
+
+/** The prototype's first classes (2026-10-28) and the rarity level each one becomes. */
+const ANCIENNES: Record<string, { classe: string; origine: string }> = {
+  C1: { classe: 'R1', origine: 'Cueillette' },
+  C2: { classe: 'R2', origine: 'Cueillette / récolte localisée' },
+  C3: { classe: 'R3', origine: 'Chasse' },
+  C4: { classe: 'R4', origine: 'Chasse' },
+  C5: { classe: 'R5', origine: 'Créature' },
+  C6: { classe: 'R6', origine: 'Créature' },
+  C7: { classe: '', origine: 'Mine' },
+  F: { classe: 'R1', origine: 'Ferme' },
+  T: { classe: CODE_TRANSFORMATION, origine: '' },
 }
 
-export const ASSIGNATIONS_DEFAUT: Assignation[] = Object.entries(PAR_CLASSE).flatMap(([classe, noms]) =>
-  noms.map((nom) => ({ nom, classe, poids: null, note: '' })),
-)
+/** [level, origin] → resources, by default. */
+const PAR_DEFAUT: [string, string, string[]][] = [
+  ['R1', 'Ferme', ['Blé', 'Carotte', 'Tomate', 'Poireau', 'Pomme de terre', 'Ail']],
+  [
+    'R1',
+    'Cueillette',
+    [
+      'Lavande', 'Lys Bleu', 'Lys jaune', 'Lys rouge', 'Lys violet', "Cosse d'herbe", 'Cloquerille', 'Chapeau blanc',
+      'Champignon luminescent', 'Branche de chardon', 'Coton de toundra', 'Langue de dragon', 'Lichen géant', 'Baies de genièvre',
+      'Genièvres', 'Hivernelle', 'Griveboise', 'Sel',
+    ],
+  ],
+  [
+    'R2',
+    'Cueillette / récolte localisée',
+    [
+      'Pied de lutin', "Oreille d'elfe", 'Couronne sanglante', 'Mousse pendante', 'Grappe rampante', 'Campanule mortelle',
+      'Racine de canis', 'Pulpe de racine', 'Fronde de somnalius', 'Tapinelle mora', 'Coupe de tache verte', 'Obscurcine',
+      'Raisins Jazbay', 'Morelle noire', 'Myrrhe givrée', 'Amanite tue-mouches', 'Pholiotes à écailles', 'Mycènes des marais',
+      'Amanites jaunes',
+    ],
+  ],
+  ['R3', 'Chasse', ['Oeuf de Fauvette', 'Œuf de poisson carnassier', 'Écailles de poisson carnassier', 'Chitine de crabe de vase', 'Rayon de miel', 'Miel', 'Peau de ragnard carbonisée', 'Lapin cru']],
+  [
+    'R4',
+    'Chasse',
+    ['Peau de loup', 'Peau de loup des neiges', "Peau d'ours", "Peau d'ours des neiges", 'Peau de Smilodon', 'Peau de Smilodon des neiges', "Griffes d'ours", 'Croc de smilodon', 'Venaison', 'Horqueur cru', 'Bœuf cru', 'Grands bois'],
+  ],
+  ['R5', 'Créature', ['Graisse de troll', 'Œufs de chaurus', 'Chitine de chaurus', 'Venin de givre', 'Ectoplasme', 'Dents de spectre de glace', 'Défense de mammouth', 'Plumes de harfreuse', "Poudre d'os"]],
+  ['R6', 'Créature', ['Coeur de Daedra']],
+  ['R6', 'Achat', ['Huile dwemer']],
+  ['', 'Mine', ["Minerai de fer", 'Minerai de corindon', "Minerai d'or", "Minerai d'argent", 'Minerai de vif-argent', 'Gemme spirituelle insignifiante', 'Rubis', 'Saphir', 'Améthyste', 'Charbon', 'Charbon pauvre']],
+  ['', 'Achat', ['Sucrelune', 'Morceau de Lin', 'Petit bois']],
+]
+
+export const ASSIGNATIONS_DEFAUT: Assignation[] = PAR_DEFAUT.flatMap(([classe, origine, noms]) => noms.map((nom) => ({ nom, classe, origine, poids: null, note: '' })))
+
+/** A resource's origin by default (by name), for rows that have none. */
+const origineDefaut = (nom: string) => ASSIGNATIONS_DEFAUT.find((a) => cle(a.nom) === cle(nom))?.origine ?? ''
 
 /** The settings, as the « Réglages missions » tab names them (the label is the row's key). */
 export const REGLAGES: { cle: keyof Reglages; libelle: string; defaut: number; min: number; max: number; note: string }[] = [
-  { cle: 'budget', libelle: 'Effort par mission', defaut: 120, min: 1, max: 100000, note: 'unités d’effort d’une courte session de jeu' },
-  { cle: 'maxEnCours', libelle: 'Missions en cours par membre', defaut: 5, min: 1, max: 99, note: 'au-delà, il faut en accomplir ou en rendre' },
+  { cle: 'budget', libelle: 'Effort par mission', defaut: 120, min: 1, max: 100000, note: 'échelle interne : le poids d’une unité est cet effort ÷ sa quantité par mission' },
+  { cle: 'maxEnCours', libelle: 'Missions en cours par membre', defaut: 5, min: 1, max: 99, note: 'une mission remise ne compte plus ; au-delà, il faut en remettre ou y renoncer' },
   { cle: 'objetsParFabrication', libelle: 'Objets par mission de fabrication', defaut: 10, min: 1, max: 10000, note: 'pour le produit final' },
-  { cle: 'poidsRepli', libelle: 'Poids de repli (poids à fixer)', defaut: 4, min: 0.1, max: 1000, note: 'taille les missions des ressources sans poids' },
+  { cle: 'quantiteRepli', libelle: 'Quantité par mission de repli (rareté à fixer)', defaut: 30, min: 1, max: 100000, note: 'taille les missions des ressources sans rareté' },
 ]
 
 // The resources' and crafting shares are the pay's settings (lib/paie.ts, « Réglages paie »): one source.
@@ -173,8 +210,12 @@ export const TEXTES = {
   inactif:
     'Le scribe du registre ne connaît pas encore les missions. Les pages se lisent, l’aperçu se calcule, mais rien ne s’inscrit tant que le dernier script du grimoire (v3m) n’est pas recopié dans la feuille.',
   sansRecette: (nom: string) => `Nulle recette n’est consignée pour ${nom} : qu’un artisan l’écrive au Livre des Recettes avant d’en demander.`,
-  aFixer: 'poids à fixer',
-  limite: (max: number) => `Tes pattes sont pleines : ${max} missions en cours, pas une de plus. Accomplis-en une, ou rends-la.`,
+  aFixer: 'rareté à fixer',
+  limite: (max: number) => `Tes pattes sont pleines : ${max} missions en cours, pas une de plus. Remets-en une, ou renonces-y.`,
+  /** The confirmation needs the v3n script. */
+  refusV3n: 'Le scribe du registre ne sait pas encore qu’un butin se remet et se confirme : qu’on recopie le dernier script du grimoire (v3n) dans la feuille.',
+  pasRemise: 'Ce butin n’a pas été remis : rien à confirmer.',
+  soiMeme: 'Nul ne confirme son propre butin : qu’une autre patte le reçoive.',
   prise: 'Une autre patte a saisi cette mission avant toi. Le désert est ainsi.',
   pasLaTienne: 'Cette mission n’est pas entre tes pattes.',
 }
@@ -204,21 +245,34 @@ const date = (v: unknown) => {
 /** The settings read from rows `{ reglage, valeur }` (a missing or unreadable one keeps its default). */
 function reglagesLus(lignes: Record<string, unknown>[]): Reglages {
   const res = { ...REGLAGES_DEFAUT }
+  let repli = false
+  let ancienPoids: number | null = null
   for (const l of lignes) {
     const k = cle(texte(l.reglage))
-    const def = REGLAGES.find((r) => cle(r.libelle) === k || cle(r.cle) === k)
     const v = nombre(l.valeur)
-    if (def && v !== null) res[def.cle] = Math.min(def.max, Math.max(def.min, v))
+    // The first layout's « Poids de repli (poids à fixer) » becomes a quantity per mission (budget ÷ weight).
+    if (k.startsWith('poidsderepli')) ancienPoids = v
+    const def = REGLAGES.find((r) => cle(r.libelle) === k || cle(r.cle) === k)
+    if (def && v !== null) {
+      res[def.cle] = Math.min(def.max, Math.max(def.min, v))
+      if (def.cle === 'quantiteRepli') repli = true
+    }
   }
+  if (!repli && ancienPoids && ancienPoids > 0) res.quantiteRepli = Math.max(1, Math.round(res.budget / ancienPoids))
   return res
 }
 
 /**
- * The pondération from the Pondération tab (rows `{ genre, code, nom, poids, note }`: « classe » rows,
- * « ressource » rows, and « lot » rows — an item's units per mission, in the « Poids » column) and the
- * « Réglages missions » tab. An empty tab: the defaults. A class « T » (Transformation) is always there.
+ * The pondération from the Pondération tab: « classe » rows (a rarity level: Code, Nom, « Par mission »),
+ * « ressource » rows (Code = its level, « Origine », « Poids » an older own weight) and « lot » rows (an
+ * item's units per mission, in « Par mission », or « Poids » in the first layout), and the « Réglages
+ * missions » tab. An empty tab: the defaults. The first layout (classes C1…C7 with a weight per unit) is
+ * read into the levels — C1 → Abondant… —, the tab's own edits kept (lots, assignments, own weights); the
+ * new layout is written only when the pondération is next engraved.
  */
 export function ponderationLue(lignes: Record<string, unknown>[] = [], reglages: Record<string, unknown>[] = []): Ponderation {
+  const r = reglagesLus(reglages)
+  const ancienne = lignes.some((l) => cle(texte(l.genre)).startsWith('class') && /^c\d$/i.test(texte(l.code)))
   const classes: Classe[] = []
   const ressources: Assignation[] = []
   const lots: LotMission[] = []
@@ -227,26 +281,38 @@ export function ponderationLue(lignes: Record<string, unknown>[] = [], reglages:
     const code = texte(l.code)
     const nom = texte(l.nom)
     if (genre.startsWith('lot')) {
-      const n = Math.round(nombre(l.poids) ?? nombre(l.code) ?? 0)
+      const n = Math.round(nombre(l.quantite) ?? nombre(l.poids) ?? nombre(l.code) ?? 0)
       if (nom && n >= 1 && !lots.some((x) => cle(x.nom) === cle(nom))) lots.push({ nom, lot: Math.min(100000, n) })
     } else if (genre.startsWith('class')) {
-      if (code && !classes.some((c) => cle(c.code) === cle(code))) classes.push({ code, nom: nom || code, poids: nombre(l.poids), note: texte(l.note) })
-    } else if (nom && !ressources.some((r) => cle(r.nom) === cle(nom))) {
-      ressources.push({ nom, classe: code, poids: nombre(l.poids), note: texte(l.note) })
+      if (ancienne) {
+        // An old class: its level takes the quantity its weight gave (C2 at weight 2 → 60), under the level's name.
+        const a = ANCIENNES[code.toUpperCase()]
+        const d = CLASSES_DEFAUT.find((c) => c.code === a?.classe)
+        const w = nombre(l.poids)
+        if (d && !classes.some((c) => c.code === d.code)) classes.push({ ...d, quantite: w && w > 0 ? Math.max(1, Math.round(r.budget / w)) : d.quantite })
+      } else if (code && !classes.some((c) => cle(c.code) === cle(code))) classes.push({ code, nom: nom || code, quantite: nombre(l.quantite), note: texte(l.note) })
+    } else if (nom && !ressources.some((x) => cle(x.nom) === cle(nom))) {
+      if (ancienne) {
+        const a = ANCIENNES[code.toUpperCase()]
+        const defaut = ASSIGNATIONS_DEFAUT.find((x) => cle(x.nom) === cle(nom))
+        // Farm produce left in C1 joins « Ferme »: the default origin wins over the old class's.
+        ressources.push({ nom, classe: a ? a.classe : code, origine: defaut?.origine || a?.origine || '', poids: nombre(l.poids), note: texte(l.note) })
+      } else ressources.push({ nom, classe: code, origine: texte(l.origine) || origineDefaut(nom), poids: nombre(l.poids), note: texte(l.note) })
     }
   }
-  if (!classes.length && !ressources.length) return { ...PONDERATION_DEFAUT, lots, reglages: reglagesLus(reglages), source: lots.length ? 'registre' : 'defaut' }
-  if (!classes.some((c) => cle(c.code) === cle(CODE_TRANSFORMATION))) classes.push(CLASSES_DEFAUT.find((c) => c.code === CODE_TRANSFORMATION)!)
-  return { classes, ressources, lots, reglages: reglagesLus(reglages), source: 'registre' }
+  if (!classes.length && !ressources.length) return { ...PONDERATION_DEFAUT, lots, reglages: r, source: lots.length ? 'registre' : 'defaut' }
+  // Every default level the tab lacks joins it (its own levels untouched).
+  for (const d of CLASSES_DEFAUT) if (!classes.some((c) => cle(c.code) === cle(d.code))) classes.push(d)
+  return { classes, ressources, lots, reglages: r, source: 'registre' }
 }
 
 /** The pondération as the tabs' rows (what 'ponderation' writes, and the seed of a first demand). */
 export function ponderationEnLignes(p: Ponderation) {
   return {
     lignes: [
-      ...p.classes.map((c) => ({ genre: 'classe', code: c.code, nom: c.nom, poids: c.poids ?? '', note: c.note })),
-      ...p.ressources.map((r) => ({ genre: 'ressource', code: r.classe, nom: r.nom, poids: r.poids ?? '', note: r.note })),
-      ...p.lots.map((l) => ({ genre: 'lot', code: '', nom: l.nom, poids: l.lot, note: 'par mission' })),
+      ...p.classes.map((c) => ({ genre: 'classe', code: c.code, nom: c.nom, quantite: c.quantite ?? '', origine: '', poids: '', note: c.note })),
+      ...p.ressources.map((r) => ({ genre: 'ressource', code: r.classe, nom: r.nom, quantite: '', origine: r.origine, poids: r.poids ?? '', note: r.note })),
+      ...p.lots.map((l) => ({ genre: 'lot', code: '', nom: l.nom, quantite: l.lot, origine: '', poids: '', note: 'par mission' })),
     ],
     reglages: REGLAGES.map((r) => ({ reglage: r.libelle, valeur: p.reglages[r.cle], note: r.note })),
   }
@@ -259,13 +325,14 @@ export function peser(p: Ponderation) {
   const assignee = (nom: string) => assignees.get(cle(nom))
   const classeDe = (nom: string): Classe | null => {
     const a = assignee(nom)
-    return a ? (classes.get(cle(a.classe)) ?? null) : null
+    return a?.classe ? (classes.get(cle(a.classe)) ?? null) : null
   }
+  /** Weight per unit (internal): an own weight, else the level's (budget ÷ its quantity); null: « à fixer ». */
   const poidsDe = (nom: string, transformation = false): number | null => {
     const a = assignee(nom)
     if (a?.poids !== null && a?.poids !== undefined && a.poids > 0) return a.poids
-    const c = a ? classes.get(cle(a.classe)) : transformation ? classes.get(cle(CODE_TRANSFORMATION)) : undefined
-    return c?.poids && c.poids > 0 ? c.poids : null
+    const c = a?.classe ? classes.get(cle(a.classe)) : transformation ? classes.get(cle(CODE_TRANSFORMATION)) : undefined
+    return poidsClasse(c, p.reglages.budget)
   }
   return { assignee, classeDe, poidsDe, classes }
 }
@@ -392,7 +459,7 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
     const r = recetteDe(recettes, nom)
     if (!r) return null
     const a = assignee(nom)
-    return a && cle(a.classe) !== cle(CODE_TRANSFORMATION) ? null : r
+    return a?.classe && cle(a.classe) !== cle(CODE_TRANSFORMATION) ? null : r
   }
 
   // Topological order (an item after everything that consumes it), loops refused.
@@ -457,8 +524,8 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
     const r = intermediaire(nom)
     const poids = poidsDe(nom, Boolean(r))
     if (poids === null) aFixer.add(nom)
-    const w = poids ?? reglages.poidsRepli
-    const classe = r ? (assignee(nom)?.classe ?? CODE_TRANSFORMATION) : (assignee(nom)?.classe ?? null)
+    const w = poids ?? poidsRepli(reglages)
+    const classe = r ? assignee(nom)?.classe || CODE_TRANSFORMATION : assignee(nom)?.classe || null
     if (r) {
       // Whole crafts: a mission holds as many crafts as its effort allows (at least one).
       const rend = Math.max(1, r.rendement)
@@ -498,7 +565,7 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
 const TYPES: Record<string, TypeMission> = { recolte: 'récolte', transformation: 'fabrication', fabrication: 'fabrication' }
 const statutLu = (s: unknown): StatutMission => {
   const k = cle(texte(s))
-  return k.startsWith('encours') || k.startsWith('prise') ? 'en cours' : k.startsWith('accompli') ? 'accomplie' : 'ouverte'
+  return k.startsWith('encours') || k.startsWith('prise') ? 'en cours' : k.startsWith('remise') ? 'remise' : k.startsWith('accompli') ? 'accomplie' : 'ouverte'
 }
 
 export type MissionsLues = { actif: boolean; ponderation: Ponderation; demandes: Demande[]; missions: Mission[]; points: LignePoints[] }
@@ -534,12 +601,14 @@ export function lireMissions(o: Onglets): MissionsLues {
       prisPar: texte(r.prisPar),
       prisLe: date(r.prisLe),
       accomplieLe: date(r.accomplieLe),
+      remiseLe: date(r.remiseLe),
+      confirmePar: texte(r.confirmePar),
       note: texte(r.note),
       journal: texte(r.journal),
     }))
     .filter((m) => m.numero && m.objet)
   const points: LignePoints[] = (o.points ?? [])
-    .map((r) => ({ horodatage: date(r.horodatage), membre: texte(r.membre), points: nombre(r.points) ?? 0, raison: texte(r.raison), mission: texte(r.mission) }))
+    .map((r) => ({ horodatage: date(r.horodatage), membre: texte(r.membre), points: nombre(r.points) ?? 0, raison: texte(r.raison), mission: texte(r.mission), confirmePar: texte(r.confirmePar) }))
     .filter((p) => p.membre)
   return { actif, ponderation: ponderationLue(o.ponderation ?? [], o.reglagesMissions ?? []), demandes, missions, points }
 }
@@ -564,7 +633,7 @@ export function soldes(points: LignePoints[], missions: Mission[] = []) {
     if (p.mission) s.accomplies++
   }
   for (const m of missions) {
-    if (m.statut !== 'en cours' || !m.prisPar) continue
+    if ((m.statut !== 'en cours' && m.statut !== 'remise') || !m.prisPar) continue
     const s = de(m.prisPar)
     s.enCours++
     s.promis += m.points

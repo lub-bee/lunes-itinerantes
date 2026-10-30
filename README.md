@@ -588,8 +588,18 @@ to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane
 - **Lots per mission**: « lot » rows of the Pondération tab (`Genre` lot, `Nom` the item, the number in
   `Poids`) set how many units one mission holds (Blé par 40, Bière par 20); the demand's note can change it
   line by line before sealing. A lot set by hand cuts full packs, the rest last (250 by 40 → 40 ×6 + 10).
-- Every form (the demand, the settings, the classes, one item's class / weight / lot) is a note laid over the
-  left page; the pages only show.
+- Every form (the demand, the settings, the rarity levels, one item's rarity / origin / lot) is a note laid over
+  the left page; the pages only show.
+- **Rarity levels** (2026-10-30): a level is edited as a quantity per mission (Abondant 120, Commun 60, Peu
+  commun 40, Rare 30, Très rare 15, Exceptionnel 8; « Fabrication intermédiaire » 60); the weight per unit
+  stays internal (effort budget ÷ quantity). A resource's **origin** (Ferme, Cueillette, Chasse, Créature,
+  Mine, Achat…) is a tag, display and filter only. The first layout (C1…C7 with weights) is read into the
+  levels without losing the tab's edits, and written in the new layout (« Par mission », « Origine »
+  columns, v3n) at the next engraving.
+- **Confirmation by a receiver** (2026-10-30, v3n): the holder marks the loot « remise »; another member
+  confirms it (« accomplie », points credited then, in the week of the confirmation, with who confirmed) or
+  refuses it (back « en cours », with a word). A mission « remise » no longer counts against the limit.
+  « Rendre » is shown as « renoncer ».
 - **Lifecycle**: ouverte → en cours (who, when; at most *max en cours* per member, checked by the server
   and again by the script under its lock) → accomplie, or rendue (open again; the « Journal » cell keeps
   each gesture).

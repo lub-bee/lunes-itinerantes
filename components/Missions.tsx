@@ -10,6 +10,7 @@ import {
   enCoursDe,
   ICONES_TYPES,
   intitule,
+  ORIGINES,
   peser,
   raisonPoints,
   recetteDe,
@@ -183,11 +184,11 @@ function GlypheType({ type, icones }: { type: TypeMission; icones: Record<string
 
 const pts = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} pt${Math.abs(n) > 1 ? 's' : ''}`
 
-/** The weight a mission was sized with: « poids 2 », or « poids à fixer » (none for a craft of the final product). */
+/** « rareté à fixer » when a mission was sized without a known rarity (the weight itself stays internal). */
 function poids(m: Pick<Mission, 'type' | 'poids'> & { intermediaire?: boolean; note?: string }): ReactNode {
-  if (m.poids !== null) return <span>poids {prix(m.poids)}</span>
-  // A harvest (or an intermediate's craft) without weight; the final product's crafts have none.
-  return m.type === 'récolte' || m.intermediaire || m.note === TEXTES.aFixer ? <span className="a-fixer">{TEXTES.aFixer}</span> : null
+  if (m.poids !== null) return null
+  // A harvest (or an intermediate's craft) without rarity; the final product's crafts have none.
+  return m.type === 'récolte' || m.intermediaire || /fixer/.test(m.note ?? '') ? <span className="a-fixer">{TEXTES.aFixer}</span> : null
 }
 
 /** A mission's small line: its parts, the empty ones left out, separated by a middle dot. */
@@ -221,7 +222,6 @@ export function GaucheMissions({ page, reg, icones, compact }: { page: PageMissi
           <Signature reg={reg} />
           <Inactif reg={reg} />
           <Message reg={reg} />
-          <MesMissions reg={reg} icones={icones} />
         </>
       )}
     </>
@@ -232,43 +232,50 @@ function MesMissions({ reg, icones }: { reg: CtxRegistre; icones: Record<string,
   const d = reg.m!.donnees!
   const moi = moiDe(reg)
   if (!moi) return null
-  const miennes = enCoursDe(d.missions, moi)
+  const enCours = enCoursDe(d.missions, moi)
+  // Handed over, waiting for another member's confirmation: no longer counted against the limit.
+  const remises = d.missions.filter((m) => m.statut === 'remise' && cle(m.prisPar) === cle(moi))
   const max = d.ponderation.reglages.maxEnCours
   const droits = reg.r.marchand?.droits
-  const geste = (m: Mission, action: 'rendre' | 'accomplir') =>
+  const geste = (m: Mission, action: 'rendre' | 'remettre') =>
     reg.m!.agir(action, { numero: m.numero }, (x) => ({
       ...x,
       missions: x.missions.map((y) =>
-        y.numero !== m.numero ? y : action === 'rendre' ? { ...y, statut: 'ouverte', prisPar: '', prisLe: '', enAttente: true } : { ...y, statut: 'accomplie', accomplieLe: new Date().toISOString(), enAttente: true },
+        y.numero !== m.numero ? y : action === 'rendre' ? { ...y, statut: 'ouverte', prisPar: '', prisLe: '', enAttente: true } : { ...y, statut: 'remise', remiseLe: new Date().toISOString(), enAttente: true },
       ),
-      points: action === 'accomplir' ? [...x.points, { horodatage: new Date().toISOString(), membre: moi, points: m.points, raison: raisonPoints(m), mission: m.numero, enAttente: true }] : x.points,
     }))
   return (
     <section className="mes-missions">
       <h3 className="titre-section">
-        Mes missions en cours <span className="compte-missions">{miennes.length} / {max}</span>
+        Mes missions en cours <span className="compte-missions">{enCours.length} / {max}</span>
       </h3>
-      {miennes.length ? (
+      {enCours.length || remises.length ? (
         <ul className="missions-liste">
-          {miennes.map((m) => (
-            <li key={m.numero} className={`mission tenue ${m.enAttente ? 'en-attente' : ''}`}>
+          {[...enCours, ...remises].map((m) => (
+            <li key={m.numero} className={`mission tenue ${m.statut === 'remise' ? 'remise' : ''} ${m.enAttente ? 'en-attente' : ''}`}>
               <GlypheType type={m.type} icones={icones} />
               <span className="mission-texte">
                 <span className="mission-intitule">{intitule(m)}</span>
-                <Meta parts={[m.prisLe && `prise le ${dateTamrielique(m.prisLe)}`, poids(m)]} />
+                <Meta parts={[m.statut === 'remise' ? m.remiseLe && `remise le ${dateTamrielique(m.remiseLe)}` : m.prisLe && `prise le ${dateTamrielique(m.prisLe)}`, poids(m)]} />
               </span>
               <span className="mission-cote">
                 <strong className="mission-points">{pts(m.points)}</strong>
                 <span className="mission-gestes">
-                  {droits?.rendre !== false && (
-                    <Action icone="rendre" disabled={m.enAttente} onClick={() => geste(m, 'rendre')}>
-                      rendre
-                    </Action>
-                  )}
-                  {droits?.accomplir !== false && (
-                    <Action icone="accomplir" disabled={m.enAttente} onClick={() => geste(m, 'accomplir')}>
-                      accomplie
-                    </Action>
+                  {m.statut === 'remise' ? (
+                    <span className="tampon petit">remise, à confirmer</span>
+                  ) : (
+                    <>
+                      {droits?.remettre !== false && (
+                        <Action icone="accomplir" disabled={m.enAttente} title="Le butin est remis à un officier : qu’une autre patte le confirme" onClick={() => geste(m, 'remettre')}>
+                          butin remis
+                        </Action>
+                      )}
+                      {droits?.rendre !== false && (
+                        <Action icone="rendre" disabled={m.enAttente} title="Renoncer : la mission retourne à l’appel" onClick={() => geste(m, 'rendre')}>
+                          renoncer
+                        </Action>
+                      )}
+                    </>
                   )}
                 </span>
               </span>
@@ -278,6 +285,63 @@ function MesMissions({ reg, icones }: { reg: CtxRegistre; icones: Record<string,
       ) : (
         <p className="vide-encre">Tes pattes sont libres : prends une mission à l’appel de la caravane.</p>
       )}
+    </section>
+  )
+}
+
+/** The loot others handed over: anyone but the holder confirms it (points credited then) or refuses it. */
+function AConfirmer({ reg, icones }: { reg: CtxRegistre; icones: Record<string, string> }) {
+  const d = reg.m!.donnees!
+  const moi = moiDe(reg)
+  const liste = d.missions.filter((m) => m.statut === 'remise')
+  if (!liste.length) return null
+  const droits = reg.r.marchand?.droits
+  const confirmer = (m: Mission) =>
+    reg.m!.agir('confirmer', { numero: m.numero }, (x) => ({
+      ...x,
+      missions: x.missions.map((y) => (y.numero !== m.numero ? y : { ...y, statut: 'accomplie', accomplieLe: new Date().toISOString(), confirmePar: moi ?? '', enAttente: true })),
+      points: [...x.points, { horodatage: new Date().toISOString(), membre: m.prisPar, points: m.points, raison: raisonPoints(m), mission: m.numero, confirmePar: moi ?? '', enAttente: true }],
+    }))
+  return (
+    <section className="a-confirmer">
+      <h3 className="titre-section">
+        Butins à confirmer <span className="compte-missions">{liste.length}</span>
+      </h3>
+      <ul className="missions-liste">
+        {liste.map((m) => {
+          const sienne = Boolean(moi) && cle(m.prisPar) === cle(moi!)
+          return (
+            <li key={m.numero} className={`mission ${m.enAttente ? 'en-attente' : ''}`}>
+              <GlypheType type={m.type} icones={icones} />
+              <span className="mission-texte">
+                <span className="mission-intitule">{intitule(m)}</span>
+                <Meta parts={[`remis par ${m.prisPar}`, m.remiseLe && `le ${dateTamrielique(m.remiseLe)}`]} />
+              </span>
+              <span className="mission-cote">
+                <strong className="mission-points">{pts(m.points)}</strong>
+                <span className="mission-gestes">
+                  {sienne || !moi ? (
+                    <em className="mission-meta">{sienne ? 'une autre patte confirmera' : ''}</em>
+                  ) : (
+                    <>
+                      {droits?.confirmer !== false && (
+                        <Action icone="accomplir" disabled={m.enAttente} onClick={() => confirmer(m)}>
+                          reçu
+                        </Action>
+                      )}
+                      {droits?.refuser !== false && (
+                        <Action icone="annuler" disabled={m.enAttente} onClick={() => reg.ouvrir({ genre: 'refus-mission', numero: m.numero })}>
+                          pas reçu
+                        </Action>
+                      )}
+                    </>
+                  )}
+                </span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }
@@ -325,6 +389,9 @@ export function DroiteMissions({ reg, icones, interactif, citation }: { reg?: Ct
   const tab = interactif ? 0 : -1
   return (
     <div className="missions-droite">
+      {/* The member's own missions first, then the call (the same order on a phone). */}
+      <MesMissions reg={reg} icones={icones} />
+      <AConfirmer reg={reg} icones={icones} />
       <h3 className="titre-section">Missions ouvertes</h3>
       <FiltreMissions reg={reg} />
       {pleines && <p className="note-encre">{TEXTES.limite(max)}</p>}
@@ -699,7 +766,7 @@ function FicheDemande({ reg, articles, chapitres, icones, fermer }: EnvMission) 
             )}
             {apercu.aFixer.length > 0 && (
               <p className="a-fixer">
-                Poids à fixer : {apercu.aFixer.join(', ')} (taillées au poids de repli, {prix(d.ponderation.reglages.poidsRepli)}).
+                Rareté à fixer : {apercu.aFixer.join(', ')} (missions de {prix(d.ponderation.reglages.quantiteRepli)} par défaut).
               </p>
             )}
           </div>
@@ -810,87 +877,96 @@ function ResumeReglages({ reg, icones }: { reg: CtxRegistre; icones: Record<stri
   )
 }
 
+/** « Blé — Abondant · Ferme — 40 par mission (réglé à la main) » */
+function descriptionMatiere(p: Ponderation, nom: string, intermediaire: boolean, fini: boolean) {
+  const { assignee, classeDe, poidsDe } = peser(p)
+  const a = assignee(nom)
+  const c = fini ? null : classeDe(nom) ?? (intermediaire && !a?.classe ? p.classes.find((x) => x.code === CODE_TRANSFORMATION) ?? null : null)
+  const lot = lotDe(p, nom)
+  const w = poidsDe(nom, intermediaire)
+  const parMission = lot ?? (fini ? p.reglages.objetsParFabrication : w ? Math.floor(p.reglages.budget / w) : p.reglages.quantiteRepli)
+  return {
+    niveau: fini ? 'produit fini' : (c?.nom ?? 'rareté à fixer'),
+    aFixer: !fini && w === null,
+    origine: a?.origine || '',
+    parMission,
+    source: lot ? 'réglé à la main' : fini ? 'réglage' : w === null ? 'repli' : a?.poids ? 'poids propre' : '',
+  }
+}
+
 function VuePonderation({ reg }: { reg: CtxRegistre }) {
   const p = reg.m!.donnees!.ponderation
   const peut = reg.r.marchand?.droits?.ponderation !== false && Boolean(moiDe(reg))
   const { assignee, poidsDe } = peser(p)
   const { liste, finis } = matieres(reg, p)
+  const [origine, setOrigine] = useState('')
+  const origines = [...new Set([...ORIGINES, ...p.ressources.map((r) => r.origine).filter(Boolean)])]
   const groupe = (x: { nom: string; intermediaire: boolean }) => {
     const a = assignee(x.nom)
-    if (!a) return x.intermediaire ? CODE_TRANSFORMATION : ''
+    if (!a?.classe) return x.intermediaire ? CODE_TRANSFORMATION : ''
     return poidsDe(x.nom) === null ? '' : a.classe
   }
-  const groupes = [{ code: '', titre: 'À fixer' }, ...p.classes.map((c) => ({ code: c.code, titre: `${c.code} · ${c.nom}` }))]
-  const ligne = (nom: string, classe: ReactNode, w: ReactNode, lot: number | null, defautLot: string) => (
-    <button key={nom} type="button" className="ressource-ponderee" disabled={!peut} onClick={() => reg.ouvrir({ genre: 'matiere-mission', nom })} title={peut ? `Ranger ${nom}` : undefined}>
-      <span className="ressource-nom">{nom}</span>
-      <span className="ressource-classe">{classe}</span>
-      <span className="ressource-poids">{w}</span>
-      <span className={`ressource-lot ${lot ? 'fixe' : ''}`}>{lot ? `par ${quantite(lot)}` : defautLot}</span>
-    </button>
-  )
+  const groupes = [{ code: '', titre: 'Rareté à fixer' }, ...p.classes.map((c) => ({ code: c.code, titre: c.nom }))]
+  const ligne = (nom: string, intermediaire: boolean, fini: boolean) => {
+    const x = descriptionMatiere(p, nom, intermediaire, fini)
+    return (
+      <button key={nom} type="button" className="ressource-ponderee" disabled={!peut} onClick={() => reg.ouvrir({ genre: 'matiere-mission', nom })} title={peut ? `Régler ${nom}` : undefined}>
+        <span className="ressource-nom">{nom}</span>
+        <span className="ressource-desc">
+          <span className={x.aFixer ? 'a-fixer' : ''}>{x.niveau}</span>
+          {x.origine && <> · {x.origine}</>} — <b className={x.source === 'réglé à la main' ? 'fixe' : ''}>{quantite(x.parMission)} par mission</b>
+          {x.source && <em> ({x.source})</em>}
+        </span>
+      </button>
+    )
+  }
+  const visible = (nom: string) => !origine || cle(assignee(nom)?.origine ?? '') === cle(origine)
   return (
     <div className="ponderation-droite">
-      <h3 className="titre-section">Classes d’effort</h3>
-      <div className="classes-ponderation" role="table">
-        <div className="classes-entete" role="row">
-          <span>Code</span>
-          <span>Classe</span>
-          <span>Poids</span>
-          <span>Par mission</span>
-        </div>
+      <h3 className="titre-section">Niveaux de rareté</h3>
+      <p className="note-encre">Combien en ramasse-t-on en une courte session ? C’est ce nombre qui règle les missions (et, en coulisse, le partage des points).</p>
+      <ul className="inventaire niveaux-rarete">
         {p.classes.map((c) => (
-          <div key={c.code} className="classes-ligne" role="row">
-            <span className="classe-code">{c.code}</span>
+          <li key={c.code}>
             <span>{c.nom}</span>
-            <span className={c.poids === null ? 'a-fixer' : ''}>{c.poids === null ? 'à fixer' : prix(c.poids)}</span>
-            <span className="classe-lot">{c.poids ? `~${Math.floor(p.reglages.budget / c.poids)}` : '—'}</span>
-          </div>
+            <span className="points" />
+            <strong className={c.quantite === null ? 'a-fixer' : ''}>{c.quantite === null ? 'à fixer' : `${quantite(c.quantite)} par mission`}</strong>
+          </li>
         ))}
-      </div>
+      </ul>
       {peut && (
         <p className="ponderation-action">
           <Action icone="peser" onClick={() => reg.ouvrir({ genre: 'classes-missions' })}>
-            corriger les classes
+            corriger les niveaux
           </Action>
         </p>
       )}
-      <div className="ponderation-entete">
-        <span>Ressource</span>
-        <span>Classe</span>
-        <span>Poids</span>
-        <span>Par mission</span>
+      <div className="filtre-missions" role="group" aria-label="Filtrer par origine">
+        {['', ...origines].map((o) => (
+          <button key={o || 'toutes'} type="button" className={`lien-encre ${origine === o ? 'actif' : ''}`} aria-pressed={origine === o} onClick={() => setOrigine(o)}>
+            {o || 'Toutes origines'}
+          </button>
+        ))}
       </div>
       {groupes.map((g) => {
-        const membres = liste.filter((x) => groupe(x) === g.code)
+        const membres = liste.filter((x) => groupe(x) === g.code && visible(x.nom))
         if (!membres.length) return null
         return (
           <section key={g.code || 'a-fixer'} className={`groupe-ressources ${g.code ? '' : 'a-fixer-groupe'}`}>
             <h4 className="fiche-sous-titre">
               {g.titre} <span className="compte-missions">{membres.length}</span>
             </h4>
-            {!g.code && <p className="note-encre">Sans classe ou sans poids : leurs missions sont taillées au poids de repli ({prix(p.reglages.poidsRepli)}) et marquées « {TEXTES.aFixer} ».</p>}
-            {membres.map((x) => {
-              const a = assignee(x.nom)
-              const w = poidsDe(x.nom, x.intermediaire)
-              return ligne(
-                x.nom,
-                a ? a.classe : x.intermediaire ? <em>T (défaut)</em> : <em className="a-fixer">aucune</em>,
-                w === null ? <em className="a-fixer">à fixer</em> : `${prix(w)}${a?.poids ? ' (propre)' : ''}`,
-                lotDe(p, x.nom),
-                w ? `~${Math.floor(p.reglages.budget / w)}` : '—',
-              )
-            })}
+            {!g.code && <p className="note-encre">Sans rareté : leurs missions prennent {prix(p.reglages.quantiteRepli)} par défaut et sont marquées « {TEXTES.aFixer} ».</p>}
+            {membres.map((x) => ligne(x.nom, x.intermediaire, false))}
           </section>
         )
       })}
-      {finis.length > 0 && (
+      {finis.length > 0 && !origine && (
         <section className="groupe-ressources">
           <h4 className="fiche-sous-titre">
             Produits finis <span className="compte-missions">{finis.length}</span>
           </h4>
-          <p className="note-encre">Leurs fabrications : {prix(p.reglages.objetsParFabrication)} objets par mission, sauf lot propre.</p>
-          {finis.map((nom) => ligne(nom, '—', '—', lotDe(p, nom), `${prix(p.reglages.objetsParFabrication)} (réglage)`))}
+          {finis.map((nom) => ligne(nom, true, true))}
         </section>
       )}
     </div>
@@ -927,7 +1003,7 @@ function FicheReglages({ reg, icones, fermer }: EnvMission) {
   )
 }
 
-/** The classes' note: names and weights per unit. */
+/** The rarity levels' note: names and quantity per mission. */
 function FicheClasses({ reg, icones, fermer }: EnvMission) {
   const p = reg.m!.donnees!.ponderation
   const [classes, setClasses] = useState<Classe[]>(p.classes)
@@ -941,28 +1017,27 @@ function FicheClasses({ reg, icones, fermer }: EnvMission) {
         envoyer(() => graver(reg, { ...p, classes }))
       }}
     >
-      <p className="fiche-aide">Le poids d’une unité ; vide : « à fixer ». Une mission tient {prix(p.reglages.budget)} d’effort.</p>
+      <p className="fiche-aide">Combien en ramasse-t-on en une courte session ? Vide : « à fixer ».</p>
       <div className="classes-ponderation classes-fiche">
         {classes.map((c, i) => (
-          <div key={c.code} className="classes-ligne">
-            <span className="classe-code">{c.code}</span>
-            <input type="text" value={c.nom} aria-label={`Nom de la classe ${c.code}`} onChange={(e) => changer(i, { nom: e.target.value.slice(0, 60) })} />
-            <ChampNombre valeur={c.poids} placeholder="à fixer" aria-label={`Poids de la classe ${c.code}`} changer={(v) => changer(i, { poids: v })} />
-            <span className="classe-lot">{c.poids ? `~${Math.floor(p.reglages.budget / c.poids)}` : '—'}</span>
+          <div key={c.code} className="classes-ligne niveau-ligne">
+            <input type="text" value={c.nom} aria-label={`Nom du niveau ${c.code}`} onChange={(e) => changer(i, { nom: e.target.value.slice(0, 60) })} />
+            <ChampNombre valeur={c.quantite} placeholder="à fixer" aria-label={`Quantité par mission du niveau ${c.nom}`} changer={(v) => changer(i, { quantite: v === null ? null : Math.round(v) })} />
+            <span className="classe-lot">par mission</span>
           </div>
         ))}
       </div>
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones}>
-          Graver les classes
+          Graver les niveaux
         </Sceller>
       </div>
     </form>
   )
 }
 
-/** One item's note: its class, its own weight, its lot per mission. */
+/** One item's note: its rarity level, its origin, its lot per mission. */
 function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }) {
   const p = reg.m!.donnees!.ponderation
   const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
@@ -970,16 +1045,17 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
   const fini = intermediaire && !recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(nom))) && !(reg.r.donnees?.ressources ?? []).some((r) => cle(r.nom) === cle(nom))
   const a = p.ressources.find((r) => cle(r.nom) === cle(nom))
   const [classe, setClasse] = useState(a?.classe ?? '')
-  const [w, setW] = useState<number | null>(a?.poids ?? null)
+  const [origine, setOrigine] = useState(a?.origine ?? '')
   const [lot, setLot] = useState<number | null>(lotDe(p, nom))
   const { etat, erreur, envoyer } = useScelle(fermer)
+  const origines = [...new Set([...ORIGINES, ...p.ressources.map((r) => r.origine).filter(Boolean)])]
   const nouvelle = (): Ponderation => {
-    const ressources: Assignation[] = [...p.ressources.filter((r) => cle(r.nom) !== cle(nom)), ...(classe ? [{ nom, classe, poids: w, note: a?.note ?? '' }] : [])]
+    const garde = classe || origine.trim()
+    const ressources: Assignation[] = [...p.ressources.filter((r) => cle(r.nom) !== cle(nom)), ...(garde ? [{ nom, classe, origine: origine.trim(), poids: a?.poids ?? null, note: a?.note ?? '' }] : [])]
     const lots = [...p.lots.filter((l) => cle(l.nom) !== cle(nom)), ...(lot ? [{ nom, lot: Math.round(lot) }] : [])]
     return { ...p, ressources, lots }
   }
-  const essai = peser(nouvelle())
-  const poidsVu = essai.poidsDe(nom, intermediaire)
+  const x = descriptionMatiere(nouvelle(), nom, intermediaire, fini)
   return (
     <form
       className="fiche-form ponderation-form"
@@ -988,41 +1064,41 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
         envoyer(() => graver(reg, nouvelle()))
       }}
     >
+      <p className="fiche-aide">
+        {nom} — {x.niveau}
+        {x.origine && ` · ${x.origine}`} — {quantite(x.parMission)} par mission{x.source && ` (${x.source})`}
+      </p>
       {!fini && (
         <>
           <label className="fiche-champ">
-            <span>Classe d’effort</span>
+            <span>Rareté</span>
             <select value={classe} onChange={(e) => setClasse(e.target.value)}>
-              <option value="">{intermediaire ? 'Transformation (par défaut : se fabrique)' : 'sans classe (à fixer)'}</option>
+              <option value="">{intermediaire ? 'Fabrication intermédiaire (par défaut : se fabrique)' : 'à fixer'}</option>
               {p.classes.map((c) => (
                 <option key={c.code} value={c.code}>
-                  {c.code} · {c.nom}
-                  {c.poids === null ? ' (à fixer)' : ` (poids ${prix(c.poids)})`}
+                  {c.nom}
+                  {c.quantite === null ? ' (à fixer)' : ` (~${quantite(c.quantite)} par mission)`}
                 </option>
               ))}
             </select>
           </label>
-          {intermediaire && <p className="fiche-aide">Rangé dans une autre classe que T, il se récolte ou s’achète au lieu de se fabriquer.</p>}
+          {intermediaire && <p className="fiche-aide">Rangé dans un niveau de rareté, il se récolte ou s’achète au lieu de se fabriquer.</p>}
           <label className="fiche-champ">
-            <span>Poids propre</span>
-            <ChampNombre valeur={w} placeholder={classe ? 'celui de la classe' : '—'} disabled={!classe} changer={setW} />
+            <span>Origine</span>
+            <input type="text" list="origines-matieres" value={origine} maxLength={60} placeholder="Ferme, Chasse, Mine…" onChange={(e) => setOrigine(e.target.value)} />
+            <datalist id="origines-matieres">
+              {origines.map((o) => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
           </label>
-          <p className="fiche-aide">
-            Poids retenu : {poidsVu === null ? <span className="a-fixer">à fixer (repli {prix(p.reglages.poidsRepli)})</span> : prix(poidsVu)}
-            {poidsVu ? ` · ~${Math.floor(p.reglages.budget / poidsVu)} par mission selon l’effort` : ''}
-          </p>
         </>
       )}
       <label className="fiche-champ">
-        <span>Lot par mission</span>
-        <ChampNombre valeur={lot} placeholder={fini ? `${prix(p.reglages.objetsParFabrication)} (réglage)` : 'selon l’effort'} changer={(v) => setLot(v === null ? null : Math.round(v))} />
+        <span>Lot par mission (réglé à la main)</span>
+        <ChampNombre valeur={lot} placeholder={`${quantite(descriptionMatiere({ ...nouvelle(), lots: p.lots.filter((l) => cle(l.nom) !== cle(nom)) }, nom, intermediaire, fini).parMission)} (selon la rareté)`} changer={(v) => setLot(v === null ? null : Math.round(v))} />
       </label>
-      <p className="fiche-aide">
-        {fini || intermediaire
-          ? 'Combien en fabrique une mission (ex. Bière par 20) ; vide : '
-          : 'Combien en récolte une mission (ex. Blé par 40) ; vide : '}
-        {fini ? 'le réglage « objets par mission de fabrication ».' : 'la taille donnée par l’effort.'} Les missions sont alors des paquets pleins, le reste en dernier.
-      </p>
+      <p className="fiche-aide">Vide : la quantité de sa rareté{fini ? ' (ou le réglage « objets par mission »)' : ''}. Réglé à la main, il l’emporte : des paquets pleins, le reste en dernier.</p>
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones}>
@@ -1033,10 +1109,41 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
   )
 }
 
+/** Refusing a loot handed over (not received, incomplete): a short word, the mission back to its holder. */
+function FicheRefus({ reg, icones, fermer, numero }: EnvMission & { numero: string }) {
+  const m = reg.m!.donnees!.missions.find((x) => x.numero === numero)
+  const [note, setNote] = useState('')
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  if (!m || m.statut !== 'remise') return <p className="fiche-aide">{TEXTES.pasRemise}</p>
+  return (
+    <form
+      className="fiche-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => reg.m!.agir('refuser', { numero, note }))
+      }}
+    >
+      <p className="fiche-aide">
+        {intitule(m)}, remis par {m.prisPar}. Refusé, il retourne entre ses pattes, « en cours ».
+      </p>
+      <label className="fiche-champ">
+        <span>Pourquoi</span>
+        <input type="text" value={note} maxLength={120} placeholder="incomplet : 80 lys au lieu de 100" onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones}>
+          Refuser le butin
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
 /* ── The notes of the missions, laid over the left page (components/Fiche.tsx) ── */
 
 type EnvMission = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; fermer: () => void }
-export type FicheMission = { genre: 'demande' } | { genre: 'reglages-missions' } | { genre: 'classes-missions' } | { genre: 'matiere-mission'; nom: string }
+export type FicheMission = { genre: 'demande' } | { genre: 'reglages-missions' } | { genre: 'classes-missions' } | { genre: 'matiere-mission'; nom: string } | { genre: 'refus-mission'; numero: string }
 
 export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: string; titre: string; corps: ReactNode; action: ActionMission } {
   if (!env.reg.m?.donnees) return { surtitre: 'Livre des Missions', titre: 'Missions', corps: <p className="registre-ferme attente-encre">Le scribe déroule le registre des missions…</p>, action: 'demande' }
@@ -1046,9 +1153,11 @@ export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: st
     case 'reglages-missions':
       return { surtitre: 'La pondération des efforts', titre: 'Les réglages', corps: <FicheReglages {...env} />, action: 'ponderation' }
     case 'classes-missions':
-      return { surtitre: 'La pondération des efforts', titre: 'Les classes d’effort', corps: <FicheClasses {...env} />, action: 'ponderation' }
+      return { surtitre: 'La pondération des efforts', titre: 'Les niveaux de rareté', corps: <FicheClasses {...env} />, action: 'ponderation' }
     case 'matiere-mission':
       return { surtitre: 'La pondération des efforts', titre: f.nom, corps: <FicheMatiere {...env} nom={f.nom} />, action: 'ponderation' }
+    case 'refus-mission':
+      return { surtitre: 'Butins à confirmer', titre: 'Pas reçu', corps: <FicheRefus {...env} numero={f.numero} />, action: 'refuser' }
   }
 }
 

@@ -245,7 +245,7 @@ export async function chargerLivre(): Promise<Livre> {
     },
     {
       type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'missions', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',
-      intro: 'Combien pèse une unité de chaque ressource : un brin de blé ne vaut pas une peau d’ours. Le poids taille les missions (une veillée = un budget d’effort) et partage les points des ressources au prorata de l’effort.',
+      intro: 'Combien en ramasse-t-on en une courte veillée ? Cent vingt brins de blé, mais huit cœurs de daedra. Chaque ressource a sa rareté et son origine : la rareté taille les missions et partage les points des ressources selon l’effort.',
     },
     // The pay (prototype): the Patriarchs' accounts, open to every member for now.
     {

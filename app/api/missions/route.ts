@@ -96,17 +96,20 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
     const code = mot(c?.code, 12)
     if (!code) continue
     if (classes.some((x) => cle(x.code) === cle(code))) non(`La classe ${code} est inscrite deux fois.`)
-    classes.push({ code, nom: mot(c?.nom, 60) || code, poids: poidsOuVide(c?.poids, `Poids de la classe ${code}`), note: mot(c?.note, 120) })
+    const q = c?.quantite === null || c?.quantite === undefined || String(c.quantite).trim() === '' ? null : entier(c.quantite, 1, 100000, `Quantité par mission du niveau ${code}`)
+    classes.push({ code, nom: mot(c?.nom, 60) || code, quantite: q, note: mot(c?.note, 120) })
   }
-  if (!classes.length) non('Une pondération sans classe ne se grave pas.')
+  if (!classes.length) non('Une pondération sans niveau de rareté ne se grave pas.')
   const ressources: Assignation[] = []
   for (const r of (brut.ressources as Record<string, unknown>[]).slice(0, 600)) {
     const nom = mot(r?.nom, 120)
     const classe = mot(r?.classe, 12)
-    if (!nom || !classe) continue
-    if (!classes.some((c) => cle(c.code) === cle(classe))) non(`${nom} est rangé dans une classe inconnue (${classe}).`)
+    const origine = mot(r?.origine, 60)
+    // A resource is kept when it has a level or an origin (« à fixer » with its origin is a row too).
+    if (!nom || (!classe && !origine)) continue
+    if (classe && !classes.some((c) => cle(c.code) === cle(classe))) non(`${nom} est rangé dans un niveau inconnu (${classe}).`)
     if (ressources.some((x) => cle(x.nom) === cle(nom))) continue
-    ressources.push({ nom, classe: classes.find((c) => cle(c.code) === cle(classe))!.code, poids: poidsOuVide(r?.poids, `Poids de ${nom}`), note: mot(r?.note, 120) })
+    ressources.push({ nom, classe: classe ? classes.find((c) => cle(c.code) === cle(classe))!.code : '', origine, poids: poidsOuVide(r?.poids, `Poids de ${nom}`), note: mot(r?.note, 120) })
   }
   const lots: LotMission[] = []
   for (const l of (Array.isArray(brut.lots) ? (brut.lots as Record<string, unknown>[]) : []).slice(0, 600)) {
@@ -119,7 +122,7 @@ function ponderationLue(b: Record<string, unknown>): Ponderation {
   for (const def of REGLAGES) {
     const n = Number(String(reglagesBruts[def.cle] ?? def.defaut).replace(',', '.'))
     if (!Number.isFinite(n) || n < def.min || n > def.max) non(`${def.libelle} : de ${def.min} à ${def.max}.`)
-    reglages[def.cle] = def.cle === 'poidsRepli' ? Math.round(n * 100) / 100 : Math.round(n)
+    reglages[def.cle] = Math.round(n)
   }
   return { classes, ressources, lots, reglages, source: 'registre' }
 }
@@ -198,19 +201,34 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
     }
 
     case 'rendre': {
+      // « Renoncer »: the mission goes back to the call.
       const x = mission()
       if (x.statut !== 'en cours' || cle(x.prisPar) !== cle(qui.nom)) non(TEXTES.pasLaTienne)
-      return { action: 'mission', charge: { mission: { numero: x.numero, geste: 'rendre', membre: qui.nom, quand } }, message: 'Mission rendue : elle retourne à l’appel de la caravane.' }
+      return { action: 'mission', charge: { mission: { numero: x.numero, geste: 'rendre', membre: qui.nom, quand } }, message: 'Tu renonces à la mission : elle retourne à l’appel de la caravane.' }
     }
 
-    case 'accomplir': {
+    case 'remettre': {
+      // The loot handed over: it waits for another member's confirmation (a v3n script).
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
       const x = mission()
       if (x.statut !== 'en cours' || cle(x.prisPar) !== cle(qui.nom)) non(TEXTES.pasLaTienne)
-      return {
-        action: 'mission',
-        charge: { mission: { numero: x.numero, geste: 'accomplir', membre: qui.nom, quand, raison: raisonPoints(x) } },
-        message: `Mission accomplie : ${x.points} point${x.points > 1 ? 's' : ''} au crédit de ${qui.nom}.`,
-      }
+      return { action: 'mission', charge: { mission: { numero: x.numero, geste: 'remettre', membre: qui.nom, quand } }, message: `Butin remis : ${x.objet}. Qu’une autre patte le confirme, et les ${x.points} points tomberont.` }
+    }
+
+    case 'confirmer':
+    case 'refuser': {
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const x = mission()
+      if (x.statut !== 'remise') non(TEXTES.pasRemise)
+      if (cle(x.prisPar) === cle(qui.nom)) non(TEXTES.soiMeme)
+      const note = mot(b.note, 120)
+      return action === 'confirmer'
+        ? {
+            action: 'mission',
+            charge: { mission: { numero: x.numero, geste: 'confirmer', membre: qui.nom, quand, raison: raisonPoints(x) } },
+            message: `Butin reçu : ${x.points} point${x.points > 1 ? 's' : ''} au crédit de ${x.prisPar}.`,
+          }
+        : { action: 'mission', charge: { mission: { numero: x.numero, geste: 'refuser', membre: qui.nom, quand, note } }, message: `Butin refusé : la mission retourne entre les pattes de ${x.prisPar}.` }
     }
 
     case 'ponderation': {
@@ -226,6 +244,9 @@ function refusScript(s: string): string {
   if (s.includes('mission taken')) return TEXTES.prise
   if (s.includes('too many missions')) return 'Tes pattes sont pleines : accomplis ou rends une mission avant d’en prendre une autre.'
   if (s.includes('not held')) return TEXTES.pasLaTienne
+  if (s.includes('not handed over')) return TEXTES.pasRemise
+  if (s.includes('own mission')) return TEXTES.soiMeme
+  if (s.includes('unknown gesture')) return TEXTES.refusV3n
   if (s.includes('unknown mission')) return 'Cette mission est introuvable dans le registre.'
   return "Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard."
 }

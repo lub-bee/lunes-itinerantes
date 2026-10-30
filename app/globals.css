@@ -3506,7 +3506,7 @@ strong.a-verser { font-weight: 400; }
 
 /* ═══════════════════════════ The book of Missions (prototype, components/Missions.tsx) ═══════════════════════════ */
 
-.missions-droite > .titre-section:first-child, .points-droite > .titre-section:first-child, .demandes-droite > .titre-section:first-child, .ponderation-droite > .titre-section:first-child { margin-top: 2px; }
+.missions-droite > .mes-missions:first-child > .titre-section:first-child, .missions-droite > .titre-section:first-child, .points-droite > .titre-section:first-child, .demandes-droite > .titre-section:first-child, .ponderation-droite > .titre-section:first-child { margin-top: 2px; }
 .missions-inactif {
   margin: 10px 0;
   padding: 7px 10px;
@@ -3709,3 +3709,16 @@ strong.a-verser { font-weight: 400; }
   .tableau-paie-entete span:nth-child(4) { display: none; }
   .tableau-paie-ligne > :nth-child(4n + 4) { grid-column: 1 / -1; }
 }
+
+/* Loot handed over, waiting for a confirmation (v3n). */
+.mission.remise { background: linear-gradient(90deg, rgba(47, 91, 58, 0.12), transparent 75%); }
+.mission-gestes .tampon.petit { margin-left: 0; }
+
+/* The pondération as rarity levels and origins (2026-10-30). */
+.ponderation-droite .ressource-ponderee, .ponderation-droite .ressource-ponderee:not(:disabled) { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.6fr); }
+.ressource-desc { text-align: right; font-size: 14px; color: var(--encre-douce); }
+.ressource-desc b { font-weight: 400; font-family: var(--f-capitales); color: var(--encre); }
+.ressource-desc b.fixe { color: #8a4b12; }
+.ressource-desc em { font-size: 12.5px; color: var(--encre-pale); }
+.niveaux-rarete li { font-size: 16px; }
+.classes-fiche .niveau-ligne { grid-template-columns: minmax(0, 1fr) 70px 80px; }
