@@ -252,6 +252,11 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
           </p>
         )}
         {envoi && <p className="ex-libris-attente">Le scribe cherche ce nom au registre…</p>}
+        {!m?.identite && m?.discordId && (
+          <p className="ex-libris-sceau">
+            Donne ce sceau au Patriarche : <strong>{m.discordId}</strong>
+          </p>
+        )}
         <p className="ex-libris-voeu">
           Signez-le, au cas où il viendrait à se perdre : Azurah veillera à ce qu&apos;il retourne à la caravane, et la caravane à son porteur.
         </p>

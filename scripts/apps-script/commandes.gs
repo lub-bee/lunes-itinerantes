@@ -25,6 +25,7 @@
  *    carries the missions' tabs (ONGLETS_MISSIONS: ponderation, reglagesMissions, demandes, missions,
  *    points). Without it, every answer is exactly what v3l answered: the grimoire in production never
  *    sees them.
+ *    With `discord: true` (v3n) the Membres rows also carry `discord` (the « Discord ID » column, read only).
  *    With `paie: true` (v3n, the pay) the answer also carries the pay's tabs (ONGLETS_PAIE: reglagesPaie,
  *    factures, evenements, ecrituresEvenement, clotures). Without it, exactly what v3m answered.
  *
@@ -141,7 +142,9 @@ var ONGLETS = {
   membres: {
     nom: 'Membres',
     lecture: true,
-    colonnes: [['Nom', 'nom'], ['Rôle', 'role']],
+    colonnes: [['Nom', 'nom'], ['Rôle', 'role'],
+      // v3n: the member's Discord user ID (filled by hand), sent only to a caller asking `discord: true`.
+      ['Discord ID', 'discord', ['Discord', 'ID Discord']]],
   },
   ressources: {
     nom: 'Ressources',
@@ -316,14 +319,20 @@ var ONGLETS_PAIE = {
 /** Whether the current call asked for the missions' tabs (`missions: true`, v3m) and the pay's (`paie: true`, v3n). */
 var AVEC_MISSIONS = false;
 var AVEC_PAIE = false;
+var AVEC_DISCORD = false;
 
 /** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
 function pourAppelant(onglets) {
-  if ((AVEC_MISSIONS && AVEC_PAIE) || !onglets) return onglets;
+  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD) || !onglets) return onglets;
   var res = {};
   Object.keys(onglets).forEach(function (k) {
     if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
     if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
+    // The members' Discord ID (v3n) only to who asks `discord: true`: the rows otherwise exactly as before.
+    if (k === 'membres' && !AVEC_DISCORD && onglets[k]) {
+      res[k] = onglets[k].map(function (m) { return { nom: m.nom, role: m.role }; });
+      return;
+    }
     res[k] = onglets[k];
   });
   return res;
@@ -361,6 +370,7 @@ function doPost(e) {
   var action = corps.action || (corps.commande ? 'commande' : '');
   AVEC_MISSIONS = Boolean(corps.missions);
   AVEC_PAIE = Boolean(corps.paie);
+  AVEC_DISCORD = Boolean(corps.discord);
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).

@@ -52,9 +52,9 @@ type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: bo
 export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: null, cache: null }
 
 // `missions: true` asks a v3m script for the missions' tabs too (lib/missions.ts), `paie: true` a v3n script
-// for the pay's (lib/paie.ts); an older script ignores them.
+// for the pay's (lib/paie.ts), `discord: true` for the members' Discord ID (lib/identite.ts); an older script ignores them.
 async function lireScript(): Promise<Lecture> {
-  const r = await appelerScript<ReponseLire>({ action: 'lire', missions: true, paie: true })
+  const r = await appelerScript<ReponseLire>({ action: 'lire', missions: true, paie: true, discord: true })
   dernierScript = { ms: r.ms ?? null, cache: r.cache ?? null }
   return { onglets: r.onglets, version: r.version ?? 0 }
 }
@@ -101,7 +101,7 @@ function lu(l: Lecture) {
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
-  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, missions: true, paie: true, ...charge })
+  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, missions: true, paie: true, discord: true, ...charge })
   dernierScript = { ms: r.ms ?? null, cache: null }
   if (!r.onglets) return { ...r, lu: null }
   const l = { onglets: r.onglets, version: r.version ?? 0 }

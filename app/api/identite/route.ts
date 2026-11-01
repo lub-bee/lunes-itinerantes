@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
-import { poserNom, rolesDe, trouverMembre } from '@/lib/identite'
+import { libreDe, poserNom, REFUS_SCEAU, rolesDe, trouverMembre, trouverParDiscord } from '@/lib/identite'
 import { droitsDe } from '@/lib/droits'
 import { lireRegistre, registreRelie } from '@/lib/registre'
 
@@ -27,7 +27,12 @@ export async function POST(req: NextRequest) {
     console.error('[identite] registre unreachable', e)
     return refus("Le registre des membres reste fermé pour l'heure. Réessaie plus tard.", 502)
   }
+  // A Discord session already matched by its ID is not offered a typed name.
+  const parId = s.genre === 'discord' ? trouverParDiscord(s.membre.id, membres) : null
+  if (parId) return refus(`Ton sceau te nomme déjà : ${parId.nom}.`, 409)
   const m = trouverMembre(tape, membres)
+  // A row that carries another Discord seal's ID is refused to a Discord session (nothing kept).
+  if (m && s.genre === 'discord' && !libreDe(m, s.membre.id)) return refus(REFUS_SCEAU, 403)
   if (!m) {
     await new Promise((r) => setTimeout(r, 600))
     return refus(`Nul membre du nom de « ${tape} » n'est inscrit au registre de la caravane. Rien n'a été consigné.`, 403)

@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
     vendeur,
     relie,
     identite: qui?.nom ?? null,
+    // An unmatched Discord visitor sees their own user ID, to give to the Patriarch (not a secret).
+    discordId: s.genre === 'discord' && !qui ? s.membre.id : null,
     droits: qui ? droitsDe(qui.roles) : null,
   })
 }

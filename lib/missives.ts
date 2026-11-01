@@ -590,8 +590,9 @@ export type Onglets = {
 export function lireOnglets(o: Onglets) {
   // « Ami des Lunes » is not part of the caravan (no access to the grimoire): such rows are not members
   // at all — they cannot sign, are not listed, and get no share of a reward.
+  // `discord`: the member's Discord user ID (Membres « Discord ID », digits only; '' when absent or with an older script).
   const membres = (o.membres ?? [])
-    .map((r) => ({ nom: texte(r.nom), role: texte(r.role) }))
+    .map((r) => ({ nom: texte(r.nom), role: texte(r.role), discord: texte(r.discord).replace(/\D/g, '') }))
     .filter((m) => m.nom && !horsCaravane(m.role))
 
   const ressources: Ressource[] = (o.ressources ?? [])

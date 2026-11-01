@@ -28,6 +28,8 @@ export type InfoMarchand = {
   /** The member's name as the Membres tab spells it, once recognized. */
   identite: string | null
   droits: Record<Action, boolean> | null
+  /** A Discord visitor not found on the members' list: their own user ID, to give to the Patriarch. */
+  discordId?: string | null
 }
 
 export type Reponse = { ok: boolean; message: string; numero?: string }

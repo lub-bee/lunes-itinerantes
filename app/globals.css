@@ -3727,3 +3727,7 @@ strong.a-verser { font-weight: 400; }
 .mission.permanente { background: linear-gradient(90deg, rgba(31, 90, 86, 0.1), transparent 75%); }
 .mission.permanente .toujours { font-family: var(--f-capitales); font-style: normal; font-size: 12px; letter-spacing: 0.05em; color: #1f5a56; }
 .mission.permanente.fermee { opacity: 0.6; }
+
+/* An unmatched Discord visitor's own user ID, under the ex-libris (2026-10-30). */
+.ex-libris-sceau { margin: 6px 0 0; font-style: italic; color: var(--encre-douce); text-align: center; }
+.ex-libris-sceau strong { font-family: var(--f-capitales); font-style: normal; font-weight: 400; letter-spacing: 0.04em; color: var(--encre); user-select: all; }
