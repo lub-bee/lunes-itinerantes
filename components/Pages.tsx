@@ -13,7 +13,7 @@ import { PAGE_DEVISE, TEXTES as OMBRE } from '@/lib/ombre'
 import { Devise, useOmbre } from './Ombre'
 import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
-import { ArbreRangs } from './Caravane'
+import { ArbreRangs, TablePatriarches } from './Caravane'
 import { Geste, DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -38,6 +38,8 @@ export type Ctx = {
   refus?: number
   /** A god's name was signed on the ex-libris (an egg): the book turns to that god's pages. */
   invoquer?: (divinite: string) => void
+  /** La Table des Patriarches' address (lib/table.ts), linked at the top of the Caravane page; absent: no link. */
+  tablePatriarches?: string
 }
 
 /** Pages without a folio: the ex-libris and a god's pages (not part of the book proper). */
@@ -468,6 +470,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'caravane':
         return (
           <>
+            {ctx.tablePatriarches && <TablePatriarches url={ctx.tablePatriarches} interactif={ctx.interactif} />}
             <ArbreRangs reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} />
             <CitationFin texte={page.citation} />
           </>

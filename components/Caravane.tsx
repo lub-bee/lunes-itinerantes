@@ -134,3 +134,20 @@ export function ArbreRangs({ reg, icones, interactif }: { reg?: CtxRegistre; ico
     </div>
   )
 }
+
+/**
+ * La Table des Patriarches, at the top of the Caravane page: where an affair is laid before the
+ * Patriarchs and their rulings are kept (another site, opened in a new tab). Only rendered when
+ * `TABLE_PATRIARCHES_URL` holds an http(s) address (lib/table.ts).
+ */
+export function TablePatriarches({ url, interactif }: { url: string; interactif: boolean }) {
+  return (
+    <section className="table-patriarches">
+      <h3 className="titre-section">La Table des Patriarches</h3>
+      <p className="note-encre">Une affaire attend l&apos;avis des Patriarches ? Dépose-la sur leur table ; leurs arrêts y sont consignés.</p>
+      <a className="lien-encre" href={url} target="_blank" rel="noopener" tabIndex={interactif ? 0 : -1}>
+        Se rendre à la Table
+      </a>
+    </section>
+  )
+}

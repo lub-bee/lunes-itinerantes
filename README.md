@@ -30,6 +30,7 @@ The whole site sits behind "the seal", checked by `middleware.ts` (`lib/sceau.ts
 | `CATALOGUE_CSV_URL` | Optional — published CSV of the price sheet (see below). |
 | `COMMANDES_SCRIPT_URL` | Optional — URL of the Apps Script web app: sealed orders, missives, recipes, members (see *Order mode* and *Missives*). |
 | `COMMANDES_JETON` | Optional — shared secret checked by that Apps Script (script property `JETON`). |
+| `TABLE_PATRIARCHES_URL` | Optional — address of La Table des Patriarches (http/https only), linked at the top of the Caravane page in a new tab. Unset, empty or invalid: no section. Read when the page is built (and at its 5-minute refresh): redeploy after changing it. |
 
 A password session lasts 30 days. Local dev: copy `.env.example` to `.env.local`, fill it, `npm run dev`.
 

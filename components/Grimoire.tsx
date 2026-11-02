@@ -88,7 +88,7 @@ const COURT_MAX = 18
 /** A recipe matches a query by its French or English name, or its craft. */
 const recetteCorrespond = (r: Recette, requete: string) => nomsCorrespondent([r.produit, r.en, metierDe(r.artisan).nom], requete)
 
-export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
+export default function Grimoire({ livre: livreServeur, tablePatriarches }: { livre: Livre; tablePatriarches?: string }) {
   const { parties, icones } = livreServeur
   const articles = useMemo(() => livreServeur.pages.flatMap((p) => (p.type === 'chapitre' ? (p as PageChapitre).articles : [])), [livreServeur])
   const registre = useRegistre(articles)
@@ -829,6 +829,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       signe,
       refus: interactif ? refus : 0,
       invoquer,
+      tablePatriarches,
     }
   }
 

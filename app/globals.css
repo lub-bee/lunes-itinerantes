@@ -2917,6 +2917,17 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .rang:hover .rang-sceau, .rang:focus-visible .rang-sceau { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)) brightness(1.15); }
 .rang:hover .rang-nom, .rang:focus-visible .rang-nom { fill: var(--encre-rouge); }
 .arbre-sans-rang { margin-top: 2px; }
+/* La Table des Patriarches, above the tree: a heading, one line of ink, the link (another site, new tab). */
+.table-patriarches { margin: 0 0 6px; }
+.table-patriarches > .titre-section { margin-top: 2px; }
+.table-patriarches .note-encre { margin: 4px 0 4px; }
+.table-patriarches .lien-encre { display: inline-block; text-decoration: none; }
+/* With the Table above it, the tree gives up the room the Table takes (the double page has no scrollbar):
+   the right page stacks its pieces and the drawing shrinks to what is left, never under 240px. */
+.droite-contenu.contenu-caravane > .defile:has(> .table-patriarches) { display: flex; flex-direction: column; }
+.droite-contenu.contenu-caravane > .defile > .table-patriarches ~ * { flex: none; }
+.droite-contenu.contenu-caravane > .defile > .table-patriarches ~ .arbre-rangs { flex: 0 1 auto; min-height: 240px; }
+.table-patriarches ~ .arbre-rangs svg { flex: 0 1 auto; min-height: 0; }
 /* The members of a rank, as a roll of honour: one name per line, centred, in display small capitals with
    a red initial, a small ornament between names. */
 .liste-membres { list-style: none; margin: 14px 0 6px; padding: 0; text-align: center; }
