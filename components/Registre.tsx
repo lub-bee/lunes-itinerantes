@@ -29,7 +29,8 @@ export type InfoMarchand = {
   droits: Record<ActionRegistre, boolean> | null
 }
 
-export type Reponse = { ok: boolean; message: string; numero?: string }
+/** `aCreer`: a Discord seal's name unknown to the registre: the page asks before a row is appended. */
+export type Reponse = { ok: boolean; message: string; numero?: string; aCreer?: boolean }
 
 type Prevision = { id: number; prevoir: (d: DonneesRegistre) => DonneesRegistre }
 
@@ -93,10 +94,11 @@ export function useRegistre(articles: Article[]) {
   }, [avis])
 
   /** Signs with a name: the server checks it against the caravan's list. */
-  const signer = useCallback(async (nom: string): Promise<Reponse> => {
+  const signer = useCallback(async (nom: string, creer = false): Promise<Reponse> => {
     try {
-      const rep = await fetch('/api/identite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom }) })
-      const r = (await rep.json().catch(() => null)) as { ok?: boolean; nom?: string; message?: string; droits?: InfoMarchand['droits'] } | null
+      const rep = await fetch('/api/identite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom, creer }) })
+      const r = (await rep.json().catch(() => null)) as { ok?: boolean; nom?: string; message?: string; aCreer?: boolean; droits?: InfoMarchand['droits'] } | null
+      if (r?.aCreer) return { ok: false, aCreer: true, message: r.message ?? '' }
       if (!rep.ok || !r?.ok || !r.nom) return { ok: false, message: r?.message ?? ECHEC }
       setMarchand((m) => (m ? { ...m, identite: r.nom!, droits: r.droits ?? m.droits } : m))
       return { ok: true, message: r.nom }

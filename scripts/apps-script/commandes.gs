@@ -21,6 +21,21 @@
  *  - { action: 'lire' } → { ok, onglets: { membres, ressources, recettes, missives, mouvements, catalogue, commandes }, version, cache },
  *    each tab an array of objects keyed by the field names of ONGLETS below (missing tabs → []);
  *    served from the script's cache when it holds them (`cache: true`).
+ *    With `missions: true` (v3m, the missions prototype) the answer — of 'lire' and of every write — also
+ *    carries the missions' tabs (ONGLETS_MISSIONS: ponderation, reglagesMissions, demandes, missions,
+ *    points). Without it, every answer is exactly what v3l answered: the grimoire in production never
+ *    sees them.
+ *    With `discord: true` (v3n) the Membres rows also carry `discord` and `pseudo` (« Discord ID », « Pseudo Discord »).
+ *      'membre'      { membre: { nom, discord, pseudo, creer } } (v3n) → the Discord seal `discord` linked to the
+ *                                                                              member `nom` (its « Discord ID » written,
+ *                                                                              « Pseudo Discord » too), or a row appended
+ *                                                                              (Nom, Rôle « Membre », ID, pseudo) when
+ *                                                                              `creer`; refused: 'other seal', 'friend',
+ *                                                                              'unknown member', 'seal taken'. With an
+ *                                                                              empty `nom`: the pseudo of the row holding
+ *                                                                              `discord` updated.
+ *    With `paie: true` (v3n, the pay) the answer also carries the pay's tabs (ONGLETS_PAIE: reglagesPaie,
+ *    factures, evenements, ecrituresEvenement, clotures). Without it, exactly what v3m answered.
  *
  *  - Writes (one writer at a time, LockService):
  *      'missive'     { missive: { numero, horodatage, titre, commanditaire, echeance, membre,
@@ -55,6 +70,42 @@
  *                                                                            → one row added to the Catalogues tab
  *                                                                              (only its existing columns are filled;
  *                                                                              refused if the name is already there) (v3f)
+ *    The missions (v3m; their tabs are created hidden when missing, nothing else is touched):
+ *      'demande'     { demande: { numero, horodatage, membre, article, quantite, plancher, pointsRessources,
+ *                                 pointsFabrication, note, missions: [{ numero, type, objet, quantite, poids,
+ *                                 effort, points, note }] },
+ *                      ponderation?: { lignes, reglages } }                  → one Demandes row, one Missions row per
+ *                                                                              mission (« ouverte »); the pondération
+ *                                                                              seeded when its tab is still empty
+ *      'mission'     { mission: { numero, geste ('prendre' | 'rendre' | 'accomplir' | v3n: 'remettre' | 'confirmer' | 'refuser'),
+ *                                 membre, quand, max?, raison?, note? } }
+ *                                                                            v3n: 'remettre' (the holder) → « remise »;
+ *                                                                              'confirmer' (another member) → « accomplie »,
+ *                                                                              its Points row then; 'refuser' → « en cours »;
+ *                                                                              'instancier' { demande, type, objet, quantite,
+ *                                                                              poids, effort, points, max }: a take of a standing
+ *                                                                              mission, a new row « en cours »; 'rendre' on
+ *                                                                              such a take → « abandonnée »; with statut
+ *                                                                              'remise': a free donation (« DON »), waiting for
+ *                                                                              its confirmation (confirmed: a 'dépôt' row of
+ *                                                                              Mouvements; refused: « refusée »)
+ *                                                                            → the mission's row: taken (refused when
+ *                                                                              not open, or when the member already
+ *                                                                              holds `max`), given back (open again) or
+ *                                                                              completed (one Points row, its points)
+ *      'ponderation' { ponderation: { lignes: [{ genre, code, nom, poids, note }],
+ *                                     reglages: [{ reglage, valeur, note }] } } → the Pondération and Réglages
+ *                                                                              missions tabs rewritten
+ *    The pay (v3n; its tabs are created hidden when missing, nothing else is touched):
+ *      'paie'        { paie: { onglet ('reglagesPaie' | 'factures' | 'evenements' | 'ecrituresEvenement' | 'clotures'),
+ *                              lignes: [{ id, ...fields }], supprimer?: [id], remplacer?: true,
+ *                              mouvements?: [{ horodatage, action, missive, membre, objet, quantite, note }] } }
+ *                                                                            → rows added or updated by their id (only
+ *                                                                              the fields sent), removed, or the whole
+ *                                                                              tab rewritten; `mouvements`: chest rows
+ *                                                                              ('livraison', the lots of an event)
+ *      'clotureSemaine' { cloture: { semaine, lignes: [{ id, ... }] } }        → the week's Clôtures rows (refused if the
+ *                                                                              week is already sealed)
  *    Answer: { ok: true, ..., onglets, version } (every tab read again after the write, as for 'lire',
  *    so the grimoire needs no second call) or { ok: false, erreur }.
  *
@@ -99,7 +150,10 @@ var ONGLETS = {
   membres: {
     nom: 'Membres',
     lecture: true,
-    colonnes: [['Nom', 'nom'], ['Rôle', 'role']],
+    colonnes: [['Nom', 'nom'], ['Rôle', 'role'],
+      // v3n: the member's Discord user ID and the display name seen at the last seal, written only by the
+      // 'membre' action (headers appended at the end of row 1 when missing); sent only with `discord: true`.
+      ['Discord ID', 'discord', ['Discord', 'ID Discord']], ['Pseudo Discord', 'pseudo', ['Pseudo']]],
   },
   ressources: {
     nom: 'Ressources',
@@ -179,6 +233,120 @@ var ONGLETS = {
   },
 };
 
+/**
+ * THE MISSIONS' TABS (v3m) — read and sent only to a caller that asks for them (`missions: true`). Created
+ * on their first write, hidden (the sheet's owner can show them: right-click a tab → Show hidden sheets),
+ * and editable by hand like the others (the Pondération and its settings are meant to be).
+ */
+var ONGLETS_MISSIONS = {
+  ponderation: {
+    nom: 'Pondération',
+    // « classe » rows (a rarity level: Code R1…, Nom, « Par mission »; v3m's C1… with a « Poids » per unit are
+    // read by the grimoire as the levels), « ressource » rows (Code = its level, « Origine », « Poids » an own
+    // weight) and « lot » rows (an item's units per mission).
+    colonnes: [['Genre', 'genre'], ['Code', 'code'], ['Nom', 'nom'], ['Poids', 'poids'], ['Note', 'note'],
+      // v3n: rarity levels by quantity per mission (« classe » and « lot » rows), a resource's origin (a tag).
+      ['Par mission', 'quantite'], ['Origine', 'origine']],
+  },
+  reglagesMissions: {
+    nom: 'Réglages missions',
+    colonnes: [['Réglage', 'reglage'], ['Valeur', 'valeur'], ['Note', 'note']],
+  },
+  demandes: {
+    nom: 'Demandes',
+    colonnes: [
+      ['N° demande', 'numero'], ['Créée le', 'horodatage'], ['Créée par', 'membre'], ['Article', 'article'], ['Quantité', 'quantite'],
+      ['Plancher', 'plancher'], ['Points ressources', 'pointsRessources'], ['Points fabrication', 'pointsFabrication'],
+      ['Statut', 'statut'], ['Note', 'note'],
+    ],
+  },
+  missions: {
+    nom: 'Missions',
+    colonnes: [
+      ['N° mission', 'numero'], ['N° demande', 'demande'], ['Type', 'type'], ['Objet', 'objet'], ['Quantité', 'quantite'],
+      ['Poids', 'poids'], ['Effort', 'effort'], ['Points', 'points'], ['Statut', 'statut'], ['Pris par', 'prisPar'],
+      ['Pris le', 'prisLe'], ['Accomplie le', 'accomplieLe'], ['Note', 'note'], ['Journal', 'journal'],
+      // v3n: the loot handed over, waiting for another member to confirm it (added at the end of row 1).
+      ['Remise le', 'remiseLe'], ['Confirmée par', 'confirmePar'],
+    ],
+  },
+  points: {
+    nom: 'Points',
+    colonnes: [['Date', 'horodatage'], ['Membre', 'membre'], ['Points', 'points'], ['Raison', 'raison'], ['N° mission', 'mission'], ['Confirmée par', 'confirmePar']],
+  },
+  /**
+   * v3n: standing missions (« missions permanentes »): always open, each take an ordinary Missions row
+   * (« N° demande » = the standing mission's id, « P-… »). Written by 'paie' (onglet 'permanentes').
+   */
+  permanentes: {
+    nom: 'Missions permanentes',
+    colonnes: [
+      ['N° permanente', 'id'], ['Type', 'type'], ['Objet', 'objet'], ['Quantité', 'quantite'], ['Points', 'points'], ['Poids', 'poids'],
+      ['Plafond par semaine', 'plafond'], ['Statut', 'statut'], ['Créée par', 'par'], ['Créée le', 'date'], ['Note', 'note'],
+    ],
+  },
+};
+
+/**
+ * THE PAY'S TABS (v3n) — read and sent only to a caller that asks for them (`paie: true`). Created hidden on
+ * their first write, editable by hand. `id` is each row's key (« F-261030-AB12 »…); the week is « S-2026-10-26 ».
+ */
+var ONGLETS_PAIE = {
+  reglagesPaie: {
+    nom: 'Réglages paie',
+    colonnes: [['Réglage', 'reglage'], ['Valeur', 'valeur'], ['Note', 'note']],
+  },
+  factures: {
+    nom: 'Factures',
+    colonnes: [
+      ['N° facture', 'id'], ['Date', 'date'], ['Libellé', 'libelle'], ['Montant', 'montant'], ['Catégorie', 'categorie'],
+      ['N° événement', 'evenement'], ['Note', 'note'], ['Inscrite par', 'par'],
+    ],
+  },
+  evenements: {
+    nom: 'Événements',
+    colonnes: [['N° événement', 'id'], ['Nom', 'nom'], ['Date', 'date'], ['Note', 'note'], ['Compensation', 'compensation'], ['Statut', 'statut']],
+  },
+  ecrituresEvenement: {
+    nom: 'Écritures événements',
+    colonnes: [
+      ['N° écriture', 'id'], ['N° événement', 'evenement'], ['Date', 'date'], ['Genre', 'genre'], ['Libellé', 'libelle'], ['Montant', 'montant'],
+      ['Membre', 'membre'], ['Objet', 'objet'], ['Quantité', 'quantite'], ['Statut', 'statut'], ['Payé par', 'payePar'], ['Payé le', 'payeLe'],
+      ['Inscrite par', 'par'],
+    ],
+  },
+  clotures: {
+    nom: 'Clôtures',
+    colonnes: [
+      ['N° ligne', 'id'], ['Semaine', 'semaine'], ['Genre', 'genre'], ['Libellé', 'libelle'], ['Membre', 'membre'], ['Points', 'points'],
+      ['Montant', 'montant'], ['Statut', 'statut'], ['Payé par', 'payePar'], ['Payé le', 'payeLe'], ['Scellée le', 'scelleeLe'],
+      ['Scellée par', 'scelleePar'],
+    ],
+  },
+};
+
+/** Whether the current call asked for the missions' tabs (`missions: true`, v3m) and the pay's (`paie: true`, v3n). */
+var AVEC_MISSIONS = false;
+var AVEC_PAIE = false;
+var AVEC_DISCORD = false;
+
+/** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
+function pourAppelant(onglets) {
+  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD) || !onglets) return onglets;
+  var res = {};
+  Object.keys(onglets).forEach(function (k) {
+    if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
+    if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
+    // The members' Discord ID and pseudo (v3n) only to who asks `discord: true`: the rows otherwise exactly as before.
+    if (k === 'membres' && !AVEC_DISCORD && onglets[k]) {
+      res[k] = onglets[k].map(function (m) { return { nom: m.nom, role: m.role }; });
+      return;
+    }
+    res[k] = onglets[k];
+  });
+  return res;
+}
+
 /** Movement type written for each movement action. */
 var TYPES_MOUVEMENT = { releve: 'relevé', depot: 'dépôt', fabrication: 'fabrication', livraison: 'livraison' };
 
@@ -209,18 +377,21 @@ function doPost(e) {
   etape('jeton');
 
   var action = corps.action || (corps.commande ? 'commande' : '');
+  AVEC_MISSIONS = Boolean(corps.missions);
+  AVEC_PAIE = Boolean(corps.paie);
+  AVEC_DISCORD = Boolean(corps.discord);
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
       var enCache = lireCache();
       etape('cache_lu');
-      if (enCache) return repondre({ ok: true, onglets: enCache.onglets, version: enCache.version, cache: true });
+      if (enCache) return repondre({ ok: true, onglets: pourAppelant(enCache.onglets), version: enCache.version, cache: true });
       var onglets = toutLire();
       etape('feuille_lue');
       var version = versionCourante();
       mettreEnCache(onglets, version);
       etape('cache_ecrit');
-      return repondre({ ok: true, onglets: onglets, version: version, cache: false });
+      return repondre({ ok: true, onglets: pourAppelant(onglets), version: version, cache: false });
     } catch (err) {
       return repondre({ ok: false, erreur: String(err) });
     }
@@ -284,6 +455,10 @@ function onglet() {
 function toutLire() {
   var res = {};
   Object.keys(ONGLETS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS[cle]); });
+  // The missions' tabs (v3m): kept in the cache with the others, sent only to who asks (pourAppelant).
+  Object.keys(ONGLETS_MISSIONS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_MISSIONS[cle]); });
+  // The pay's tabs (v3n), the same way (sent only with `paie: true`).
+  Object.keys(ONGLETS_PAIE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_PAIE[cle]); });
   return res;
 }
 
@@ -373,6 +548,7 @@ function avecVerrou(f, avecOnglets) {
       etape('onglets');
       mettreEnCache(res.onglets, res.version);
       etape('cache_ecrit');
+      res.onglets = pourAppelant(res.onglets);
     }
   } catch (err) {
     viderCache();
@@ -406,7 +582,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3l';
+var CACHE = 'registre-v3n';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -965,7 +1141,367 @@ var ECRITURES = {
       },
     };
   },
+
+  /* ── The missions (v3m) ── */
+
+  /** A demand for merchandise and its missions (all « ouverte »); the pondération seeded if its tab is empty. */
+  demande: function (corps) {
+    var d = corps.demande;
+    if (!d || !d.numero || !d.missions || !d.missions.length) return { ok: false, erreur: 'empty demand' };
+    var M = ONGLETS_MISSIONS;
+    var rangD = {
+      numero: d.numero, horodatage: new Date(d.horodatage), membre: d.membre || '', article: d.article, quantite: d.quantite,
+      plancher: nombreOuVide(d.plancher), pointsRessources: d.pointsRessources || 0, pointsFabrication: d.pointsFabrication || 0,
+      statut: 'ouverte', note: d.note || '',
+    };
+    var rangs = d.missions.map(function (m) {
+      return {
+        numero: m.numero, demande: d.numero, type: m.type, objet: m.objet, quantite: m.quantite, poids: nombreOuVide(m.poids),
+        effort: m.effort, points: m.points, statut: 'ouverte', prisPar: '', prisLe: '', accomplieLe: '', note: m.note || '', journal: '',
+      };
+    });
+    ajouter(M.demandes, [rangD], preparerMasque(M.demandes));
+    ajouter(M.missions, rangs, preparerMasque(M.missions));
+    var graine = corps.ponderation && ongletVide(M.ponderation) ? ecrirePonderation(corps.ponderation) : null;
+    return {
+      ok: true, numero: d.numero, missions: rangs.length, ponderationSemee: Boolean(graine),
+      maj: function (o) {
+        (o.demandes = o.demandes || []).push(complet(M.demandes, rangD));
+        o.missions = o.missions || [];
+        rangs.forEach(function (x) { o.missions.push(complet(M.missions, x)); });
+        if (graine) {
+          o.ponderation = graine.lignes.map(function (x) { return complet(M.ponderation, x); });
+          o.reglagesMissions = graine.reglages.map(function (x) { return complet(M.reglagesMissions, x); });
+        }
+      },
+    };
+  },
+
+  /**
+   * One gesture on a mission, checked here under the lock (two members cannot take the same one):
+   * 'prendre' (it must be open; the member may hold at most `max` « en cours »), 'rendre' and 'accomplir'
+   * (it must be « en cours » in that member's paws). Completed, its points go to a Points row.
+   */
+  mission: function (corps) {
+    var g = corps.mission;
+    if (!g || !g.numero || !g.geste) return { ok: false, erreur: 'no mission' };
+    var M = ONGLETS_MISSIONS;
+    var o = ouvrirMasque(M.missions);
+    var p = o.p;
+    var lignes = o.lignes;
+    var cellule = function (l, champ) { return p.cols[champ] ? l[p.cols[champ] - 1] : ''; };
+    if (g.geste === 'instancier') {
+      // v3n: a take of a standing mission: a new row « en cours », for that member (within his limit).
+      var membreI = cleEntete(g.membre);
+      var tenuesI = lignes.filter(function (l) {
+        return cleEntete(cellule(l, 'statut')) === 'encours' && cleEntete(cellule(l, 'prisPar')) === membreI;
+      }).length;
+      // A free donation (statut « remise ») is declared already handed over: no limit.
+      var don = g.statut === 'remise';
+      if (!don && g.max && tenuesI >= Number(g.max)) return { ok: false, erreur: 'too many missions' };
+      var quandI = new Date(g.quand || Date.now());
+      var rang = {
+        numero: g.numero, demande: g.demande, type: g.type, objet: g.objet, quantite: g.quantite, poids: nombreOuVide(g.poids), effort: g.effort || '',
+        points: g.points, statut: don ? 'remise' : 'en cours', prisPar: g.membre, prisLe: quandI, accomplieLe: '', note: g.note || '',
+        remiseLe: don ? quandI : '',
+        journal: (don ? 'don déclaré par ' : 'prise par ') + g.membre + ' le ' + Utilities.formatDate(quandI, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm'),
+      };
+      ajouter(M.missions, [rang], p);
+      return {
+        ok: true, numero: g.numero, geste: g.geste,
+        maj: function (o2) { (o2.missions = o2.missions || []).push(complet(M.missions, rang)); },
+      };
+    }
+    var i = -1;
+    for (var r = 0; r < lignes.length; r++) {
+      if (cleEntete(cellule(lignes[r], 'numero')) === cleEntete(g.numero)) { i = r; break; }
+    }
+    if (i < 0) return { ok: false, erreur: 'unknown mission ' + g.numero };
+    var ligne = lignes[i];
+    var statut = cleEntete(cellule(ligne, 'statut'));
+    var membre = cleEntete(g.membre);
+    var tient = statut === 'encours' && cleEntete(cellule(ligne, 'prisPar')) === membre;
+    var quand = new Date(g.quand || Date.now());
+    var jour = Utilities.formatDate(quand, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm');
+    var journal = String(cellule(ligne, 'journal') || '');
+    var noter = function (mot) { return (journal ? journal + ' · ' : '') + mot + ' par ' + g.membre + ' le ' + jour; };
+    var valeurs;
+    var point = null;
+    var depot = null;
+    if (g.geste === 'prendre') {
+      if (statut !== 'ouverte' && statut !== '') return { ok: false, erreur: 'mission taken ' + g.numero };
+      var tenues = lignes.filter(function (l) {
+        return cleEntete(cellule(l, 'statut')) === 'encours' && cleEntete(cellule(l, 'prisPar')) === membre;
+      }).length;
+      if (g.max && tenues >= Number(g.max)) return { ok: false, erreur: 'too many missions' };
+      valeurs = { statut: 'en cours', prisPar: g.membre, prisLe: quand, journal: noter('prise') };
+    } else if (g.geste === 'rendre') {
+      if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
+      // v3n: a take of a standing mission given up is dropped (the standing mission stays open).
+      var prise = /^p-/i.test(String(cellule(ligne, 'demande')));
+      valeurs = prise ? { statut: 'abandonnée', journal: noter('abandonnée') } : { statut: 'ouverte', prisPar: '', prisLe: '', journal: noter('rendue') };
+    } else if (g.geste === 'remettre') {
+      // v3n: the holder hands the loot over; the mission waits for another member's confirmation.
+      if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
+      valeurs = { statut: 'remise', remiseLe: quand, journal: noter('remise') };
+    } else if (g.geste === 'confirmer' || g.geste === 'refuser') {
+      // v3n: another member than the holder confirms the loot (points credited now) or refuses it (back to « en cours »).
+      if (statut !== 'remise') return { ok: false, erreur: 'mission not handed over ' + g.numero };
+      if (cleEntete(cellule(ligne, 'prisPar')) === membre) return { ok: false, erreur: 'own mission ' + g.numero };
+      var estDon = /^don/i.test(String(cellule(ligne, 'demande')));
+      if (g.geste === 'refuser') {
+        // A donation refused is gone (« refusée »); a mission's loot goes back « en cours ».
+        valeurs = estDon
+          ? { statut: 'refusée', journal: noter('refusée' + (g.note ? ' (' + g.note + ')' : '')) }
+          : { statut: 'en cours', remiseLe: '', journal: noter('refusée' + (g.note ? ' (' + g.note + ')' : '')) };
+      } else {
+        // A donation confirmed enters the chest (a 'dépôt' row of the ledger, no missive).
+        if (estDon) {
+          depot = { horodatage: quand, action: '', missive: '', membre: cellule(ligne, 'prisPar'), type: 'dépôt', objet: cellule(ligne, 'objet'), quantite: Number(cellule(ligne, 'quantite')) || 0, note: 'don confirmé par ' + g.membre };
+          ajouter(ONGLETS.mouvements, [depot]);
+        }
+        valeurs = { statut: 'accomplie', accomplieLe: quand, confirmePar: g.membre, journal: noter('confirmée') };
+        point = { horodatage: quand, membre: cellule(ligne, 'prisPar'), points: Number(cellule(ligne, 'points')) || 0, raison: g.raison || '', mission: cellule(ligne, 'numero'), confirmePar: g.membre };
+      }
+    } else if (g.geste === 'accomplir') {
+      if (!tient) return { ok: false, erreur: 'mission not held ' + g.numero };
+      valeurs = { statut: 'accomplie', accomplieLe: quand, journal: noter('accomplie') };
+      point = { horodatage: quand, membre: cellule(ligne, 'prisPar'), points: Number(cellule(ligne, 'points')) || 0, raison: g.raison || '', mission: cellule(ligne, 'numero') };
+    } else {
+      return { ok: false, erreur: 'unknown gesture ' + g.geste };
+    }
+    lignes[i] = enLigne(p, valeurs, ligne);
+    p.feuille.getRange(i + 2, 1, 1, p.largeur).setValues([lignes[i]]);
+    if (point) ajouter(M.points, [point], preparerMasque(M.points));
+    return {
+      ok: true, numero: g.numero, geste: g.geste, points: point ? point.points : 0,
+      maj: function (o) {
+        (o.missions || []).forEach(function (x) {
+          if (cleEntete(x.numero) !== cleEntete(g.numero)) return;
+          Object.keys(valeurs).forEach(function (k) { x[k] = valeurs[k]; });
+        });
+        if (point) (o.points = o.points || []).push(complet(M.points, point));
+        if (depot) (o.mouvements = o.mouvements || []).push(complet(ONGLETS.mouvements, depot));
+      },
+    };
+  },
+
+  /** The effort classes, the resources' classes and weights, and the settings: both tabs rewritten. */
+  ponderation: function (corps) {
+    if (!corps.ponderation || !corps.ponderation.lignes) return { ok: false, erreur: 'no ponderation' };
+    var M = ONGLETS_MISSIONS;
+    var ecrit = ecrirePonderation(corps.ponderation);
+    return {
+      ok: true, lignes: ecrit.lignes.length,
+      maj: function (o) {
+        o.ponderation = ecrit.lignes.map(function (x) { return complet(M.ponderation, x); });
+        o.reglagesMissions = ecrit.reglages.map(function (x) { return complet(M.reglagesMissions, x); });
+      },
+    };
+  },
 };
+
+/* ───────────────────────── The pay (v3n) ───────────────────────── */
+
+/** Fields holding a date: an ISO text becomes a date cell. */
+var DATES_PAIE = ['date', 'payeLe', 'scelleeLe'];
+function daterPaie(o) {
+  var r = {};
+  Object.keys(o).forEach(function (k) {
+    var v = o[k];
+    r[k] = DATES_PAIE.indexOf(k) >= 0 && typeof v === 'string' && v ? new Date(v) : v === null || v === undefined ? '' : v;
+  });
+  return r;
+}
+
+ECRITURES.paie = function (corps) {
+  var c = corps.paie;
+  // The pay's tabs, and the standing missions' (v3n).
+  var def = c && (ONGLETS_PAIE[c.onglet] || (c.onglet === 'permanentes' ? ONGLETS_MISSIONS.permanentes : null));
+  if (!def) return { ok: false, erreur: 'unknown tab' };
+  var lignes = (c.lignes || []).map(daterPaie);
+  if (c.remplacer) {
+    remplacer(def, lignes);
+  } else {
+    var supprimer = (c.supprimer || []).map(cleEntete);
+    var o = ouvrirMasque(def);
+    var p = o.p;
+    var vues = {};
+    var gardees = [];
+    o.lignes.forEach(function (l) {
+      var k = cleEntete(l[p.cols.id - 1]);
+      if (k && supprimer.indexOf(k) >= 0) return;
+      var maj = lignes.filter(function (x) { return cleEntete(x.id) === k; })[0];
+      if (k && maj) {
+        vues[k] = true;
+        l = enLigne(p, maj, l);
+      }
+      gardees.push(enLigne(p, {}, l).slice(0, p.largeur));
+    });
+    var nouvelles = lignes.filter(function (x) { return !vues[cleEntete(x.id)]; }).map(function (x) { return enLigne(p, x).slice(0, p.largeur); });
+    var toutes = gardees.concat(nouvelles);
+    if (o.lignes.length) p.feuille.getRange(2, 1, o.lignes.length, p.largeur).clearContent();
+    if (toutes.length) p.feuille.getRange(2, 1, toutes.length, p.largeur).setValues(toutes);
+  }
+  // The lots of an event leave the chest: 'livraison' rows of the ledger.
+  var ms = (c.mouvements || []).map(function (m) {
+    return { horodatage: new Date(m.horodatage), action: m.action || '', missive: m.missive || '', membre: m.membre, type: 'livraison', objet: m.objet, quantite: m.quantite, note: m.note || '' };
+  });
+  if (ms.length) ajouter(ONGLETS.mouvements, ms);
+  // No `maj`: the tabs are read again (these writes are rare).
+  return { ok: true, onglet: c.onglet, lignes: lignes.length };
+};
+
+/**
+ * A Discord seal linked to its member (v3n), under the lock: the Membres row named `nom` (compared like
+ * headers) gets the ID and the pseudo when its « Discord ID » is empty; `creer` appends a row (Nom, Rôle
+ * « Membre », ID, pseudo) when no row has that name. Nom and Rôle are never written on an existing row.
+ * The « Discord ID » / « Pseudo Discord » headers are added at the end of row 1 when missing.
+ */
+ECRITURES.membre = function (corps) {
+  var m = corps.membre;
+  var id = String((m && m.discord) || '').replace(/\D/g, '');
+  if (!m || !id) return { ok: false, erreur: 'no seal' };
+  var def = ONGLETS.membres;
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  if (!feuille || feuille.getLastRow() < 1) return { ok: false, erreur: 'no members tab' };
+  var tout = feuille.getDataRange().getValues();
+  var idx = indexColonnes(tout[0], def);
+  if (idx.nom < 0) return { ok: false, erreur: 'no members tab' };
+  var ajouterEntete = function (titre) {
+    var premiere = feuille.getRange(1, 1, 1, Math.max(feuille.getLastColumn(), 1)).getValues()[0];
+    var fin = premiere.length;
+    while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
+    feuille.getRange(1, fin + 1).setValue(titre).setFontWeight('bold');
+    return fin;
+  };
+  var cellule = function (l, champ) { return idx[champ] >= 0 ? l[idx[champ]] : ''; };
+  var pseudo = String(m.pseudo || '').slice(0, 80);
+  var parId = -1;
+  var parNom = -1;
+  for (var r = 1; r < tout.length; r++) {
+    if (String(cellule(tout[r], 'discord')).replace(/\D/g, '') === id) parId = r;
+    if (m.nom && parNom < 0 && cleEntete(cellule(tout[r], 'nom')) === cleEntete(m.nom)) parNom = r;
+  }
+  var ecrire = function (r, champ, valeur) {
+    if (idx[champ] < 0) idx[champ] = ajouterEntete(champ === 'discord' ? 'Discord ID' : 'Pseudo Discord');
+    feuille.getRange(r + 1, idx[champ] + 1).setValue(valeur);
+  };
+  var maj = null;
+  var nom;
+  var cree = false;
+  if (!m.nom) {
+    // Only the pseudo of the row already holding this seal.
+    if (parId < 0) return { ok: false, erreur: 'unknown member' };
+    nom = String(cellule(tout[parId], 'nom'));
+    ecrire(parId, 'pseudo', pseudo);
+  } else if (parId >= 0 && parId !== parNom) {
+    return { ok: false, erreur: 'seal taken' };
+  } else if (parNom >= 0) {
+    var role = String(cellule(tout[parNom], 'role'));
+    if (/ami(e|s)?deslunes/.test(cleEntete(role))) return { ok: false, erreur: 'friend' };
+    var actuel = String(cellule(tout[parNom], 'discord')).replace(/\D/g, '');
+    if (actuel && actuel !== id) return { ok: false, erreur: 'other seal' };
+    nom = String(cellule(tout[parNom], 'nom'));
+    if (!actuel) ecrire(parNom, 'discord', "'" + id);
+    ecrire(parNom, 'pseudo', pseudo);
+  } else {
+    if (!m.creer) return { ok: false, erreur: 'unknown member' };
+    nom = String(m.nom).slice(0, 80);
+    if (idx.role < 0) return { ok: false, erreur: 'no role column' };
+    if (idx.discord < 0) idx.discord = ajouterEntete('Discord ID');
+    if (idx.pseudo < 0) idx.pseudo = ajouterEntete('Pseudo Discord');
+    var largeur = Math.max(idx.nom, idx.role, idx.discord, idx.pseudo) + 1;
+    var ligne = [];
+    for (var c = 0; c < largeur; c++) ligne.push('');
+    ligne[idx.nom] = nom;
+    ligne[idx.role] = 'Membre';
+    ligne[idx.discord] = "'" + id;
+    ligne[idx.pseudo] = pseudo;
+    feuille.getRange(feuille.getLastRow() + 1, 1, 1, largeur).setValues([ligne]);
+    cree = true;
+  }
+  // No `maj`: the tabs are read again (a first seal is rare).
+  return { ok: true, nom: nom, cree: cree };
+};
+
+ECRITURES.clotureSemaine = function (corps) {
+  var c = corps.cloture;
+  if (!c || !c.semaine || !c.lignes || !c.lignes.length) return { ok: false, erreur: 'empty closing' };
+  var def = ONGLETS_PAIE.clotures;
+  var deja = lireOnglet(def).some(function (r) { return String(r.semaine).trim() === c.semaine; });
+  if (deja) return { ok: false, erreur: 'week already sealed ' + c.semaine };
+  ajouter(def, c.lignes.map(daterPaie), preparerMasque(def));
+  return { ok: true, semaine: c.semaine, lignes: c.lignes.length };
+};
+
+/* ───────────────────────── The missions' helpers (v3m) ───────────────────────── */
+
+/** A number, or an empty cell. */
+function nombreOuVide(v) {
+  return v === null || v === undefined || v === '' ? '' : v;
+}
+
+/** A missions' tab made ready like `preparer`, and hidden when this call created it. */
+function preparerMasque(def) {
+  var existait = Boolean(SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom));
+  var p = preparer(def);
+  if (!existait) p.feuille.hideSheet();
+  return p;
+}
+
+/** `ouvrir` for a missions' tab (created hidden when missing). */
+function ouvrirMasque(def) {
+  if (!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom)) preparerMasque(def);
+  return ouvrir(def);
+}
+
+/** Whether a tab holds no data row (missing, or a header row only). */
+function ongletVide(def) {
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  return !feuille || lireOnglet(def).length === 0;
+}
+
+/** Replaces every data row of a missions' tab by `objets` (the header row and other columns kept). */
+function remplacer(def, objets) {
+  var p = preparerMasque(def);
+  var dernier = p.feuille.getLastRow();
+  if (dernier >= 2) p.feuille.getRange(2, 1, dernier - 1, p.largeur).clearContent();
+  if (objets.length) p.feuille.getRange(2, 1, objets.length, p.largeur).setValues(objets.map(function (o) { return enLigne(p, o).slice(0, p.largeur); }));
+}
+
+/** Writes the Pondération and Réglages missions tabs; answers the rows written. */
+function ecrirePonderation(pd) {
+  var lignes = (pd.lignes || []).map(function (l) {
+    return { genre: l.genre || '', code: l.code || '', nom: l.nom || '', poids: nombreOuVide(l.poids), note: l.note || '', quantite: nombreOuVide(l.quantite), origine: l.origine || '' };
+  });
+  var reglages = (pd.reglages || []).map(function (l) {
+    return { reglage: l.reglage || '', valeur: nombreOuVide(l.valeur), note: l.note || '' };
+  });
+  remplacer(ONGLETS_MISSIONS.ponderation, lignes);
+  remplacer(ONGLETS_MISSIONS.reglagesMissions, reglages);
+  return { lignes: lignes, reglages: reglages };
+}
+
+/** Run once from the editor to create the pay's tabs (hidden) without waiting for a first write (v3n). */
+function preparerPaie() {
+  Object.keys(ONGLETS_PAIE).forEach(function (k) {
+    var p = preparerMasque(ONGLETS_PAIE[k]);
+    Logger.log('Tab "' + ONGLETS_PAIE[k].nom + '" ready (hidden: ' + p.feuille.isSheetHidden() + '), ' + p.feuille.getLastRow() + ' row(s).');
+  });
+  viderCache();
+  nouvelleVersion();
+}
+
+/** Run once from the editor to create the missions' tabs (hidden) without waiting for a first demand. */
+function preparerMissions() {
+  Object.keys(ONGLETS_MISSIONS).forEach(function (k) {
+    var p = preparerMasque(ONGLETS_MISSIONS[k]);
+    Logger.log('Tab "' + ONGLETS_MISSIONS[k].nom + '" ready (hidden: ' + p.feuille.isSheetHidden() + '), ' + p.feuille.getLastRow() + ' row(s).');
+  });
+  viderCache();
+  nouvelleVersion();
+}
 
 function repondre(objet) {
   if (DEBUT) {

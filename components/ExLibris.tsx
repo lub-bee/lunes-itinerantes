@@ -159,6 +159,15 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
   const [frais, setFrais] = useState(false)
   const champ = useRef<HTMLInputElement>(null)
   const tab = ctx.interactif ? 0 : -1
+  /** A Discord seal's name unknown to the registre: the in-character question before a row is appended. */
+  const [aCreer, setACreer] = useState<string | null>(null)
+  // A Discord seal not yet linked: the line is pre-filled with the Discord display name (once).
+  const prerempli = useRef(false)
+  useEffect(() => {
+    if (prerempli.current || !m?.discord || m.identite || !m.nom) return
+    prerempli.current = true
+    setNom(m.nom)
+  }, [m?.discord, m?.identite, m?.nom])
 
   // After a refusal the blotted name fades away and the line is free again.
   useEffect(() => {
@@ -184,14 +193,35 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
     }
     setEnvoi(true)
     setRefus(null)
+    setACreer(null)
     const rep = await r.signer(tape)
     setEnvoi(false)
+    if (rep.aCreer) {
+      setACreer(tape)
+      return
+    }
     if (!rep.ok) {
       setRefus({ texte: rep.message, tache: tape, n: Date.now() })
       return
     }
     setFrais(true)
     // The ink dries, then the book opens on its title page.
+    const sommaire = ctx.livre.pages.findIndex((p) => p.type === 'sommaire')
+    setTimeout(() => (ctx.signe ? ctx.signe() : ctx.aller?.(sommaire)), rep.message.length * PAS_LETTRE + DUREE_PARAPHE + APRES_SIGNATURE)
+  }
+
+  /** « Oui, inscris-moi »: the row is appended with the seal's ID (server side), then the name is signed. */
+  const inscrire = async (tape: string) => {
+    if (!r || envoi) return
+    setEnvoi(true)
+    const rep = await r.signer(tape, true)
+    setEnvoi(false)
+    setACreer(null)
+    if (!rep.ok) {
+      setRefus({ texte: rep.message, tache: tape, n: Date.now() })
+      return
+    }
+    setFrais(true)
     const sommaire = ctx.livre.pages.findIndex((p) => p.type === 'sommaire')
     setTimeout(() => (ctx.signe ? ctx.signe() : ctx.aller?.(sommaire)), rep.message.length * PAS_LETTRE + DUREE_PARAPHE + APRES_SIGNATURE)
   }
@@ -252,6 +282,20 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
           </p>
         )}
         {envoi && <p className="ex-libris-attente">Le scribe cherche ce nom au registre…</p>}
+        {!m?.identite && aCreer && (
+          <div className="ex-libris-confirmer" role="dialog" aria-label="Inscrire au registre">
+            <p>Inscrire « {aCreer} » au registre de la caravane ?</p>
+            <p className="ex-libris-confirmer-note">Nul membre de ce nom n’y figure encore : ton sceau y sera inscrit, au rang de Membre. Les Patriarches t’attribueront ton rang.</p>
+            <div className="ex-libris-confirmer-gestes">
+              <button type="button" className="lien-encre" tabIndex={tab} disabled={envoi} onClick={() => inscrire(aCreer)}>
+                Oui, inscris-moi
+              </button>
+              <button type="button" className="lien-encre" tabIndex={tab} disabled={envoi} onClick={() => setACreer(null)}>
+                Non, je me suis trompé de nom
+              </button>
+            </div>
+          </div>
+        )}
         <p className="ex-libris-voeu">
           Signez-le, au cas où il viendrait à se perdre : Azurah veillera à ce qu&apos;il retourne à la caravane, et la caravane à son porteur.
         </p>

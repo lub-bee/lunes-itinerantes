@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession, nomDe } from '@/lib/sceau'
 import { identite, identiteSignee } from '@/lib/identite'
 import { droitsDe, type Role } from '@/lib/droits'
-import { lireRegistre, registreRelie } from '@/lib/registre'
+import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 
 // Who holds the pen: the order sheet and the missives show this name.
 // - `identite`: the member's name validated against the Membres tab (signed cookie, or the Discord
@@ -34,7 +34,11 @@ export async function GET(req: NextRequest) {
     if (signe) qui = { nom: signe, roles: [] }
     else if (s.genre === 'discord') {
       try {
-        qui = await identite(req.cookies, (await lireRegistre()).membres)
+        const lu = await lireRegistre()
+        qui = await identite(req.cookies, lu.membres, lu.sceauxLus)
+        // A linked seal whose Discord display name changed: its « Pseudo Discord » follows (v3n, best effort).
+        const ligne = lu.sceauxLus ? lu.membres.find((x) => x.discord === s.membre.id) : undefined
+        if (ligne && ligne.pseudo !== s.membre.nom) await ecrireRegistre('membre', { membre: { nom: '', discord: s.membre.id, pseudo: s.membre.nom } }).catch((e) => console.error('[marchand] pseudo not updated', e))
       } catch (e) {
         console.error('[marchand] registre unreachable', e)
       }

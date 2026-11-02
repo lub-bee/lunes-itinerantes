@@ -576,9 +576,14 @@ export type Onglets = {
 export function lireOnglets(o: Onglets) {
   // « Ami des Lunes » is not part of the caravan (no access to the grimoire): such rows are not members
   // at all — they cannot sign, are not listed, and get no share of a reward.
-  const membres = (o.membres ?? [])
-    .map((r) => ({ nom: texte(r.nom), role: texte(r.role) }))
-    .filter((m) => m.nom && !horsCaravane(m.role))
+  // `discord` / `pseudo`: the member's Discord user ID (digits) and the display name seen at the last seal
+  // (Membres « Discord ID », « Pseudo Discord »; '' when absent or with an older script).
+  const tous = (o.membres ?? []).map((r) => ({ nom: texte(r.nom), role: texte(r.role), discord: texte(r.discord).replace(/\D/g, ''), pseudo: texte(r.pseudo) }))
+  const membres = tous.filter((m) => m.nom && !horsCaravane(m.role))
+  /** « Amis des Lunes »: never members, never linked to a seal (their names only, server use). */
+  const amis = tous.filter((m) => m.nom && horsCaravane(m.role)).map((m) => m.nom)
+  /** The script reads the Membres' Discord columns (v3n, asked with `discord: true`): seals are linked by ID. */
+  const sceauxLus = (o.membres ?? []).some((r) => 'discord' in r)
 
   const ressources: Ressource[] = (o.ressources ?? [])
     .map((r) => ({ nom: texte(r.nom), en: texte(r.en), origine: texte(r.origine), prix: nombre(r.prix), bonneAffaire: nombre(r.bonneAffaire), note: texte(r.note), lot: Math.max(1, Math.round(nombre(r.lot) ?? 1)) }))
@@ -704,7 +709,7 @@ export function lireOnglets(o: Onglets) {
     ventes = [...par.values()].sort((a, b) => b.horodatage.localeCompare(a.horodatage))
   }
 
-  return { membres, ressources, recettes, missives, mouvements, catalogue, variantes, lotsMatieres, ventes }
+  return { membres, amis, sceauxLus, ressources, recettes, missives, mouvements, catalogue, variantes, lotsMatieres, ventes }
 }
 
 /**

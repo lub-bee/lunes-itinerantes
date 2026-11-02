@@ -44,6 +44,20 @@ expires, a returning visitor is sent back through Discord with `prompt=none`, wh
 if they still hold the role (seamless) and refuses them in character if the role was taken away.
 Closing the grimoire (iron latch, or the key on mobile) forgets the session.
 
+**Who a Discord seal is** (v3n, spec `discord/spec-discord-id.md` of 2026-11-02): nobody types IDs, nobody
+adds members by hand. A seal whose Discord user ID is on a Membres row is that member at once (its « Pseudo
+Discord » follows the display name). Otherwise the ex-libris asks the name, pre-filled with the Discord
+display name: a row with an empty « Discord ID » is linked (the script writes the ID and the pseudo on it);
+a row holding another ID is refused (« Ce nom porte déjà le sceau d'un autre marchand. »); no row → after
+« Inscrire « … » au registre de la caravane ? » the script appends a row (Nom, Rôle « Membre », Discord ID,
+Pseudo Discord). « Membre » is not a rank: such rows sit « Sans rang » until the Patriarchs set the Rôle.
+« Ami des Lunes » rows never link nor sign. The ID comes only from the signed session; the script checks
+everything again under its lock (action `membre`). A seal already linked is not offered a typed name, and no
+seal ever reaches a row holding an ID by its nickname. Password sessions sign an existing name as before and
+never link nor create. With an older script (no Discord columns read) everything behaves as before (the
+nickname rule). The access role can be a single Discord role (`DISCORD_ROLE_IDS` = its ID).
+`DISCORD_ROLE_PATRIARCHE` only feeds the rights (`lib/droits.ts`).
+
 On the order sheet the seller is the session's name (fixed; `/api/commande` reads it from the cookie,
 never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name; once that name is
 recognized on the Membres tab (see *Missives — Who holds the pen*), it signs the order instead.
@@ -432,7 +446,7 @@ is `ONGLETS` at the top of `commandes.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
-| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member) |
+| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member), `Discord ID` (aliases `Discord`, `ID Discord`) and `Pseudo Discord`, written by a v3n script at a member's first Discord seal (headers appended at the end of row 1; sent only with `discord: true`) |
 | **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims for one lot — older header `Valeur`), `Bonne affaire` (same), `Note`, `Lot` (how many units the prices buy, « 1 septim les 3 »; empty = 1; written from v3j) |
 | **Recettes** | one ingredient of one recipe | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note`, `Variante` (1, 2, 3… — a product may have several recipes; empty = 1), `Usage` (`oui` on the rows of the product's *recette d'usage*; none marked = variant 1) |
 | **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture`, `Recettes` (the recipes chosen for this missive, same on each of its rows: `Potion de vigueur=2; Rubis=acheter`; empty = the usual ones) |
@@ -470,6 +484,7 @@ refused by the script itself (`already closed`), under the lock.
 | `livre` (v3l) | `{ livre: { fr, valeur } }` | `Livre` (« Ombre » / empty) on the article's Catalogues row (column added at the end of row 1 if missing) and on every Recettes row of the product. From v3l, `vente` and `recette` also write `livre` when sent `livre: 'Ombre'`; cache key `registre-v3l` |
 | `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
+| `membre` (v3n) | `{ membre: { nom, discord, pseudo, creer } }` | A Discord seal's link, under the lock: `Discord ID` and `Pseudo Discord` written on the row named `nom` (refused `other seal` if it holds another ID, `seal taken` if the ID is already on another row, `friend` on an « Ami des Lunes » row, `unknown member` when absent and `creer` is not set); with `creer: true` a row is appended (`Nom`, `Rôle` « Membre », `Discord ID`, `Pseudo Discord`); `nom: ''` only refreshes the pseudo of the row holding `discord`. The headers are added at the end of row 1 when missing; the Membres' Discord columns are sent only to a caller asking `discord: true`. Answer `nom` (the sheet's spelling). The grimoire sends only this action; v3n's other tabs (missions, pay) are not read by this branch. An older script answers `unknown action`: the ex-libris refuses the name in character, nothing written |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
