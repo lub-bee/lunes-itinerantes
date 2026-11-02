@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: true, donnees: vide(false) })
   try {
     const lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
-    return NextResponse.json({ ok: true, donnees: vue(lu, await identite(req.cookies, lu.membres)) })
+    return NextResponse.json({ ok: true, donnees: vue(lu, await identite(req.cookies, lu.membres, lu.sceauxLus)) })
   } catch (e) {
     console.error('[missions] read failed', e)
     return refus("Le registre des missions reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
@@ -353,7 +353,7 @@ export async function POST(req: NextRequest) {
     console.error('[missions] read failed', e)
     return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
   }
-  const qui = await identite(req.cookies, lu.membres)
+  const qui = await identite(req.cookies, lu.membres, lu.sceauxLus)
   if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
   if (!peut(action, qui.roles)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
   // The sheet's script does not know the missions yet (before v3m): refused in character, nothing sent.

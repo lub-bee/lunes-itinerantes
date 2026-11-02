@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: true, donnees: null })
   try {
     const lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
-    return NextResponse.json({ ok: true, donnees: await vue(lu, await identite(req.cookies, lu.membres), s) })
+    return NextResponse.json({ ok: true, donnees: await vue(lu, await identite(req.cookies, lu.membres, lu.sceauxLus), s) })
   } catch (e) {
     console.error('[paie] read failed', e)
     return refus("Le livre du trésor reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
@@ -257,7 +257,7 @@ export async function POST(req: NextRequest) {
     console.error('[paie] read failed', e)
     return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
   }
-  const qui = await identite(req.cookies, lu.membres)
+  const qui = await identite(req.cookies, lu.membres, lu.sceauxLus)
   if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
   if (!peut(action, qui.roles)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
   if (!lu.paie.actif) return refus(TEXTES_PAIE.refus, 409)

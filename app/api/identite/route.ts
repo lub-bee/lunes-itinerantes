@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
-import { libreDe, poserNom, REFUS_SCEAU, rolesDe, trouverMembre, trouverParDiscord } from '@/lib/identite'
+import { libreDe, poserNom, REFUS_AMI, REFUS_SCEAU, rolesDe, trouverMembre, trouverParDiscord } from '@/lib/identite'
+import { cle } from '@/lib/missives'
 import { droitsDe } from '@/lib/droits'
-import { lireRegistre, registreRelie } from '@/lib/registre'
+import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 
 // Signing with one's name: POST { nom } is matched against the Membres tab (never sent to the page);
 // a known name is kept, in the sheet's spelling, in a signed cookie; an unknown one is refused and
 // nothing is kept. DELETE forgets the name (« Ce n'est pas mon nom »).
+// A Discord seal with a v3n script: the name is linked to the seal's ID (an empty « Discord ID »), or,
+// with `creer: true` after the page's confirmation, a row is appended (Rôle « Membre »).
 
 export const dynamic = 'force-dynamic'
 
@@ -16,31 +19,64 @@ export async function POST(req: NextRequest) {
   const s = await lireSession(req.cookies)
   if (!s.valide) return refus('Le sceau de la caravane a pâli : rouvre le grimoire, ami.', 401)
   if (!registreRelie()) return refus("Le registre des membres n'est pas encore relié au grimoire.", 503)
-  const { nom } = (await req.json().catch(() => ({}))) as { nom?: unknown }
-  const tape = String(nom ?? '').trim().slice(0, 80)
+  const { nom, creer } = (await req.json().catch(() => ({}))) as { nom?: unknown; creer?: unknown }
+  const tape = String(nom ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)
   if (!tape) return refus('Inscris ton nom, ami : la plume attend.', 400)
-  let membres
+  let lu: Awaited<ReturnType<typeof lireRegistre>>
   const t0 = performance.now()
   try {
-    membres = (await lireRegistre()).membres
+    lu = await lireRegistre()
   } catch (e) {
     console.error('[identite] registre unreachable', e)
     return refus("Le registre des membres reste fermé pour l'heure. Réessaie plus tard.", 502)
   }
-  // A Discord session already matched by its ID is not offered a typed name.
-  const parId = s.genre === 'discord' ? trouverParDiscord(s.membre.id, membres) : null
-  if (parId) return refus(`Ton sceau te nomme déjà : ${parId.nom}.`, 409)
+  const membres = lu.membres
+  const signer = async (m: { nom: string; role: string }) => {
+    const rep = NextResponse.json({ ok: true, nom: m.nom, droits: droitsDe(rolesDe(m, s.genre === 'discord' && s.membre.patriarche)) })
+    await poserNom(rep, m.nom)
+    rep.headers.set('Server-Timing', `lire;dur=${(performance.now() - t0).toFixed(0)}`)
+    return rep
+  }
+
+  // A Discord seal with a script that links seals (v3n): the typed name is linked to the seal's ID — the
+  // ID comes from the signed session only, never from the page —, or a row is created after a confirmation.
+  if (s.genre === 'discord' && lu.sceauxLus) {
+    // A session already linked by its ID is not offered a typed name.
+    const parId = trouverParDiscord(s.membre.id, membres)
+    if (parId) return refus(`Ton sceau te nomme déjà : ${parId.nom}.`, 409)
+    if (lu.amis.some((a) => cle(a) === cle(tape))) return refus(REFUS_AMI, 403)
+    const m = trouverMembre(tape, membres)
+    if (m && !libreDe(m, s.membre.id)) return refus(REFUS_SCEAU, 403)
+    if (!m && creer !== true)
+      return NextResponse.json({ ok: false, aCreer: true, nom: tape, message: `Inscrire « ${tape} » au registre de la caravane ?` }, { status: 200 })
+    try {
+      const r = await ecrireRegistre('membre', { membre: { nom: m?.nom ?? tape, discord: s.membre.id, pseudo: s.membre.nom, creer: !m } })
+      const nomEcrit = String((r as { nom?: unknown }).nom ?? m?.nom ?? tape)
+      return await signer({ nom: nomEcrit, role: m?.role ?? 'Membre' })
+    } catch (e) {
+      const t = String(e)
+      console.error('[identite] link refused', t)
+      return refus(
+        t.includes('other seal') || t.includes('seal taken')
+          ? REFUS_SCEAU
+          : t.includes('friend')
+            ? REFUS_AMI
+            : t.includes('unknown member')
+              ? `Nul membre du nom de « ${tape} » n'est inscrit au registre de la caravane. Rien n'a été consigné.`
+              : "Le scribe n'a pu lier ton sceau au registre. Rien n'a été consigné : réessaie plus tard.",
+        t.includes('other seal') || t.includes('seal taken') || t.includes('friend') ? 403 : 502,
+      )
+    }
+  }
+
+  // A password session (never links nor creates), or a Discord seal with an older script: the name as today.
   const m = trouverMembre(tape, membres)
-  // A row that carries another Discord seal's ID is refused to a Discord session (nothing kept).
   if (m && s.genre === 'discord' && !libreDe(m, s.membre.id)) return refus(REFUS_SCEAU, 403)
   if (!m) {
     await new Promise((r) => setTimeout(r, 600))
     return refus(`Nul membre du nom de « ${tape} » n'est inscrit au registre de la caravane. Rien n'a été consigné.`, 403)
   }
-  const rep = NextResponse.json({ ok: true, nom: m.nom, droits: droitsDe(rolesDe(m, s.genre === 'discord' && s.membre.patriarche)) })
-  await poserNom(rep, m.nom)
-  rep.headers.set('Server-Timing', `lire;dur=${(performance.now() - t0).toFixed(0)}`)
-  return rep
+  return signer(m)
 }
 
 export async function DELETE() {

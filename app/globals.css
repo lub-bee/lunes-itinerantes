@@ -3728,6 +3728,9 @@ strong.a-verser { font-weight: 400; }
 .mission.permanente .toujours { font-family: var(--f-capitales); font-style: normal; font-size: 12px; letter-spacing: 0.05em; color: #1f5a56; }
 .mission.permanente.fermee { opacity: 0.6; }
 
-/* An unmatched Discord visitor's own user ID, under the ex-libris (2026-10-30). */
-.ex-libris-sceau { margin: 6px 0 0; font-style: italic; color: var(--encre-douce); text-align: center; }
-.ex-libris-sceau strong { font-family: var(--f-capitales); font-style: normal; font-weight: 400; letter-spacing: 0.04em; color: var(--encre); user-select: all; }
+/* A Discord seal's first signature: the question before a row is appended to the registre (2026-11-02). */
+.ex-libris-confirmer { margin: 10px auto 0; max-width: 420px; padding: 8px 12px; border: 1px dashed rgba(110, 80, 45, 0.5); background: rgba(255, 250, 235, 0.35); text-align: center; }
+.ex-libris-confirmer p { margin: 2px 0; }
+.ex-libris-confirmer > p:first-child { font-family: var(--f-capitales); color: var(--encre); }
+.ex-libris-confirmer-note { font-size: 14px; font-style: italic; color: var(--encre-douce); }
+.ex-libris-confirmer-gestes { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-top: 6px; }

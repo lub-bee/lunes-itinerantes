@@ -44,17 +44,20 @@ expires, a returning visitor is sent back through Discord with `prompt=none`, wh
 if they still hold the role (seamless) and refuses them in character if the role was taken away.
 Closing the grimoire (iron latch, or the key on mobile) forgets the session.
 
-**Who a Discord seal is** (v3n, the Membres « Discord ID » column): the session's Discord user ID is looked
-up first; a row carrying it is that member. Only when no row carries it is the server nickname used, and
-then only onto a row whose « Discord ID » is empty (the transition while the column is filled): a row that
-has an ID is never reached by nickname. A typed name is refused to a Discord session when its row carries
-another ID (« Ce nom porte déjà le sceau d'un autre marchand. »), and a session matched by its ID is not
-offered a typed name. An unmatched Discord visitor reads their own ID under the ex-libris (« Donne ce sceau
-au Patriarche : … ») — right-click a user in Discord with Developer Mode on → *Copy User ID* gives the same.
-Password sessions are unchanged. With an older script (no « Discord ID » read) the nickname rule applies to
-every row, as before. The access role can be a single Discord role (`DISCORD_ROLE_IDS` = its ID).
-`DISCORD_ROLE_PATRIARCHE` only feeds the rights (`lib/droits.ts`); the pay's Patriarchs come from the
-Membres « Rôle » (or the pay settings' explicit list, when filled).
+**Who a Discord seal is** (v3n, spec `discord/spec-discord-id.md` of 2026-11-02): nobody types IDs, nobody
+adds members by hand. A seal whose Discord user ID is on a Membres row is that member at once (its « Pseudo
+Discord » follows the display name). Otherwise the ex-libris asks the name, pre-filled with the Discord
+display name: a row with an empty « Discord ID » is linked (the script writes the ID and the pseudo on it);
+a row holding another ID is refused (« Ce nom porte déjà le sceau d'un autre marchand. »); no row → after
+« Inscrire « … » au registre de la caravane ? » the script appends a row (Nom, Rôle « Membre », Discord ID,
+Pseudo Discord). « Membre » is not a rank: such rows sit « Sans rang » until the Patriarchs set the Rôle.
+« Ami des Lunes » rows never link nor sign. The ID comes only from the signed session; the script checks
+everything again under its lock (action `membre`). A seal already linked is not offered a typed name, and no
+seal ever reaches a row holding an ID by its nickname. Password sessions sign an existing name as before and
+never link nor create. With an older script (no Discord columns read) everything behaves as before (the
+nickname rule). The access role can be a single Discord role (`DISCORD_ROLE_IDS` = its ID).
+`DISCORD_ROLE_PATRIARCHE` only feeds the rights (`lib/droits.ts`); the pay's Patriarchs come from the Membres
+« Rôle » (or the pay settings' explicit list, when filled).
 
 On the order sheet the seller is the session's name (fixed; `/api/commande` reads it from the cookie,
 never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name; once that name is
@@ -444,7 +447,7 @@ is `ONGLETS` at the top of `commandes.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
-| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member), optional `Discord ID` (aliases `Discord`, `ID Discord`: the member's Discord user ID, digits; read by a v3n script asked with `discord: true`) |
+| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member), `Discord ID` (aliases `Discord`, `ID Discord`) and `Pseudo Discord`, written by a v3n script at a member's first Discord seal (headers appended at the end of row 1; sent only with `discord: true`) |
 | **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims for one lot — older header `Valeur`), `Bonne affaire` (same), `Note`, `Lot` (how many units the prices buy, « 1 septim les 3 »; empty = 1; written from v3j) |
 | **Recettes** | one ingredient of one recipe | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note`, `Variante` (1, 2, 3… — a product may have several recipes; empty = 1), `Usage` (`oui` on the rows of the product's *recette d'usage*; none marked = variant 1) |
 | **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture`, `Recettes` (the recipes chosen for this missive, same on each of its rows: `Potion de vigueur=2; Rubis=acheter`; empty = the usual ones) |

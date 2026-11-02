@@ -25,7 +25,15 @@
  *    carries the missions' tabs (ONGLETS_MISSIONS: ponderation, reglagesMissions, demandes, missions,
  *    points). Without it, every answer is exactly what v3l answered: the grimoire in production never
  *    sees them.
- *    With `discord: true` (v3n) the Membres rows also carry `discord` (the « Discord ID » column, read only).
+ *    With `discord: true` (v3n) the Membres rows also carry `discord` and `pseudo` (« Discord ID », « Pseudo Discord »).
+ *      'membre'      { membre: { nom, discord, pseudo, creer } } (v3n) → the Discord seal `discord` linked to the
+ *                                                                              member `nom` (its « Discord ID » written,
+ *                                                                              « Pseudo Discord » too), or a row appended
+ *                                                                              (Nom, Rôle « Membre », ID, pseudo) when
+ *                                                                              `creer`; refused: 'other seal', 'friend',
+ *                                                                              'unknown member', 'seal taken'. With an
+ *                                                                              empty `nom`: the pseudo of the row holding
+ *                                                                              `discord` updated.
  *    With `paie: true` (v3n, the pay) the answer also carries the pay's tabs (ONGLETS_PAIE: reglagesPaie,
  *    factures, evenements, ecrituresEvenement, clotures). Without it, exactly what v3m answered.
  *
@@ -143,8 +151,9 @@ var ONGLETS = {
     nom: 'Membres',
     lecture: true,
     colonnes: [['Nom', 'nom'], ['Rôle', 'role'],
-      // v3n: the member's Discord user ID (filled by hand), sent only to a caller asking `discord: true`.
-      ['Discord ID', 'discord', ['Discord', 'ID Discord']]],
+      // v3n: the member's Discord user ID and the display name seen at the last seal, written only by the
+      // 'membre' action (headers appended at the end of row 1 when missing); sent only with `discord: true`.
+      ['Discord ID', 'discord', ['Discord', 'ID Discord']], ['Pseudo Discord', 'pseudo', ['Pseudo']]],
   },
   ressources: {
     nom: 'Ressources',
@@ -328,7 +337,7 @@ function pourAppelant(onglets) {
   Object.keys(onglets).forEach(function (k) {
     if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
     if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
-    // The members' Discord ID (v3n) only to who asks `discord: true`: the rows otherwise exactly as before.
+    // The members' Discord ID and pseudo (v3n) only to who asks `discord: true`: the rows otherwise exactly as before.
     if (k === 'membres' && !AVEC_DISCORD && onglets[k]) {
       res[k] = onglets[k].map(function (m) { return { nom: m.nom, role: m.role }; });
       return;
@@ -1341,6 +1350,79 @@ ECRITURES.paie = function (corps) {
   if (ms.length) ajouter(ONGLETS.mouvements, ms);
   // No `maj`: the tabs are read again (these writes are rare).
   return { ok: true, onglet: c.onglet, lignes: lignes.length };
+};
+
+/**
+ * A Discord seal linked to its member (v3n), under the lock: the Membres row named `nom` (compared like
+ * headers) gets the ID and the pseudo when its « Discord ID » is empty; `creer` appends a row (Nom, Rôle
+ * « Membre », ID, pseudo) when no row has that name. Nom and Rôle are never written on an existing row.
+ * The « Discord ID » / « Pseudo Discord » headers are added at the end of row 1 when missing.
+ */
+ECRITURES.membre = function (corps) {
+  var m = corps.membre;
+  var id = String((m && m.discord) || '').replace(/\D/g, '');
+  if (!m || !id) return { ok: false, erreur: 'no seal' };
+  var def = ONGLETS.membres;
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  if (!feuille || feuille.getLastRow() < 1) return { ok: false, erreur: 'no members tab' };
+  var tout = feuille.getDataRange().getValues();
+  var idx = indexColonnes(tout[0], def);
+  if (idx.nom < 0) return { ok: false, erreur: 'no members tab' };
+  var ajouterEntete = function (titre) {
+    var premiere = feuille.getRange(1, 1, 1, Math.max(feuille.getLastColumn(), 1)).getValues()[0];
+    var fin = premiere.length;
+    while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
+    feuille.getRange(1, fin + 1).setValue(titre).setFontWeight('bold');
+    return fin;
+  };
+  var cellule = function (l, champ) { return idx[champ] >= 0 ? l[idx[champ]] : ''; };
+  var pseudo = String(m.pseudo || '').slice(0, 80);
+  var parId = -1;
+  var parNom = -1;
+  for (var r = 1; r < tout.length; r++) {
+    if (String(cellule(tout[r], 'discord')).replace(/\D/g, '') === id) parId = r;
+    if (m.nom && parNom < 0 && cleEntete(cellule(tout[r], 'nom')) === cleEntete(m.nom)) parNom = r;
+  }
+  var ecrire = function (r, champ, valeur) {
+    if (idx[champ] < 0) idx[champ] = ajouterEntete(champ === 'discord' ? 'Discord ID' : 'Pseudo Discord');
+    feuille.getRange(r + 1, idx[champ] + 1).setValue(valeur);
+  };
+  var maj = null;
+  var nom;
+  var cree = false;
+  if (!m.nom) {
+    // Only the pseudo of the row already holding this seal.
+    if (parId < 0) return { ok: false, erreur: 'unknown member' };
+    nom = String(cellule(tout[parId], 'nom'));
+    ecrire(parId, 'pseudo', pseudo);
+  } else if (parId >= 0 && parId !== parNom) {
+    return { ok: false, erreur: 'seal taken' };
+  } else if (parNom >= 0) {
+    var role = String(cellule(tout[parNom], 'role'));
+    if (/ami(e|s)?deslunes/.test(cleEntete(role))) return { ok: false, erreur: 'friend' };
+    var actuel = String(cellule(tout[parNom], 'discord')).replace(/\D/g, '');
+    if (actuel && actuel !== id) return { ok: false, erreur: 'other seal' };
+    nom = String(cellule(tout[parNom], 'nom'));
+    if (!actuel) ecrire(parNom, 'discord', "'" + id);
+    ecrire(parNom, 'pseudo', pseudo);
+  } else {
+    if (!m.creer) return { ok: false, erreur: 'unknown member' };
+    nom = String(m.nom).slice(0, 80);
+    if (idx.role < 0) return { ok: false, erreur: 'no role column' };
+    if (idx.discord < 0) idx.discord = ajouterEntete('Discord ID');
+    if (idx.pseudo < 0) idx.pseudo = ajouterEntete('Pseudo Discord');
+    var largeur = Math.max(idx.nom, idx.role, idx.discord, idx.pseudo) + 1;
+    var ligne = [];
+    for (var c = 0; c < largeur; c++) ligne.push('');
+    ligne[idx.nom] = nom;
+    ligne[idx.role] = 'Membre';
+    ligne[idx.discord] = "'" + id;
+    ligne[idx.pseudo] = pseudo;
+    feuille.getRange(feuille.getLastRow() + 1, 1, 1, largeur).setValues([ligne]);
+    cree = true;
+  }
+  // No `maj`: the tabs are read again (a first seal is rare).
+  return { ok: true, nom: nom, cree: cree };
 };
 
 ECRITURES.clotureSemaine = function (corps) {
