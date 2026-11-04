@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
-import { libreDe, poserNom, REFUS_AMI, REFUS_SCEAU, rolesDe, trouverMembre, trouverParDiscord } from '@/lib/identite'
+import { libreDe, poserNom, qualitesDe, REFUS_AMI, REFUS_SCEAU, trouverMembre, trouverParDiscord } from '@/lib/identite'
 import { cle } from '@/lib/missives'
 import { droitsDe } from '@/lib/droits'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
   }
   const membres = lu.membres
   const signer = async (m: { nom: string; role: string }) => {
-    const rep = NextResponse.json({ ok: true, nom: m.nom, droits: droitsDe(rolesDe(m, s.genre === 'discord' && s.membre.patriarche)) })
+    const q = qualitesDe(m, s, lu.droits)
+    const rep = NextResponse.json({ ok: true, nom: m.nom, droits: droitsDe(q, lu.droits), testeur: q.testeur })
     await poserNom(rep, m.nom)
     rep.headers.set('Server-Timing', `lire;dur=${(performance.now() - t0).toFixed(0)}`)
     return rep

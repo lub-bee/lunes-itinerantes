@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Article } from '@/lib/types'
 import { calculerMissives, evaluateur, indexRecettes, type ActionRegistre, type DonneesRegistre } from '@/lib/missives'
 import type { Hierarchie } from '@/lib/rangs'
-import type { Action } from '@/lib/droits'
+import type { Droits } from '@/lib/droits'
 
 /*
  * The registre as the page sees it: who holds the pen (the member's name, checked by the server
@@ -27,7 +27,10 @@ export type InfoMarchand = {
   relie: boolean
   /** The member's name as the Membres tab spells it, once recognized. */
   identite: string | null
-  droits: Record<Action, boolean> | null
+  /** What the member may do (lib/droits.ts), every action and gesture; null: not signed, or the registre unread. */
+  droits: Droits | null
+  /** A seal of TESTEURS_DISCORD_IDS: every gesture, and the secret page /permissions. */
+  testeur?: boolean
 }
 
 /** `aCreer`: a Discord seal's name unknown to the registre: the page asks before a row is appended. */

@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
   try {
     // `v`: the newest version this reader has seen (its own writes must not vanish).
     const lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
-    const qui = await identite(req.cookies, lu.membres, lu.sceauxLus)
+    const qui = await identite(req.cookies, lu)
     return NextResponse.json({ ok: true, donnees: await vue(lu, qui?.nom ?? null) })
   } catch (e) {
     console.error('[registre] read failed', e)
@@ -520,9 +520,13 @@ export async function POST(req: NextRequest) {
     return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
   }
   const tLire = performance.now() - t0
-  const qui = await identite(req.cookies, lu.membres, lu.sceauxLus)
+  const qui = await identite(req.cookies, lu)
   if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
-  if (!peut(action, qui.roles)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
+  // A recipe of a product that already has one (an edit, a moved recipe, a new variant) is a correction.
+  const corrige =
+    action === 'recette' &&
+    Boolean(String(b.ancienProduit ?? '').trim() || variantesDe(lu.recettes, String(b.produit ?? '').replace(/\s+/g, ' ').trim()).length)
+  if (!peut(corrige ? 'recetteCorriger' : action, qui, lu.droits)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
 
   let e: Ecriture
   try {

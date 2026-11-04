@@ -48,6 +48,8 @@ function vide(relie: boolean): DonneesMissions {
 
 function vue(lu: Lu, qui: Identite | null): DonneesMissions {
   const m = lu.missions
+  // Points are internal (Missions v2): the ledger goes only to who opens the Trésor (lib/droits.ts « tresor »).
+  const points = peut('tresor', qui, lu.droits) ? m.points : []
   const b = bornes(semaineDe(Date.now(), lu.paie.reglages.jour))
   return {
     relie: true,
@@ -55,7 +57,7 @@ function vue(lu: Lu, qui: Identite | null): DonneesMissions {
     ponderation: m.ponderation,
     demandes: m.demandes,
     missions: m.missions,
-    points: m.points,
+    points,
     permanentes: m.permanentes,
     prises: prisesDeLaSemaine(m.missions, b.debut, b.fin),
     moi: qui?.nom ?? null,
@@ -67,7 +69,7 @@ export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: true, donnees: vide(false) })
   try {
     const lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
-    return NextResponse.json({ ok: true, donnees: vue(lu, await identite(req.cookies, lu.membres, lu.sceauxLus)) })
+    return NextResponse.json({ ok: true, donnees: vue(lu, await identite(req.cookies, lu)) })
   } catch (e) {
     console.error('[missions] read failed', e)
     return refus("Le registre des missions reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
@@ -353,9 +355,9 @@ export async function POST(req: NextRequest) {
     console.error('[missions] read failed', e)
     return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
   }
-  const qui = await identite(req.cookies, lu.membres, lu.sceauxLus)
+  const qui = await identite(req.cookies, lu)
   if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
-  if (!peut(action, qui.roles)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
+  if (!peut(action, qui, lu.droits)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
   // The sheet's script does not know the missions yet (before v3m): refused in character, nothing sent.
   if (!lu.missions.actif) return refus(TEXTES.refus, 409)
 

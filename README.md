@@ -25,7 +25,8 @@ The whole site sits behind "the seal", checked by `middleware.ts` (`lib/sceau.ts
 | `DISCORD_CLIENT_SECRET` | Discord application's client secret. |
 | `DISCORD_GUILD_ID` | ID of the caravan's Discord server. |
 | `DISCORD_ROLE_IDS` | Comma-separated role IDs that open the grimoire (any one is enough). |
-| `DISCORD_ROLE_PATRIARCHE` | Optional — role ID marking a Patriarch (carried in the session, unused for now). |
+| `DISCORD_ROLE_PATRIARCHE` | Optional — role ID marking a Patriarch (adds the Patriarche role to the seal's roles). |
+| `TESTEURS_DISCORD_IDS` | Optional — comma-separated Discord user IDs of the testers: every permission, and the secret page `/permissions` (never from the sheet). |
 | `SCEAU_MOT_DE_PASSE_COMMUN` | Optional — `1` keeps the shared password alongside Discord. |
 | `CATALOGUE_CSV_URL` | Optional — published CSV of the price sheet (see below). |
 | `COMMANDES_SCRIPT_URL` | Optional — URL of the Apps Script web app: sealed orders, missives, recipes, members (see *Order mode* and *Missives*). |
@@ -409,10 +410,17 @@ missive pages, order sheet) forgets it. Every write re-checks the name against t
 whose server nickname is on the list arrives pre-signed. An unrecognized typed seller still works for
 orders as in v2.
 
-Permissions: `lib/droits.ts` has one rule per action (`ROLES_REQUIS`), all open for now. To restrict an
-action, list the roles allowed (e.g. `recette: ['maitreartisan', 'patriarche']`); roles come from an
-optional **Rôle** column of the Membres tab and from the Discord Patriarch role (the server always
-checks; for the page to hide a restricted action, `/api/marchand` must then look the roles up too).
+Permissions (Missions v2, lot 1; script v3o): the sheet's **Permissions** tab holds one row per gesture
+(Groupe, Geste, Clé) and one checkbox column per role (« Tout membre » opens a gesture to every signed member).
+`lib/droits.ts` keeps the defaults (used when the tab, a row or a column is missing), maps each action to its
+gesture (`GESTE_DE`) and checks it; the server checks every write and the Trésor's reads, the page hides what
+a member may not do (`/api/marchand` answers `droits`). The tab is edited from the secret page `/permissions`
+(testers only, `TESTEURS_DISCORD_IDS`; anyone else gets a sealed page, 403).
+A member's roles come from Discord: the **Rôles** tab (Rôle | ID du rôle Discord; type the IDs as text) maps
+a role name to a Discord role ID, and the seal keeps the member's role IDs. TRANSITION: while the Membres
+**Rôle** column exists, it is read only when none of the member's Discord roles is mapped (password sessions,
+seals made before lot 1, an empty Rôles tab). The Livre du Trésor and the points open only with the
+« tresor » gesture.
 
 ### The rules
 

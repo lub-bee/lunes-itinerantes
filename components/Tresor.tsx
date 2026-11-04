@@ -37,7 +37,8 @@ import { Sceller } from './Fiche'
 const ECHEC = "Le coursier n'est pas revenu. Rien n'a été consigné : réessaie."
 const FERME = "Le livre du trésor ne répond pas : le coursier n'a pu l'ouvrir. Réessaie dans un moment."
 
-export function useTresor(signe: string | null) {
+/** `ouvert`: the reader may open the Trésor (lib/droits.ts « tresor »); otherwise nothing is read. */
+export function useTresor(signe: string | null, ouvert = true) {
   const [donnees, setDonnees] = useState<DonneesPaie | null | undefined>(undefined)
   const [erreur, setErreur] = useState<string | null>(null)
   const [message, setMessage] = useState<{ ok: boolean; texte: string; n: number } | null>(null)
@@ -61,8 +62,8 @@ export function useTresor(signe: string | null) {
       .catch(() => setErreur(FERME))
   }, [recevoir, semaine])
   useEffect(() => {
-    lire()
-  }, [lire, signe])
+    if (ouvert) lire()
+  }, [lire, signe, ouvert])
   useEffect(() => {
     if (!message) return
     const t = setTimeout(() => setMessage(null), 9000)

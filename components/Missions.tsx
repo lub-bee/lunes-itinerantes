@@ -188,6 +188,12 @@ function GlypheType({ type, icones }: { type: TypeMission; icones: Record<string
 }
 
 const pts = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} pt${Math.abs(n) > 1 ? 's' : ''}`
+/** Points are internal (Missions v2): shown only to who opens the Trésor (lib/droits.ts « tresor »). */
+const voitPoints = (reg?: CtxRegistre) => reg?.r.marchand?.droits?.tresor === true
+/** A mission's points, or nothing for a member who may not see them. */
+function Pts({ reg, n }: { reg?: CtxRegistre; n: number }) {
+  return voitPoints(reg) ? <Pts reg={reg} n={n} /> : null
+}
 
 /** « rareté à fixer » when a mission was sized without a known rarity (the weight itself stays internal). */
 function poids(m: Pick<Mission, 'type' | 'poids'> & { intermediaire?: boolean; note?: string }): ReactNode {
@@ -281,7 +287,7 @@ function MesMissions({ reg, icones }: { reg: CtxRegistre; icones: Record<string,
                 <Meta parts={[m.statut === 'remise' ? m.remiseLe && `${estDon(m) ? 'déclaré' : 'remise'} le ${dateTamrielique(m.remiseLe)}` : m.prisLe && `prise le ${dateTamrielique(m.prisLe)}`, /^p-/i.test(m.demande) && 'mission permanente', poids(m)]} />
               </span>
               <span className="mission-cote">
-                <strong className="mission-points">{pts(m.points)}</strong>
+                <Pts reg={reg} n={m.points} />
                 <span className="mission-gestes">
                   {m.statut === 'remise' ? (
                     <span className="tampon petit">remise, à confirmer</span>
@@ -342,7 +348,7 @@ function Permanentes({ reg, icones, tab }: { reg: CtxRegistre; icones: Record<st
                 />
               </span>
               <span className="mission-cote">
-                <strong className="mission-points">{pts(x.points)}</strong>
+                <Pts reg={reg} n={x.points} />
                 <span className="mission-gestes">
                   {moi && droits?.prendrePermanente !== false && (
                     <Action icone="prendre" tabIndex={tab} disabled={fermee || pleines || !d.actif} title={pleines ? TEXTES.limite(max) : undefined} onClick={() => m.agir('prendrePermanente', { id: x.id })}>
@@ -393,7 +399,7 @@ function AConfirmer({ reg, icones }: { reg: CtxRegistre; icones: Record<string, 
                 <Meta parts={[estDon(m) ? `don libre de ${m.prisPar}` : `remis par ${m.prisPar}`, m.remiseLe && `le ${dateTamrielique(m.remiseLe)}`, estDon(m) && !m.points && 'sous le minimum : sans point']} />
               </span>
               <span className="mission-cote">
-                <strong className="mission-points">{pts(m.points)}</strong>
+                <Pts reg={reg} n={m.points} />
                 <span className="mission-gestes">
                   {sienne || !moi ? (
                     <em className="mission-meta">{sienne ? 'une autre patte confirmera' : ''}</em>
@@ -487,7 +493,7 @@ export function DroiteMissions({ reg, icones, interactif, citation }: { reg?: Ct
                   <Meta parts={[dm && `pour ${quantite(dm.quantite)} ${dm.article}`, poids(x)]} />
                 </span>
                 <span className="mission-cote">
-                  <strong className="mission-points">{pts(x.points)}</strong>
+                  <Pts reg={reg} n={x.points} />
                   <span className="mission-gestes">
                     {peutPrendre && (
                       <Action icone="prendre" tabIndex={tab} disabled={pleines || !d.actif || x.enAttente} title={!d.actif ? TEXTES.inactif : pleines ? TEXTES.limite(max) : undefined} onClick={() => prendre(x)}>
@@ -676,7 +682,7 @@ function Demandes({ reg }: { reg: CtxRegistre }) {
                 <span className="demande-avance">
                   <Jauge avance={a.avance} titre={`${a.accomplies} missions accomplies sur ${a.total}`} />
                   <span>
-                    {a.accomplies}/{a.total} accomplies, {a.enCours} en cours · {pts(a.credites)} sur {pts(a.points)}
+                    {a.accomplies}/{a.total} accomplies, {a.enCours} en cours{voitPoints(reg) && <> · {pts(a.credites)} sur {pts(a.points)}</>}
                   </span>
                 </span>
               </li>
@@ -818,7 +824,7 @@ function FicheDemande({ reg, articles, chapitres, icones, fermer }: EnvMission) 
                   <span className="ligne-demande-decoupe">
                     {pareilles(ms).map((g, i) => (
                       <span key={i}>
-                        {g.length > 1 ? `${g.length} missions` : '1 mission'} de {quantite(g[0].quantite)} <strong>{pts(g[0].points)}</strong>
+                        {g.length > 1 ? `${g.length} missions` : '1 mission'} de {quantite(g[0].quantite)} {voitPoints(reg) && <strong>{pts(g[0].points)}</strong>}
                         {g.length > 1 ? ' chacune' : ''}
                       </span>
                     ))}
@@ -832,7 +838,7 @@ function FicheDemande({ reg, articles, chapitres, icones, fermer }: EnvMission) 
               <strong>{apercu.missions.length}</strong> mission{apercu.missions.length > 1 ? 's' : ''} : {apercu.missions.filter((x) => x.type === 'récolte').length} de récolte,{' '}
               {apercu.missions.filter((x) => x.type === 'fabrication').length} de fabrication.
             </p>
-            {apercu.plancher !== null ? (
+            {!voitPoints(reg) ? null : apercu.plancher !== null ? (
               <p>
                 Plancher {prix(apercu.plancher)} × {quantite(apercu.quantite)} : <strong>{pts(apercu.pointsRessources)}</strong> pour les ressources ({d.ponderation.reglages.partRessources} %),{' '}
                 <strong>{pts(apercu.pointsFabrication)}</strong> pour la fabrication ({d.ponderation.reglages.partFabrication} %).
@@ -1333,8 +1339,16 @@ function FicheDon({ reg, icones, fermer, articles }: EnvMission) {
       {don &&
         (don.points ? (
           <p className="fiche-partage">
-            {quantite(q)} {objet} : <strong>{pts(don.points)}</strong>
-            {don.bonus && ` (dont le bonus des gros dons, ${prix(d.ponderation.reglages.bonusDon)} %)`}, crédités quand une autre patte aura confirmé le don.
+            {voitPoints(reg) ? (
+              <>
+                {quantite(q)} {objet} : <strong>{pts(don.points)}</strong>
+                {don.bonus && ` (dont le bonus des gros dons, ${prix(d.ponderation.reglages.bonusDon)} %)`}, crédités quand une autre patte aura confirmé le don.
+              </>
+            ) : (
+              <>
+                {quantite(q)} {objet} : ton don comptera dans l’effort de la caravane quand une autre patte l’aura confirmé.
+              </>
+            )}
           </p>
         ) : (
           <p className="message-encre erreur">

@@ -35,7 +35,9 @@ import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre,
 import { Action, En, Icone, Septims } from './Ornements'
 import { contenuMission } from './Missions'
 import { contenuTresor } from './Tresor'
-import type { Action as Droit } from '@/lib/droits'
+import type { Action as ActionDroit, Geste } from '@/lib/droits'
+
+type Droit = ActionDroit | Geste
 
 /*
  * A loose slip laid on the left page (on the whole screen on mobile): a recipe's tree, or the form
@@ -255,7 +257,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
         surtitre: f.nouvelle ? 'Ajouter une variante' : f.nom ? 'Corriger la recette' : 'Consigner une recette',
         titre: f.nom || 'Nouvelle recette',
         corps: (
-          <Signe env={env} action="recette">
+          <Signe env={env} action={f.nom && (env.reg.r.donnees?.recettes ?? []).some((r) => cle(r.produit) === cle(f.nom)) ? 'recetteCorriger' : 'recette'}>
             <FormRecette nom={f.nom} variante={f.variante} nouvelle={f.nouvelle} artisanPropose={f.artisan} ombre={f.ombre} env={env} />
           </Signe>
         ),
@@ -740,7 +742,7 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
       {/* Every action of the note in one block at its foot: the recipe's first, then the material's, then
           the catalogue's, taking out last. */}
       <div className="fiche-actions">
-        {droits?.recette !== false && recette && (
+        {droits?.recetteCorriger !== false && recette && (
           <Action icone="corriger" onClick={() => env.changer({ genre: 'edition-recette', nom: recette.produit, variante: recette.variante })}>
             corriger{plusieurs ? ` la recette ${recette.variante}` : ' la recette'}
           </Action>
@@ -758,7 +760,7 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
             en faire la recette d&apos;usage
           </Action>
         )}
-        {droits?.recette !== false && (
+        {(vs.length ? droits?.recetteCorriger : droits?.recette) !== false && (
           <Action icone="consigner" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
             {vs.length ? 'ajouter une variante' : 'consigner la recette'}
           </Action>

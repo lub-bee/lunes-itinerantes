@@ -1,6 +1,6 @@
 // Session "seal". Two ways in:
 // - Discord (when DISCORD_* are set): a member of the caravan's guild holding one of the allowed
-//   roles. The cookie holds a signed record (id, display name, patriarch flag, 24 h expiry).
+//   roles. The cookie holds a signed record (id, display name, patriarch flag, role IDs, 24 h expiry).
 // - The shared password (when Discord is not configured, or alongside it with
 //   SCEAU_MOT_DE_PASSE_COMMUN=1): the cookie holds HMAC(secret, password), so changing the
 //   password breaks every such seal.
@@ -102,7 +102,11 @@ export async function verifier<T>(usage: string, signe: string | undefined): Pro
   }
 }
 
-export type Membre = { id: string; nom: string; patriarche: boolean; exp: number }
+/**
+ * `roles`: the member's Discord role IDs in the caravan's guild, as read at the seal (lot 1; mapped to the
+ * grimoire's roles by the sheet's « Rôles » tab, lib/droits.ts). Absent from a seal made before lot 1.
+ */
+export type Membre = { id: string; nom: string; patriarche: boolean; roles?: string[]; exp: number }
 
 /* ── Who is at the door ────────────────────────────────────── */
 

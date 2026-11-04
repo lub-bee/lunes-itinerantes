@@ -65,6 +65,8 @@ export async function GET(req: NextRequest) {
       id: m.user.id,
       nom: nomAffiche(m).slice(0, 80),
       patriarche: Boolean(patriarcheId && m.roles.includes(patriarcheId)),
+      // Every role ID of the member (the sheet's « Rôles » tab says which ones are ranks, lib/droits.ts).
+      roles: m.roles.filter((r) => /^\d+$/.test(r)).slice(0, 60),
       exp: Date.now() + DUREE_MEMBRE * 1000,
     }
     // A silent renewal goes straight back to the page asked for; a fresh entry plays the lock's opening.

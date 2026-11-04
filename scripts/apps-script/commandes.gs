@@ -36,6 +36,16 @@
  *                                                                              `discord` updated.
  *    With `paie: true` (v3n, the pay) the answer also carries the pay's tabs (ONGLETS_PAIE: reglagesPaie,
  *    factures, evenements, ecrituresEvenement, clotures). Without it, exactly what v3m answered.
+ *    With `permissions: true` (v3o) the answer also carries `roles` (the « Rôles » tab: { role, id }, a role
+ *    name and its Discord role ID) and `permissions` (the « Permissions » tab: one { groupe, geste, cle,
+ *    roles: { <column header>: <cell> } } per gesture). Without it, exactly what v3n answered.
+ *      'permissions' { droits: { roles: [header], rolesDiscord: [name], lignes: [{ groupe, geste, cle,
+ *                                valeurs: { <header>: true | false } }] } } (v3o)
+ *                                                                            → the Permissions tab rewritten (Groupe,
+ *                                                                              Geste, Clé, one checkbox column per
+ *                                                                              role); the Rôles tab created with one
+ *                                                                              row per name of `rolesDiscord` (IDs to
+ *                                                                              fill by hand) when it is missing
  *
  *  - Writes (one writer at a time, LockService):
  *      'missive'     { missive: { numero, horodatage, titre, commanditaire, echeance, membre,
@@ -325,18 +335,37 @@ var ONGLETS_PAIE = {
   },
 };
 
+/**
+ * THE PERMISSIONS (v3o) — read and sent only to a caller that asks for them (`permissions: true`).
+ * « Rôles »: a role's name (as the grimoire knows it: Patriarche, Argentier, Aide de camp…) and the ID of
+ * the Discord role that carries it, filled by hand (type the ID as text: a leading apostrophe). Created
+ * with its header and the known names by the first 'permissions' write.
+ * « Permissions »: one row per gesture (Groupe, Geste, Clé), one column per role, a checkbox per cell. Its
+ * role columns are free (a role added later is a new column), so it is read and written by its own code.
+ */
+var ONGLET_ROLES = {
+  nom: 'Rôles',
+  colonnes: [['Rôle', 'role', ['Rang']], ['ID du rôle Discord', 'id', ['ID Discord', 'ID du rôle', 'Discord ID', 'ID']]],
+};
+var ONGLET_PERMISSIONS = 'Permissions';
+var COLONNES_PERMISSIONS = [['Groupe', 'groupe'], ['Geste', 'geste'], ['Clé', 'cle', ['Cle', 'Code']]];
+
 /** Whether the current call asked for the missions' tabs (`missions: true`, v3m) and the pay's (`paie: true`, v3n). */
 var AVEC_MISSIONS = false;
 var AVEC_PAIE = false;
 var AVEC_DISCORD = false;
+/** v3o: the Rôles and Permissions tabs (`permissions: true`). */
+var AVEC_PERMISSIONS = false;
 
 /** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
 function pourAppelant(onglets) {
-  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD) || !onglets) return onglets;
+  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD && AVEC_PERMISSIONS) || !onglets) return onglets;
   var res = {};
   Object.keys(onglets).forEach(function (k) {
     if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
     if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
+    // The Rôles and Permissions tabs (v3o) only to who asks `permissions: true`.
+    if ((k === 'roles' || k === 'permissions') && !AVEC_PERMISSIONS) return;
     // The members' Discord ID and pseudo (v3n) only to who asks `discord: true`: the rows otherwise exactly as before.
     if (k === 'membres' && !AVEC_DISCORD && onglets[k]) {
       res[k] = onglets[k].map(function (m) { return { nom: m.nom, role: m.role }; });
@@ -380,6 +409,7 @@ function doPost(e) {
   AVEC_MISSIONS = Boolean(corps.missions);
   AVEC_PAIE = Boolean(corps.paie);
   AVEC_DISCORD = Boolean(corps.discord);
+  AVEC_PERMISSIONS = corps.permissions === true;
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
@@ -459,6 +489,36 @@ function toutLire() {
   Object.keys(ONGLETS_MISSIONS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_MISSIONS[cle]); });
   // The pay's tabs (v3n), the same way (sent only with `paie: true`).
   Object.keys(ONGLETS_PAIE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_PAIE[cle]); });
+  // The Rôles and Permissions tabs (v3o), last (sent only with `permissions: true`).
+  res.roles = lireOnglet(ONGLET_ROLES);
+  res.permissions = lirePermissions();
+  return res;
+}
+
+/**
+ * The Permissions tab (v3o): one object per gesture row, { groupe, geste, cle, roles: { header: cell } } —
+ * every column other than Groupe / Geste / Clé is a role, its header kept as written. Rows without a
+ * gesture nor a key are skipped (a leftover checkbox reads FALSE, not blank).
+ */
+function lirePermissions() {
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ONGLET_PERMISSIONS);
+  if (!feuille || feuille.getLastRow() < 2) return [];
+  var valeurs = feuille.getDataRange().getValues();
+  var entete = valeurs[0].map(function (v) { return String(v).trim(); });
+  var fixes = indexColonnes(entete, { colonnes: COLONNES_PERMISSIONS });
+  var pris = [fixes.groupe, fixes.geste, fixes.cle];
+  var res = [];
+  for (var r = 1; r < valeurs.length; r++) {
+    var ligne = valeurs[r];
+    var champ = function (k) { return fixes[k] >= 0 ? String(ligne[fixes[k]]).trim() : ''; };
+    if (!champ('geste') && !champ('cle')) continue;
+    var objet = { groupe: champ('groupe'), geste: champ('geste'), cle: champ('cle'), roles: {} };
+    entete.forEach(function (h, i) {
+      if (!h || pris.indexOf(i) >= 0) return;
+      objet.roles[h] = ligne[i] === undefined ? '' : ligne[i];
+    });
+    res.push(objet);
+  }
   return res;
 }
 
@@ -582,7 +642,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3n';
+var CACHE = 'registre-v3o';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -1423,6 +1483,47 @@ ECRITURES.membre = function (corps) {
   }
   // No `maj`: the tabs are read again (a first seal is rare).
   return { ok: true, nom: nom, cree: cree };
+};
+
+/**
+ * v3o: the Permissions tab rewritten from the secret page (the grimoire's server allows only its testers;
+ * the script sees the shared token only). The tab is created when missing; every old cell is cleared first.
+ * The Rôles tab is created (header, one row per role name, the ID column as text) when it is missing.
+ */
+ECRITURES.permissions = function (corps) {
+  var d = corps.droits;
+  if (!d || !d.roles || !d.roles.length || !d.lignes || !d.lignes.length) return { ok: false, erreur: 'empty permissions' };
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  var feuille = classeur.getSheetByName(ONGLET_PERMISSIONS) || classeur.insertSheet(ONGLET_PERMISSIONS);
+  var roles = d.roles.map(function (r) { return String(r).slice(0, 60); });
+  var entete = ['Groupe', 'Geste', 'Clé'].concat(roles);
+  var lignes = d.lignes.map(function (l) {
+    var v = l.valeurs || {};
+    return [String(l.groupe || ''), String(l.geste || ''), String(l.cle || '')].concat(roles.map(function (r) { return v[r] === true; }));
+  });
+  if (feuille.getLastRow() > 0) feuille.getRange(1, 1, feuille.getLastRow(), Math.max(feuille.getLastColumn(), 1)).clearContent();
+  feuille.getRange(1, 1, 1, entete.length).setValues([entete]).setFontWeight('bold');
+  feuille.setFrozenRows(1);
+  feuille.getRange(2, 1, lignes.length, entete.length).setValues(lignes);
+  try {
+    feuille.getRange(2, 4, lignes.length, roles.length).insertCheckboxes();
+  } catch (err) {
+    // Plain TRUE / FALSE cells: the grimoire reads them the same way.
+  }
+  var rolesCree = false;
+  if (!classeur.getSheetByName(ONGLET_ROLES.nom)) {
+    var p = preparer(ONGLET_ROLES);
+    var noms = (d.rolesDiscord || []).map(function (n) { return String(n).slice(0, 60); }).filter(function (n) { return n; });
+    try {
+      p.feuille.getRange(2, p.cols.id, Math.max(noms.length, 1) + 40, 1).setNumberFormat('@');
+    } catch (err) {
+      // The owner types the IDs with a leading apostrophe.
+    }
+    ajouter(ONGLET_ROLES, noms.map(function (n) { return { role: n, id: '' }; }), p);
+    rolesCree = true;
+  }
+  // No `maj`: the tabs are read again (a rare write).
+  return { ok: true, lignes: lignes.length, rolesCree: rolesCree };
 };
 
 ECRITURES.clotureSemaine = function (corps) {

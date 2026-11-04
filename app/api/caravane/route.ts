@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: false, message: "Le registre des membres reste fermé pour l'heure." }, { status: 502 })
   }
-  if (!(await identite(req.cookies, lu.membres, lu.sceauxLus))) {
+  if (!(await identite(req.cookies, lu))) {
     return NextResponse.json({ ok: false, message: "Signe d'abord l'ex-libris : seuls les membres lisent ce registre." }, { status: 401 })
   }
   const rangs: Hierarchie = {}
