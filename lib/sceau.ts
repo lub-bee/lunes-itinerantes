@@ -5,7 +5,13 @@
 // - The shared password (when Discord is not configured, or alongside it with
 //   SCEAU_MOT_DE_PASSE_COMMUN=1): the cookie holds HMAC(secret, password), so changing the
 //   password breaks every such seal.
+// - A tester's « qualité » (lot 1c): a tester may view the book as a chosen set of ranks (COOKIE_QUALITE, signed, tied
+//   to their Discord user ID, re-checked against TESTEURS_DISCORD_IDS on every request). The session then carries
+//   `qualite`: lib/identite.ts reads its ranks instead of the seal's and suspends the tester flag; the middleware
+//   shows the refusal when those ranks may not enter. The real identity (ID, name, Discord roles) never changes.
 // Web Crypto only: this file runs in the middleware (edge) as well as in route handlers.
+
+import { estTesteur } from './testeurs'
 
 export const COOKIE_SCEAU = 'caravane_sceau'
 export const DUREE_SCEAU = 60 * 60 * 24 * 30
@@ -21,6 +27,10 @@ export const DUREE_CONNU = 60 * 60 * 24 * 365
 export const COOKIE_ETAT = 'caravane_etat'
 /** Set when a silent renewal failed: no new silent attempt for 10 minutes (no redirect loop). */
 export const COOKIE_SILENCE = 'caravane_silence'
+
+/** A tester's chosen ranks (lot 1c, lib/qualite.ts): a browser-session cookie, signed, 24 h at most. */
+export const COOKIE_QUALITE = 'caravane_qualite'
+export const DUREE_QUALITE = 60 * 60 * 24
 
 /** Name carried by password sessions (they have no identity). */
 export const NOM_COMMUN = 'Un marchand de la caravane'
@@ -111,10 +121,18 @@ export async function verifier<T>(usage: string, signe: string | undefined): Pro
  */
 export type Membre = { id: string; nom: string; patriarche?: boolean; roles?: string[]; exp: number }
 
+/**
+ * A tester viewing the book « en la qualité de » some ranks (lot 1c). `id`: the tester's Discord user ID (the cookie
+ * is void for any other seal); `rangs`: the ranks' keys (lib/droits.ts), [] = no rank; `noms`: their labels as the
+ * Rôles tab spelled them when chosen; `refus`: null when those ranks may « Entrer dans le grimoire » (decided when
+ * chosen, as a real seal's entry is decided at the seal), else the lock page's refusal (`rang` or `registre`).
+ */
+export type Qualite = { id: string; rangs: string[]; noms: string[]; refus: null | 'rang' | 'registre'; exp: number }
+
 /* ── Who is at the door ────────────────────────────────────── */
 
 export type Session =
-  | { valide: true; genre: 'discord'; membre: Membre }
+  | { valide: true; genre: 'discord'; membre: Membre; qualite?: Qualite }
   | { valide: true; genre: 'commun' }
   | { valide: false; expiree: boolean }
 
@@ -125,7 +143,10 @@ export async function lireSession(biscuits: Biscuits): Promise<Session> {
   if (discordConfigure()) {
     const m = await verifier<Membre>('membre', biscuits.get(COOKIE_MEMBRE)?.value)
     if (m && typeof m.exp === 'number') {
-      if (m.exp > Date.now()) return { valide: true, genre: 'discord', membre: m }
+      if (m.exp > Date.now()) {
+        const qualite = await lireQualite(biscuits, m.id)
+        return qualite ? { valide: true, genre: 'discord', membre: m, qualite } : { valide: true, genre: 'discord', membre: m }
+      }
       expiree = true
     }
   }
@@ -135,6 +156,15 @@ export async function lireSession(biscuits: Biscuits): Promise<Session> {
     if (jeton && attendu && egaux(jeton, attendu)) return { valide: true, genre: 'commun' }
   }
   return { valide: false, expiree }
+}
+
+/** The tester's chosen ranks: only when signed, unexpired, tied to this seal's ID, and that ID is still a tester. */
+async function lireQualite(biscuits: Biscuits, id: string): Promise<Qualite | null> {
+  const brut = biscuits.get(COOKIE_QUALITE)?.value
+  if (!brut || !estTesteur(id)) return null
+  const q = await verifier<Qualite>('qualite', brut)
+  if (!q || q.id !== id || typeof q.exp !== 'number' || q.exp <= Date.now() || !Array.isArray(q.rangs)) return null
+  return { id, rangs: q.rangs.map(String), noms: Array.isArray(q.noms) ? q.noms.map(String) : [], refus: q.refus === 'rang' || q.refus === 'registre' ? q.refus : null, exp: q.exp }
 }
 
 /** Display name of the session: the member's name, or the generic one for the shared password. */

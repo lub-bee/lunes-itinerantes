@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Permissions from '@/components/Permissions'
+import { ChoixQualite } from '@/components/Qualite'
 
 // The secret page of the permissions (lib/droits.ts, the Grimoire's rows of the shared tab): not in the book, reachable by its address only. The
 // middleware lets only testers in (TESTEURS_DISCORD_IDS); anyone else reads /permissions/scellee, answered 403.
@@ -26,6 +27,7 @@ export default function PagePermissions() {
           absente : le geste reste fermé. Seules les lignes « Grimoire » de l’onglet « Permissions » se règlent ici ; celles de la Table n’y paraissent pas.
         </p>
         <Permissions />
+        <ChoixQualite />
       </article>
     </main>
   )

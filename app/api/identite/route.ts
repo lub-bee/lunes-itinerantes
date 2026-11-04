@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
-import { libreDe, poserNom, qualitesDe, rangsDe, REFUS_AMI, REFUS_SCEAU, trouverMembre, trouverParDiscord } from '@/lib/identite'
+import { libreDe, poserNom, qualitesDe, rangsDe, rangsReels, REFUS_AMI, REFUS_SCEAU, trouverMembre, trouverParDiscord } from '@/lib/identite'
 import { AMI, droitsDe, rangsEcrits } from '@/lib/droits'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 
@@ -10,6 +10,8 @@ import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 // A Discord seal with a v3n script: the name is linked to the seal's ID (an empty « Discord ID »), or,
 // with `creer: true` after the page's confirmation, a row is appended. Lot 1b (v3p): the seal's ranks (its Discord
 // roles mapped by the Rôles tab) are written in « Rôle » of that row; a seal holding « Ami des Lunes » never links.
+// Lot 1c: a tester viewing « en la qualité de » some ranks is refused or let through as those ranks would be (Ami des
+// Lunes), but a link or creation writes their REAL ranks in « Rôle », under their real seal (ID, pseudo).
 
 export const dynamic = 'force-dynamic'
 
@@ -42,12 +44,16 @@ export async function POST(req: NextRequest) {
   // A Discord seal with a script that links seals (v3n): the typed name is linked to the seal's ID — the
   // ID comes from the signed session only, never from the page —, or a row is created after a confirmation.
   if (s.genre === 'discord' && lu.sceauxLus) {
+    // « Ami des Lunes » comes from Discord now (the Rôles tab), not from the Membres « Rôle » cell. A tester viewing
+    // as one (lot 1c) holds no name (lib/identite.ts), so is answered as an unlinked Ami first.
+    const ami = rangsDe(s, lu.droits).some((r) => r.cle === AMI)
+    if (ami && s.qualite) return refus(REFUS_AMI, 403)
     // A session already linked by its ID is not offered a typed name.
     const parId = trouverParDiscord(s.membre.id, membres)
     if (parId) return refus(`Ton sceau te nomme déjà : ${parId.nom}.`, 409)
-    // « Ami des Lunes » comes from Discord now (the Rôles tab), not from the Membres « Rôle » cell.
-    const rangs = rangsDe(s, lu.droits)
-    if (rangs.some((r) => r.cle === AMI)) return refus(REFUS_AMI, 403)
+    if (ami) return refus(REFUS_AMI, 403)
+    // What « Rôle » is written with: the seal's own ranks, never the ranks a tester views the book as.
+    const rangs = rangsReels(s, lu.droits)
     const m = trouverMembre(tape, membres)
     if (m && !libreDe(m, s.membre.id)) return refus(REFUS_SCEAU, 403)
     if (!m && creer !== true)

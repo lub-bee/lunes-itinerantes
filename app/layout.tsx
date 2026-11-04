@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { IM_Fell_English, IM_Fell_English_SC, Mrs_Saint_Delafield, UnifrakturMaguntia } from 'next/font/google'
 import './globals.css'
+import { BandeauQualite } from '@/components/Qualite'
 
 const gothique = UnifrakturMaguntia({ weight: '400', subsets: ['latin'], variable: '--font-gothique' })
 const texte = IM_Fell_English({ weight: '400', style: ['normal', 'italic'], subsets: ['latin'], variable: '--font-texte' })
@@ -19,7 +20,11 @@ export const viewport: Viewport = { themeColor: '#1a110b', width: 'device-width'
 export default function Racine({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={`${gothique.variable} ${texte.variable} ${capitales.variable} ${plume.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Testers only (lot 1c): « Tu portes le rang de… » while viewing as chosen ranks; nothing for anyone else. */}
+        <BandeauQualite />
+      </body>
     </html>
   )
 }
