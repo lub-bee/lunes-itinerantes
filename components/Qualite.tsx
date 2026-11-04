@@ -97,7 +97,8 @@ const AUCUN = '__aucun__'
 
 export function ChoixQualite() {
   const [info, setInfo] = useState<Info | null>(null)
-  const [coches, setCoches] = useState<Set<string>>(new Set())
+  // « Membre » checked from the start: every real rank holder carries it (unchecked only to see the refusal).
+  const [coches, setCoches] = useState<Set<string>>(new Set(['membre']))
   const [aucun, setAucun] = useState(false)
   const [enCours, setEnCours] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
