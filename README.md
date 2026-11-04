@@ -265,7 +265,7 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   (`C-YYMMDD-XXXXX`, JST day) and forwards it to the Apps Script with `COMMANDES_JETON`. The script
   URL and token never reach the browser. Without them, sealing answers an in-character error.
 - Code: `components/Commande.tsx` (scroll, sheet, mobile roll, state), `lib/commande.ts` (maths shared
-  with the route), `app/api/commande/route.ts`, `scripts/apps-script/Grimoire.gs`; styles in the
+  with the route), `app/api/commande/route.ts`, `scripts/apps-script/grimoire.gs`; styles in the
   *Order mode* section of `app/globals.css`.
 
 ### Rows written in the sheet
@@ -283,14 +283,14 @@ vendu* are then its share. An older script, which does not know that column, sti
 *Prix réel vendu*. *Total mini / Total idéal / Prix réel vendu / Statut* are per line (qty × floor, qty × ceiling, line
 total, line status: `à perte`, `honnête`, `excellente affaire`, `négocié`); *Total commande* repeats
 the order total on each of its rows. To match another layout, edit only the `COLONNES` array at the
-top of `Grimoire.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
+top of `grimoire.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
 `prixIdeal`, `sousPlancher` and the order-level `totalMini`, `totalIdeal`, `statut`.
 
 ### Setting up the orders sheet
 
 1. Make a copy of the sheet that should receive the orders (or a new sheet).
 2. In it: *Extensions → Apps Script*. Replace the editor's content with
-   `scripts/apps-script/Grimoire.gs`, save.
+   `scripts/apps-script/grimoire.gs`, save.
 3. *Project Settings (gear) → Script properties → Add property*: `JETON` = a long random value
    (`openssl rand -hex 24`). Keep it for step 7.
 4. Optional: run the `essai` function once from the editor (it asks for the sheet permission and
@@ -332,7 +332,7 @@ Lunes » is not a member at all: no signing, not listed, no share.
 ## Missives, the chest and the workshop (v3)
 
 Everything lives in the same Google Sheet as the orders, read and written through the same Apps Script
-(`scripts/apps-script/Grimoire.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
+(`scripts/apps-script/grimoire.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
 pages say the registre is not linked yet, there is no ex-libris, and the price ledger behaves exactly as
 in v2. When the sheet cannot be read, the pages say so in character, with « renvoyer le coursier ».
 
@@ -455,7 +455,7 @@ sessions hold no rank. The Livre du Trésor and the points open only with the «
 
 Headers are found by name (case, accents and punctuation ignored), in any order; older names are still
 read (below); a missing column is added at the end of row 1 on the first write. The mapping of every tab
-is `ONGLETS` at the top of `Grimoire.gs`.
+is `ONGLETS` at the top of `grimoire.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
@@ -496,7 +496,7 @@ refused by the script itself (`already closed`), under the lock.
 | `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
 | `livre` (v3l) | `{ livre: { fr, valeur } }` | `Livre` (« Ombre » / empty) on the article's Catalogues row (column added at the end of row 1 if missing) and on every Recettes row of the product. From v3l, `vente` and `recette` also write `livre` when sent `livre: 'Ombre'`; cache key `registre-v3l` |
 | `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
-| `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `Grimoire.gs`; cache key `registre-v3p` |
+| `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `grimoire.gs`; cache key `registre-v3p` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
@@ -564,7 +564,7 @@ that server's copy.
    `Nom` · `Ressource,Nom EN,Origine,Prix courant,Bonne affaire,Note` (a tab already imported with
    `Catégorie`/`Valeur` keeps working) · `Produit,Ingrédient,Quantité,Rendement,Artisan,Note`.
    The **Missives** and **Mouvements** tabs may stay empty (or absent): the script writes their headers.
-2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/Grimoire.gs`, save.
+2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/grimoire.gs`, save.
 3. *Deploy → Manage deployments →* the existing web app → ✏️ edit → *Version: **New version*** → Deploy.
    The `/exec` URL stays the same, so nothing changes on Vercel. (A *New deployment* would make a new URL.)
 4. Optional: run `essai` once from the editor (creates the missing tabs' headers and logs the row counts).
@@ -573,7 +573,7 @@ that server's copy.
 
 ### Testing locally
 
-A mock of the web app that runs the real `Grimoire.gs` against an in-memory sheet (fake
+A mock of the web app that runs the real `grimoire.gs` against an in-memory sheet (fake
 `SpreadsheetApp`, `LockService`, `ContentService`, `PropertiesService`) lives outside the repo
 (`/Volumes/PERSO/dev/_atelier/caravane/v3/mock-script.js`, `MOCK_DELAI` = ms per call). Run it, then start
 the grimoire with `COMMANDES_SCRIPT_URL=http://localhost:3931/exec COMMANDES_JETON=jeton-essai`.

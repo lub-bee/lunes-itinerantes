@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 const refus = (message: string, status: number) => NextResponse.json({ ok: false, message }, { status })
 
 const SCELLE = 'Ce registre est scellé : seuls les testeurs de la caravane en brisent le cachet.'
-const VIEUX_SCRIPT = 'Le scribe du registre ne connaît pas encore les rangs : qu’on colle la v3p du script (Grimoire.gs) dans la feuille, puis qu’on réessaie.'
+const VIEUX_SCRIPT = 'Le scribe du registre ne connaît pas encore les rangs : qu’on colle la v3p du script (grimoire.gs) dans la feuille, puis qu’on réessaie.'
 const SANS_RANG = 'L’onglet « Rôles » ne nomme aucun rang : qu’on y inscrive d’abord chaque rang et l’ID de son rôle Discord (« Membre » le premier).'
 
 /** The tester's Discord session, or null. */

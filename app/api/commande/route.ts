@@ -6,7 +6,7 @@ import { oublierRegistre } from '@/lib/registre'
 import { calculerLigne, centimes, poidsLigne, repartirGlobal, statut, totaux, uniteLigne, type CommandeEnvoyee } from '@/lib/commande'
 
 // Seals an order: validates it, recomputes every total from the catalogue, and hands it to the
-// Google Apps Script web app that writes it in the "Commandes" sheet (scripts/apps-script/Grimoire.gs).
+// Google Apps Script web app that writes it in the "Commandes" sheet (scripts/apps-script/grimoire.gs).
 // COMMANDES_SCRIPT_URL and COMMANDES_JETON stay on the server.
 
 export const dynamic = 'force-dynamic'
