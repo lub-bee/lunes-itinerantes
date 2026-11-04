@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     nom: nomDe(s),
     discord: s.genre === 'discord',
-    patriarche: s.genre === 'discord' && s.membre.patriarche,
+    patriarche: Boolean(qui?.roles.includes('patriarche')),
     vendeur,
     relie,
     identite: qui?.nom ?? null,

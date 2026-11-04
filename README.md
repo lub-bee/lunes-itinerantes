@@ -24,8 +24,6 @@ The whole site sits behind "the seal", checked by `middleware.ts` (`lib/sceau.ts
 | `DISCORD_CLIENT_ID` | Discord application's client ID. |
 | `DISCORD_CLIENT_SECRET` | Discord application's client secret. |
 | `DISCORD_GUILD_ID` | ID of the caravan's Discord server. |
-| `DISCORD_ROLE_IDS` | Comma-separated role IDs that open the grimoire (any one is enough). |
-| `DISCORD_ROLE_PATRIARCHE` | Optional — role ID marking a Patriarch (adds the Patriarche role to the seal's roles). |
 | `TESTEURS_DISCORD_IDS` | Optional — comma-separated Discord user IDs of the testers: every permission, and the secret page `/permissions` (never from the sheet). |
 | `SCEAU_MOT_DE_PASSE_COMMUN` | Optional — `1` keeps the shared password alongside Discord. |
 | `CATALOGUE_CSV_URL` | Optional — published CSV of the price sheet (see below). |
@@ -38,9 +36,12 @@ A password session lasts 30 days. Local dev: copy `.env.example` to `.env.local`
 
 How it works: OAuth2 authorization code, scopes `identify guilds.members.read`, no bot. Back from
 Discord (`/api/discord/retour`), the server reads the visitor's membership of `DISCORD_GUILD_ID`
-(`GET /users/@me/guilds/{guild}/member`) and lets them in only if they hold one of `DISCORD_ROLE_IDS`.
+(`GET /users/@me/guilds/{guild}/member`) and lets them in only if their ranks may « Entrer dans le grimoire »
+(lot 1b: their Discord roles mapped by the sheet's **Rôles** tab, the `entrer` row of **Permissions**; see
+*Permissions*), or if they are a tester. The tabs unreadable (script down for more than ten minutes, older
+script): nobody else enters (« Le registre des rangs reste fermé… »).
 The session cookie (signed with `CARAVANE_SECRET`) holds the Discord id, the display name (server
-nickname, else Discord display name, else username), the Patriarch flag and a 24 h expiry. When it
+nickname, else Discord display name, else username), the Discord role IDs and a 24 h expiry. When it
 expires, a returning visitor is sent back through Discord with `prompt=none`, which comes straight back
 if they still hold the role (seamless) and refuses them in character if the role was taken away.
 Closing the grimoire (iron latch, or the key on mobile) forgets the session.
@@ -56,9 +57,11 @@ Pseudo Discord). « Membre » is not a rank: such rows sit « Sans rang » until
 everything again under its lock (action `membre`). A seal already linked is not offered a typed name, and no
 seal ever reaches a row holding an ID by its nickname. Password sessions sign an existing name as before and
 never link nor create. With an older script (no Discord columns read) everything behaves as before (the
-nickname rule). The access role can be a single Discord role (`DISCORD_ROLE_IDS` = its ID).
-`DISCORD_ROLE_PATRIARCHE` only feeds the rights (`lib/droits.ts`); the pay's Patriarchs come from the Membres
-« Rôle » (or the pay settings' explicit list, when filled).
+nickname rule). Lot 1b (v3p): at each seal and at each link the script writes the member's ranks in the
+Membres **Rôle** column (their ranks other than « Membre », else « Membre »; joined by « , »); nobody edits it by
+hand. It only serves the listings of other members (ranks page, the pay's Patriarchs, the Table); a signed-in
+member's own rights come from their Discord roles. « Ami des Lunes » (a Discord role mapped in Rôles) never links
+nor signs.
 
 On the order sheet the seller is the session's name (fixed; `/api/commande` reads it from the cookie,
 never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name; once that name is
@@ -81,15 +84,13 @@ refused or failed, tampered request.
    opened on, so it must be listed exactly.
 4. In Discord: *User Settings → Advanced → Developer Mode* ON. Then right-click the caravan's server
    icon → **Copy Server ID** (= `DISCORD_GUILD_ID`); *Server Settings → Roles* → right-click each role
-   that may enter → **Copy Role ID** (= `DISCORD_ROLE_IDS`, comma-separated), and the Patriarchs' role
-   if wanted (= `DISCORD_ROLE_PATRIARCHE`).
+   of the caravan → **Copy Role ID**, into the sheet's **Rôles** tab (one row per rank, the ID typed as text
+   with a leading apostrophe; « Membre » first: without it nobody enters).
 5. On Vercel (choose the environments when asked):
    ```
    vercel env add DISCORD_CLIENT_ID
    vercel env add DISCORD_CLIENT_SECRET
    vercel env add DISCORD_GUILD_ID
-   vercel env add DISCORD_ROLE_IDS          # e.g. 112233445566778899,998877665544332211
-   vercel env add DISCORD_ROLE_PATRIARCHE   # optional
    vercel env add SCEAU_MOT_DE_PASSE_COMMUN # optional: 1 = keep the shared password during the transition
    ```
    then redeploy. `CARAVANE_SECRET` must be set (it already is for the password).
@@ -264,7 +265,7 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   (`C-YYMMDD-XXXXX`, JST day) and forwards it to the Apps Script with `COMMANDES_JETON`. The script
   URL and token never reach the browser. Without them, sealing answers an in-character error.
 - Code: `components/Commande.tsx` (scroll, sheet, mobile roll, state), `lib/commande.ts` (maths shared
-  with the route), `app/api/commande/route.ts`, `scripts/apps-script/commandes.gs`; styles in the
+  with the route), `app/api/commande/route.ts`, `scripts/apps-script/Grimoire.gs`; styles in the
   *Order mode* section of `app/globals.css`.
 
 ### Rows written in the sheet
@@ -282,14 +283,14 @@ vendu* are then its share. An older script, which does not know that column, sti
 *Prix réel vendu*. *Total mini / Total idéal / Prix réel vendu / Statut* are per line (qty × floor, qty × ceiling, line
 total, line status: `à perte`, `honnête`, `excellente affaire`, `négocié`); *Total commande* repeats
 the order total on each of its rows. To match another layout, edit only the `COLONNES` array at the
-top of `commandes.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
+top of `Grimoire.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
 `prixIdeal`, `sousPlancher` and the order-level `totalMini`, `totalIdeal`, `statut`.
 
 ### Setting up the orders sheet
 
 1. Make a copy of the sheet that should receive the orders (or a new sheet).
 2. In it: *Extensions → Apps Script*. Replace the editor's content with
-   `scripts/apps-script/commandes.gs`, save.
+   `scripts/apps-script/Grimoire.gs`, save.
 3. *Project Settings (gear) → Script properties → Add property*: `JETON` = a long random value
    (`openssl rand -hex 24`). Keep it for step 7.
 4. Optional: run the `essai` function once from the editor (it asks for the sheet permission and
@@ -331,7 +332,7 @@ Lunes » is not a member at all: no signing, not listed, no share.
 ## Missives, the chest and the workshop (v3)
 
 Everything lives in the same Google Sheet as the orders, read and written through the same Apps Script
-(`scripts/apps-script/commandes.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
+(`scripts/apps-script/Grimoire.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
 pages say the registre is not linked yet, there is no ex-libris, and the price ledger behaves exactly as
 in v2. When the sheet cannot be read, the pages say so in character, with « renvoyer le coursier ».
 
@@ -410,17 +411,20 @@ missive pages, order sheet) forgets it. Every write re-checks the name against t
 whose server nickname is on the list arrives pre-signed. An unrecognized typed seller still works for
 orders as in v2.
 
-Permissions (Missions v2, lot 1; script v3o): the sheet's **Permissions** tab holds one row per gesture
-(Groupe, Geste, Clé) and one checkbox column per role (« Tout membre » opens a gesture to every signed member).
-`lib/droits.ts` keeps the defaults (used when the tab, a row or a column is missing), maps each action to its
-gesture (`GESTE_DE`) and checks it; the server checks every write and the Trésor's reads, the page hides what
-a member may not do (`/api/marchand` answers `droits`). The tab is edited from the secret page `/permissions`
-(testers only, `TESTEURS_DISCORD_IDS`; anyone else gets a sealed page, 403).
-A member's roles come from Discord: the **Rôles** tab (Rôle | ID du rôle Discord; type the IDs as text) maps
-a role name to a Discord role ID, and the seal keeps the member's role IDs. TRANSITION: while the Membres
-**Rôle** column exists, it is read only when none of the member's Discord roles is mapped (password sessions,
-seals made before lot 1, an empty Rôles tab). The Livre du Trésor and the points open only with the
-« tresor » gesture.
+Permissions (Missions v2, lots 1 and 1b; script v3p, contract `contrat-sheet-unique.md` § 5): the **Rôles** tab
+(Rôle | ID du rôle Discord, edited by hand, IDs typed as text) maps each rank to its Discord role; a member's
+ranks are those whose role their seal holds. The **Permissions** tab is shared with the Table: Outil | Geste |
+Clé | one checkbox column per rank label. The grimoire reads and writes only its rows (Outil « Grimoire »), never
+renames or moves a column, and appends a missing rank column at the end of row 1 when it writes. Unchecked, a
+missing row or a missing column = no. « Membre » is the prerequisite: without it, no gesture and no entry; with
+it, the union of the boxes of all one's ranks. Entry is the gesture `entrer`, checked at the Discord seal.
+`lib/droits.ts` keeps the defaults, which only seed the Grimoire's rows once (when the tab holds none and Rôles
+maps « Membre »: at the next seal, or from the secret page); a gesture added later arrives unchecked. It maps
+each action to its gesture (`GESTE_DE`) and checks it; the server checks every write and the Trésor's reads, the
+page hides what a member may not do (`/api/marchand` answers `droits`). A failed read grants nothing (the last
+good read is kept ten minutes for an outage); testers (`TESTEURS_DISCORD_IDS`) hold every gesture and the secret
+page `/permissions` (anyone else gets a sealed page, 403), where the Grimoire's rows are edited. Password
+sessions hold no rank. The Livre du Trésor and the points open only with the « tresor » gesture.
 
 ### The rules
 
@@ -451,7 +455,7 @@ seals made before lot 1, an empty Rôles tab). The Livre du Trésor and the poin
 
 Headers are found by name (case, accents and punctuation ignored), in any order; older names are still
 read (below); a missing column is added at the end of row 1 on the first write. The mapping of every tab
-is `ONGLETS` at the top of `commandes.gs`.
+is `ONGLETS` at the top of `Grimoire.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
@@ -492,6 +496,7 @@ refused by the script itself (`already closed`), under the lock.
 | `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
 | `livre` (v3l) | `{ livre: { fr, valeur } }` | `Livre` (« Ombre » / empty) on the article's Catalogues row (column added at the end of row 1 if missing) and on every Recettes row of the product. From v3l, `vente` and `recette` also write `livre` when sent `livre: 'Ombre'`; cache key `registre-v3l` |
 | `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
+| `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `Grimoire.gs`; cache key `registre-v3p` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
@@ -559,7 +564,7 @@ that server's copy.
    `Nom` · `Ressource,Nom EN,Origine,Prix courant,Bonne affaire,Note` (a tab already imported with
    `Catégorie`/`Valeur` keeps working) · `Produit,Ingrédient,Quantité,Rendement,Artisan,Note`.
    The **Missives** and **Mouvements** tabs may stay empty (or absent): the script writes their headers.
-2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/commandes.gs`, save.
+2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/Grimoire.gs`, save.
 3. *Deploy → Manage deployments →* the existing web app → ✏️ edit → *Version: **New version*** → Deploy.
    The `/exec` URL stays the same, so nothing changes on Vercel. (A *New deployment* would make a new URL.)
 4. Optional: run `essai` once from the editor (creates the missing tabs' headers and logs the row counts).
@@ -568,7 +573,7 @@ that server's copy.
 
 ### Testing locally
 
-A mock of the web app that runs the real `commandes.gs` against an in-memory sheet (fake
+A mock of the web app that runs the real `Grimoire.gs` against an in-memory sheet (fake
 `SpreadsheetApp`, `LockService`, `ContentService`, `PropertiesService`) lives outside the repo
 (`/Volumes/PERSO/dev/_atelier/caravane/v3/mock-script.js`, `MOCK_DELAI` = ms per call). Run it, then start
 the grimoire with `COMMANDES_SCRIPT_URL=http://localhost:3931/exec COMMANDES_JETON=jeton-essai`.

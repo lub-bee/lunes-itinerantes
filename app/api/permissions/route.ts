@@ -1,20 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
 import { estTesteur } from '@/lib/testeurs'
-import { cleRole, GESTES, TOUT_MEMBRE, type Geste, type TablePermissions } from '@/lib/droits'
+import { defautDe, GESTES, MEMBRE, rangsDuSceau, type Geste, type TablePermissions } from '@/lib/droits'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
 
-// The secret page's table (lib/droits.ts). GET: the Permissions tab as the grimoire reads it (the defaults
-// where a row or a column is missing), the Rôles tab, and the tester's own Discord roles. POST { cases }: the
-// whole tab rewritten by the script (v3o 'permissions'). Testers only (TESTEURS_DISCORD_IDS): the script sees
-// the shared token alone, so this route is the only guard.
+// The secret page's table (lib/droits.ts): the Grimoire's rows of the shared Permissions tab (never the Table's),
+// one column per rank of the Rôles tab. GET: the rows as the grimoire reads them; a box the sheet does not hold yet
+// (a missing row, a rank without a column) is shown as proposed: the defaults while the tab holds no Grimoire row,
+// else unchecked. POST { cases }: the Grimoire's rows written by the script (v3p 'permissions': each row's cells,
+// missing rows appended, missing rank columns appended at the end of row 1; nothing else touched).
+// Testers only (TESTEURS_DISCORD_IDS): the script sees the shared token alone, so this route is the only guard.
 
 export const dynamic = 'force-dynamic'
 
 const refus = (message: string, status: number) => NextResponse.json({ ok: false, message }, { status })
 
 const SCELLE = 'Ce registre est scellé : seuls les testeurs de la caravane en brisent le cachet.'
-const VIEUX_SCRIPT = 'Le scribe du registre ne connaît pas encore les permissions : qu’on colle la v3o du script dans la feuille, puis qu’on réessaie.'
+const VIEUX_SCRIPT = 'Le scribe du registre ne connaît pas encore les rangs : qu’on colle la v3p du script (Grimoire.gs) dans la feuille, puis qu’on réessaie.'
+const SANS_RANG = 'L’onglet « Rôles » ne nomme aucun rang : qu’on y inscrive d’abord chaque rang et l’ID de son rôle Discord (« Membre » le premier).'
 
 /** The tester's Discord session, or null. */
 async function testeur(req: NextRequest) {
@@ -22,17 +25,28 @@ async function testeur(req: NextRequest) {
   return s.valide && s.genre === 'discord' && estTesteur(s.membre.id) ? s.membre : null
 }
 
+/** A box as the page starts with it: the sheet's when it holds it, else the proposal. */
+function depart(t: TablePermissions) {
+  return Object.fromEntries(
+    GESTES.map((g) => [
+      g.cle,
+      Object.fromEntries(t.colonnes.map((c) => [c.cle, t.ecrites[g.cle] && c.dansFeuille ? t.cases[g.cle][c.cle] : !t.semees && defautDe(g, c.cle)])),
+    ]),
+  ) as Record<Geste, Record<string, boolean>>
+}
+
 function vue(t: TablePermissions, moi: { id: string; nom: string; roles?: string[] }) {
-  const parId = new Map(t.roles.filter((r) => r.id).map((r) => [r.id, r.nom]))
+  const rangs = rangsDuSceau(moi.roles, t)
   return {
+    lu: t.lu,
+    semees: t.semees,
     colonnes: t.colonnes,
-    cases: t.cases,
+    cases: depart(t),
     ecrites: t.ecrites,
     inconnues: t.inconnues,
-    lu: t.lu,
-    onglet: t.onglet,
+    orphelines: t.orphelines,
     roles: t.roles,
-    moi: { nom: moi.nom, roles: (moi.roles ?? []).flatMap((id) => (parId.has(id) ? [parId.get(id)!] : [])), sceauAncien: !moi.roles },
+    moi: { nom: moi.nom, rangs: rangs.map((r) => r.nom), membre: rangs.some((r) => r.cle === MEMBRE), sceauAncien: !moi.roles },
   }
 }
 
@@ -67,29 +81,27 @@ export async function POST(req: NextRequest) {
   }
   const t = lu.droits
   if (!t.lu) return refus(VIEUX_SCRIPT, 409)
-  // Every column the grimoire knows (Tout membre, the roles, those the sheet names), in the tab's order;
-  // every gesture's row (a box the page did not send keeps its current value); rows of unknown keys kept.
-  const colonnes = t.colonnes
-  const valeurs = (g: Geste) =>
-    Object.fromEntries(colonnes.map((c) => [c.nom, typeof brut[g]?.[c.cle] === 'boolean' ? (brut[g][c.cle] as boolean) : t.cases[g][c.cle]]))
-  const lignes = [
-    ...GESTES.map((g) => ({ groupe: g.groupe, geste: g.libelle, cle: g.cle, valeurs: valeurs(g.cle) })),
-    ...t.inconnues.map((l) => ({
-      ...l,
-      valeurs: Object.fromEntries(colonnes.map((c) => [c.nom, Object.entries(l.valeurs).some(([h, v]) => cleRole(h) === c.cle && v)])),
-    })),
-  ]
+  if (!t.colonnes.length) return refus(SANS_RANG, 409)
+  // Every gesture's row, every rank's cell (a box the page did not send keeps what the page started with).
+  const avant = depart(t)
+  const lignes = GESTES.map((g) => ({
+    cle: g.cle,
+    geste: g.libelle,
+    valeurs: Object.fromEntries(t.colonnes.map((c) => [c.nom, typeof brut[g.cle]?.[c.cle] === 'boolean' ? (brut[g.cle][c.cle] as boolean) : avant[g.cle][c.cle]])),
+  }))
   try {
-    const r = await ecrireRegistre('permissions', {
-      droits: { roles: colonnes.map((c) => c.nom), rolesDiscord: colonnes.filter((c) => c.cle !== TOUT_MEMBRE).map((c) => c.nom), lignes },
-    })
+    const r = (await ecrireRegistre('permissions', { droits: { rangs: t.colonnes.map((c) => c.nom), lignes } })) as Awaited<ReturnType<typeof ecrireRegistre>> & {
+      ajoutees?: number
+      colonnes?: string[]
+    }
     const apres = r.lu ?? (await lireRegistre(r.version ?? 0))
-    console.log(`[permissions] ${lignes.length} rows written by ${moi.nom} (${moi.id})${(r as { rolesCree?: boolean }).rolesCree ? ', Rôles tab created' : ''}`)
+    const colonnes = r.colonnes ?? []
+    console.log(`[permissions] Grimoire rows written by ${moi.nom} (${moi.id}): ${r.ajoutees ?? 0} appended, columns added: ${colonnes.join(', ') || 'none'}`)
     return NextResponse.json({
       ok: true,
-      message: (r as { rolesCree?: boolean }).rolesCree
-        ? 'Les permissions sont gravées. L’onglet « Rôles » est né dans la feuille : qu’on y inscrive l’ID de chaque rôle Discord.'
-        : 'Les permissions sont gravées au registre. Chacun verra ses gestes changer à sa prochaine page.',
+      message:
+        'Les permissions sont gravées au registre. Chacun verra ses gestes changer à sa prochaine page (l’entrée, à son prochain sceau).' +
+        (colonnes.length ? ` Colonne${colonnes.length > 1 ? 's' : ''} ajoutée${colonnes.length > 1 ? 's' : ''} au bout de l’onglet : ${colonnes.join(', ')}.` : ''),
       donnees: vue(apres.droits, moi),
       version: apres.version,
     })

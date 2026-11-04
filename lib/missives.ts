@@ -578,9 +578,10 @@ export type Onglets = {
   points?: Record<string, unknown>[]
   /** Standing missions (v3n, with the missions' tabs). */
   permanentes?: Record<string, unknown>[]
-  /** The Rôles and Permissions tabs (lib/droits.ts), from a v3o script asked with `permissions: true`. */
+  /** The Rôles tab and the Grimoire's rows of Permissions with its row 1 (lib/droits.ts), from a v3p script asked with `rangs: true`. */
   roles?: Record<string, unknown>[]
   permissions?: Record<string, unknown>[]
+  permissionsEntete?: unknown[]
   /** The pay's tabs (lib/paie.ts), from a v3n script asked with `paie: true`. */
   reglagesPaie?: Record<string, unknown>[]
   factures?: Record<string, unknown>[]

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import Permissions from '@/components/Permissions'
 
-// The secret page of the permissions (lib/droits.ts): not in the book, reachable by its address only. The
+// The secret page of the permissions (lib/droits.ts, the Grimoire's rows of the shared tab): not in the book, reachable by its address only. The
 // middleware lets only testers in (TESTEURS_DISCORD_IDS); anyone else reads /permissions/scellee, answered 403.
 
 export const metadata: Metadata = { title: 'Le registre des permissions', robots: { index: false, follow: false } }
@@ -22,8 +22,8 @@ export default function PagePermissions() {
           <div className="perm-sous-titre">The Caravan’s Permissions</div>
         </header>
         <p className="perm-intro">
-          Chaque case cochée ouvre un geste à un rôle. « Tout membre » l’ouvre à quiconque a signé le registre, rang ou pas. Un rôle sans case cochée n’a aucun geste réservé. Les livres des Marchandises, des Recettes, des Missives et de la
-          Caravane restent ouverts à tous : seuls les gestes se règlent, et l’ouverture des livres de l’Intendance et du Trésor.
+          Chaque case cochée ouvre un geste à un rang, entrer dans le grimoire compris. Sans le rang « Membre », nul n’entre ni n’agit ; avec lui, chacun tient les gestes de tous ses rangs réunis. Une case décochée, une ligne ou une colonne
+          absente : le geste reste fermé. Seules les lignes « Grimoire » de l’onglet « Permissions » se règlent ici ; celles de la Table n’y paraissent pas.
         </p>
         <Permissions />
       </article>

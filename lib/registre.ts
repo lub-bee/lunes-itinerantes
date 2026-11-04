@@ -12,7 +12,7 @@ import { revalidateTag, unstable_cache } from 'next/cache'
 import { lireOnglets, type Onglets } from './missives'
 import { lireMissions } from './missions'
 import { lirePaie } from './paie'
-import { lirePermissions } from './droits'
+import { lirePermissions, MEMBRE, semis } from './droits'
 
 export const ETIQUETTE_REGISTRE = 'registre'
 /** Seconds a read of the sheet is reused. */
@@ -53,9 +53,10 @@ type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: bo
 export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: null, cache: null }
 
 // `missions: true` asks a v3m script for the missions' tabs too (lib/missions.ts), `paie: true` a v3n script
-// for the pay's (lib/paie.ts), `discord: true` for the members' Discord ID (lib/identite.ts), `permissions: true` a
-// v3o script for the Rôles and Permissions tabs (lib/droits.ts); an older script ignores them.
-const DRAPEAUX = { missions: true, paie: true, discord: true, permissions: true }
+// for the pay's (lib/paie.ts), `discord: true` for the members' Discord ID (lib/identite.ts), `rangs: true` a
+// v3p script for the Rôles tab and the Grimoire's rows of Permissions (lib/droits.ts), and its 'membre' writing the
+// ranks in « Rôle »; an older script ignores them (then nothing is granted but to testers).
+const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true }
 
 async function lireScript(): Promise<Lecture> {
   const r = await appelerScript<ReponseLire>({ action: 'lire', ...DRAPEAUX })
@@ -63,10 +64,15 @@ async function lireScript(): Promise<Lecture> {
   return { onglets: r.onglets, version: r.version ?? 0 }
 }
 
-const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3o'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3p'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
+
+/** The last read that succeeded on this instance, kept for a short outage of the script (lireRegistreOuSecours). */
+let dernierBon: (Lecture & { le: number }) | null = null
+/** How long the last good read stands in for a failed one (ms). */
+const SECOURS = 10 * 60 * 1000
 
 /** A write that does not answer with the tabs (a sealed order): the next read goes to the sheet. */
 export function oublierRegistre() {
@@ -92,7 +98,35 @@ export async function lireRegistre(versionVue = 0) {
       garder(l)
     }
   }
+  dernierBon = { ...l, le: Date.now() }
   return lu(l)
+}
+
+/**
+ * A read straight from the script (never the shared copy, which may lag 45 s behind a hand edit of the sheet): the
+ * Discord seal asks it before refusing anyone, so a rank just mapped in « Rôles » opens the door at once.
+ */
+export async function lireRegistreFrais() {
+  const l = await lireScript()
+  garder(l)
+  dernierBon = { ...l, le: Date.now() }
+  return lu(l)
+}
+
+/**
+ * lireRegistre, or — when the script cannot be reached — this instance's last good read if it is less than ten
+ * minutes old (contract § 5: a short outage may be bridged, a failed read never grants). Throws otherwise.
+ */
+export async function lireRegistreOuSecours(versionVue = 0) {
+  try {
+    return await lireRegistre(versionVue)
+  } catch (e) {
+    if (dernierBon && Date.now() - dernierBon.le < SECOURS) {
+      console.error('[registre] script unreachable, last good read used', e)
+      return lu(dernierBon)
+    }
+    throw e
+  }
 }
 
 /** Every tab typed: the registre's, the missions' and the pay's (the missions read their shares from the pay's settings). */
@@ -111,4 +145,19 @@ export async function ecrireRegistre(action: string, charge: Record<string, unkn
   const l = { onglets: r.onglets, version: r.version ?? 0 }
   garder(l)
   return { ...r, lu: lu(l) }
+}
+
+type Registre = Awaited<ReturnType<typeof lireRegistre>>
+
+/**
+ * The Grimoire's rows of the Permissions tab seeded once with the defaults (contract § 5), when the tab holds
+ * none yet and the Rôles tab maps « Membre » to a Discord role (else the open gestures would be seeded on no
+ * column). The script writes nothing if another call seeded first. Answers the registre as it now is.
+ */
+export async function semerSiBesoin(l: Registre): Promise<Registre> {
+  const t = l.droits
+  if (!t.lu || t.semees || !t.roles.some((r) => r.cle === MEMBRE && r.id)) return l
+  const r = await ecrireRegistre('permissions', { droits: { semer: true, rangs: t.colonnes.map((c) => c.nom), lignes: semis(t) } })
+  console.log(`[permissions] seeded: ${(r as { seme?: boolean }).seme ? `${(r as { ajoutees?: number }).ajoutees ?? 0} rows` : 'already there'}`)
+  return r.lu ?? (await lireRegistre(r.version ?? 0))
 }

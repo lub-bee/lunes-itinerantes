@@ -1,6 +1,7 @@
 // Session "seal". Two ways in:
-// - Discord (when DISCORD_* are set): a member of the caravan's guild holding one of the allowed
-//   roles. The cookie holds a signed record (id, display name, patriarch flag, role IDs, 24 h expiry).
+// - Discord (when DISCORD_* are set): a member of the caravan's guild whose ranks (their Discord roles mapped by
+//   the sheet's « Rôles » tab) may « Entrer dans le grimoire » (lib/droits.ts, checked at /api/discord/retour). The
+//   cookie holds a signed record (id, display name, role IDs, 24 h expiry).
 // - The shared password (when Discord is not configured, or alongside it with
 //   SCEAU_MOT_DE_PASSE_COMMUN=1): the cookie holds HMAC(secret, password), so changing the
 //   password breaks every such seal.
@@ -44,7 +45,8 @@ export function egaux(a: string, b: string): boolean {
 
 export function discordConfigure(): boolean {
   const e = process.env
-  return Boolean(e.DISCORD_CLIENT_ID && e.DISCORD_CLIENT_SECRET && e.DISCORD_GUILD_ID && e.DISCORD_ROLE_IDS && e.CARAVANE_SECRET)
+  // No role list here (lot 1b): who may enter is the sheet's « Entrer dans le grimoire » row.
+  return Boolean(e.DISCORD_CLIENT_ID && e.DISCORD_CLIENT_SECRET && e.DISCORD_GUILD_ID && e.CARAVANE_SECRET)
 }
 
 export function sceauConfigure(): boolean {
@@ -103,10 +105,11 @@ export async function verifier<T>(usage: string, signe: string | undefined): Pro
 }
 
 /**
- * `roles`: the member's Discord role IDs in the caravan's guild, as read at the seal (lot 1; mapped to the
- * grimoire's roles by the sheet's « Rôles » tab, lib/droits.ts). Absent from a seal made before lot 1.
+ * `roles`: the member's Discord role IDs in the caravan's guild, as read at the seal (mapped to the grimoire's
+ * ranks by the sheet's « Rôles » tab, lib/droits.ts). Absent from a seal made before lot 1 (no rank until renewed).
+ * `patriarche`: written by seals made before lot 1b (DISCORD_ROLE_PATRIARCHE), never read any more.
  */
-export type Membre = { id: string; nom: string; patriarche: boolean; roles?: string[]; exp: number }
+export type Membre = { id: string; nom: string; patriarche?: boolean; roles?: string[]; exp: number }
 
 /* ── Who is at the door ────────────────────────────────────── */
 

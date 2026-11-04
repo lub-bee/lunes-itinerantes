@@ -11,6 +11,7 @@ type Etat = 'repos' | 'essai' | 'refus' | 'ouvert'
 const REFUS: Record<string, string> = {
   membre: "Ce sceau n'est pas celui de la caravane : Khajiit ne te connaît pas, voyageur.",
   rang: "La caravane te connaît, mais ton rang n'ouvre pas ce grimoire. Parle aux Patriarches.",
+  registre: "Le registre des rangs reste fermé pour l'heure : nul ne peut lire ton rang. Réessaie plus tard, ami.",
   discord: "Le sceau n'a pas été présenté. La serrure reste close.",
   ruse: 'La serrure a senti une ruse. Recommence, ami.',
 }

@@ -6,7 +6,7 @@
 import type { NextResponse } from 'next/server'
 import { cle } from './missives'
 import { lireSession, signer, verifier, type Session } from './sceau'
-import { PERMISSIONS_DEFAUT, rolesDuMembre, type Role, type TablePermissions } from './droits'
+import { rangsDuSceau, type Role, type TablePermissions } from './droits'
 import { estTesteur } from './testeurs'
 
 export const COOKIE_NOM = 'caravane_nom'
@@ -19,17 +19,17 @@ type Membre = { nom: string; role: string; discord?: string; pseudo?: string }
 export const REFUS_SCEAU = 'Ce nom porte déjà le sceau d’un autre marchand.'
 
 /**
- * `roles`: the member's roles' keys (lib/droits.ts: their Discord roles, else the Membres « Rôle » cell);
- * `origine`: where they came from; `testeur`: a Discord seal listed in TESTEURS_DISCORD_IDS (every permission).
+ * `roles`: the keys of the ranks of the seal (lib/droits.ts: the Discord roles mapped by the Rôles tab, never the
+ * Membres « Rôle » cell; none for a password session); `testeur`: a Discord seal listed in TESTEURS_DISCORD_IDS.
  */
-export type Identite = { nom: string; roles: Role[]; source: 'discord' | 'signature'; testeur: boolean; origine: 'discord' | 'feuille' }
+export type Identite = { nom: string; roles: Role[]; source: 'discord' | 'signature'; testeur: boolean }
 
 
 /** A valid session's tester flag: a Discord seal whose user ID is listed (never a password session). */
 export const testeurDe = (s: Session) => s.valide && s.genre === 'discord' && estTesteur(s.membre.id)
 
-/** What the registre gives identite(): the members, whether seals are linked by ID (v3n), the permissions (v3o). */
-type Lu = { membres: Membre[]; sceauxLus?: boolean; droits?: TablePermissions }
+/** What the registre gives identite(): the members, whether seals are linked by ID (v3n), the ranks and permissions (v3p). */
+type Lu = { membres: Membre[]; sceauxLus?: boolean; droits: TablePermissions }
 
 export function trouverMembre(nom: string, membres: Membre[]): Membre | null {
   const k = cle(nom)
@@ -49,11 +49,12 @@ export const libreDe = (m: Membre, id: string) => !m.discord || m.discord === id
 
 export const REFUS_AMI = 'Un ami des Lunes ne signe pas le registre de la caravane.'
 
-/** A member's roles and tester flag under this session (lib/droits.ts rolesDuMembre). */
-export function qualitesDe(m: { role: string }, s: Session, table: TablePermissions = PERMISSIONS_DEFAUT) {
-  const discord = s.valide && s.genre === 'discord' ? s.membre : null
-  const { roles, origine } = rolesDuMembre({ cellule: m.role, discord: discord?.roles ?? null, patriarche: Boolean(discord?.patriarche), table })
-  return { roles, origine, testeur: testeurDe(s) }
+/** The ranks of a session: its seal's Discord roles mapped by the Rôles tab (a password session has none). */
+export const rangsDe = (s: Session, table: TablePermissions) => rangsDuSceau(s.valide && s.genre === 'discord' ? s.membre.roles : null, table)
+
+/** The ranks' keys and tester flag under this session (lib/droits.ts). */
+export function qualitesDe(s: Session, table: TablePermissions) {
+  return { roles: rangsDe(s, table).map((r) => r.cle), testeur: testeurDe(s) }
 }
 
 /** The name in the signed cookie, as validated when it was set (not re-checked against the list). */
@@ -81,7 +82,7 @@ export async function identite(biscuits: Biscuits, lu: Lu): Promise<Identite | n
   const { membres, sceauxLus: sceaux = false, droits } = lu
   const s = await lireSession(biscuits)
   if (!s.valide) return null
-  const de = (m: Membre, source: Identite['source']): Identite => ({ nom: m.nom, source, ...qualitesDe(m, s, droits) })
+  const de = (m: Membre, source: Identite['source']): Identite => ({ nom: m.nom, source, ...qualitesDe(s, droits) })
   if (s.genre === 'discord') {
     // 1. By the Discord user ID; 2. by the server nickname, only onto a row without an ID (the
     // transition while the column is filled): a row that has an ID is never reached by nickname.
