@@ -144,6 +144,34 @@
  *  `conseilDoGet(e)` / `conseilDoPost(e)` (`{ ok: false, erreur: 'conseil absent' }` when not defined), any
  *  other to the grimoire, unchanged; `onEdit(e)` runs the grimoire's handler, then `conseilOnEdit(e)` if defined
  *  (an error in one never stops the other). Every grimoire answer is exactly v3p's.
+ *
+ *  v3r (2026-11-05) — the Livre de l'Intendance (Missions v2, lot 2). Everything new is behind the caller flag
+ *  `intendance: true`; without it, every answer and every sheet write is exactly v3q's.
+ *    - A new tab « Intendance » (hidden, created on its first write): one row per thing that enters or leaves the
+ *      chest — a hand-over for a mission, a gift (named, or anonymous), a deposit declared in the « coffre des
+ *      petites lunes » waiting for its confirmation, materials taken out to craft (« façonnage », open until the
+ *      goods come back), what comes back, a sale's goods taken from the chest (waiting for their confirmation), a
+ *      loss. Sent with `intendance: true` only (`onglets.intendance`).
+ *    - « Demandes » gains « Titre » and « N° missive » (a mission sheet and the missive it was written for), read and
+ *      written for `intendance: true` callers only (columns appended at the end of row 1 on such a write).
+ *    - 'intendance' { coffre: { lignes: [{ id, date, genre, statut, membre, objet, quantite, mission, demande,
+ *                                  missive, commande, lien, coffre, par, le, points, note }],
+ *                               maj: [{ id, si: [statut], champs: { statut, par, le, points, note } }],
+ *                               mouvements: [{ horodatage, action, missive, membre, type ('dépôt' | 'livraison'),
+ *                                              objet, quantite, note }],
+ *                               points: [{ horodatage, membre, points, raison, mission, confirmePar }],
+ *                               reserver: [{ nom, role }] } }
+ *                                                                            → under the lock, every `maj` row checked
+ *                                                                              first (its id found, its « Statut » one
+ *                                                                              of `si`: else nothing is written, 'already
+ *                                                                              answered'); then the Intendance rows
+ *                                                                              appended / updated, the Mouvements rows,
+ *                                                                              the Points rows, and a Membres row (Nom,
+ *                                                                              Rôle) for each `reserver` name no row holds
+ *                                                                              (names compared like headers).
+ *    - 'demande' also takes `demande.titre`, `demande.missive` and a top-level `missive` (written first, exactly as
+ *      the 'missive' action: a mission sheet written as a missive).
+ *    Cache key registre-v3r.
  */
 
 /* ───────────────────────── Entry points (shared with conseil.gs) ───────────────────────── */
@@ -413,12 +441,40 @@ var ONGLETS_PAIE = {
   },
 };
 
+/**
+ * THE LIVRE DE L'INTENDANCE (v3r) — read and sent only to a caller that asks for it (`intendance: true`). Created
+ * hidden on its first write, editable by hand. `id` is each row's key (« I-261105-AB12 »).
+ */
+var ONGLETS_INTENDANCE = {
+  intendance: {
+    nom: 'Intendance',
+    colonnes: [
+      ['N°', 'id'], ['Date', 'date'], ['Genre', 'genre'], ['Statut', 'statut'], ['Membre', 'membre'], ['Objet', 'objet'],
+      ['Quantité', 'quantite'], ['N° mission', 'mission'], ['N° demande', 'demande'], ['N° missive', 'missive'],
+      ['N° commande', 'commande'], ['N° lié', 'lien'], ['Coffre', 'coffre'], ['Consignée par', 'par'], ['Consignée le', 'le'],
+      ['Points', 'points'], ['Note', 'note'],
+    ],
+  },
+};
+/** v3r: the Demandes tab with its two new columns (read for the cache; written so only for `intendance: true`). */
+var CHAMPS_DEMANDES_V3R = ['titre', 'missive'];
+var DEMANDES_V3R = {
+  nom: ONGLETS_MISSIONS.demandes.nom,
+  colonnes: ONGLETS_MISSIONS.demandes.colonnes.concat([['Titre', 'titre'], ['N° missive', 'missive']]),
+};
+/** The Demandes tab as this caller writes it: v3q's columns, or v3r's two more. */
+function defDemandes() {
+  return AVEC_INTENDANCE ? DEMANDES_V3R : ONGLETS_MISSIONS.demandes;
+}
+
 /** Whether the current call asked for the missions' tabs (`missions: true`, v3m) and the pay's (`paie: true`, v3n). */
 var AVEC_MISSIONS = false;
 var AVEC_PAIE = false;
 var AVEC_DISCORD = false;
 /** v3p: the Rôles tab and the Grimoire's rows of Permissions (`rangs: true`), and the new 'membre' / 'permissions'. */
 var AVEC_RANGS = false;
+/** v3r: the Intendance tab, the Demandes' new columns and the 'intendance' action (`intendance: true`). */
+var AVEC_INTENDANCE = false;
 
 /**
  * RANKS AND PERMISSIONS (v3p) — read and sent only to a caller that asks for them (`rangs: true`).
@@ -440,9 +496,20 @@ var ONGLETS_RANGS = { roles: true, permissions: true, permissionsEntete: true };
 
 /** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
 function pourAppelant(onglets) {
-  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD && AVEC_RANGS) || !onglets) return onglets;
+  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD && AVEC_RANGS && AVEC_INTENDANCE) || !onglets) return onglets;
   var res = {};
   Object.keys(onglets).forEach(function (k) {
+    // v3r: the Intendance tab only to who asks `intendance: true`.
+    if (ONGLETS_INTENDANCE[k] && !AVEC_INTENDANCE) return;
+    // v3r: the Demandes rows without their two new fields (v3q's rows, key for key).
+    if (k === 'demandes' && AVEC_MISSIONS && !AVEC_INTENDANCE && onglets[k]) {
+      res[k] = onglets[k].map(function (d) {
+        var x = {};
+        Object.keys(d).forEach(function (c) { if (CHAMPS_DEMANDES_V3R.indexOf(c) < 0) x[c] = d[c]; });
+        return x;
+      });
+      return;
+    }
     if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
     if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
     // The ranks and permissions (v3p) only to who asks `rangs: true`.
@@ -491,6 +558,7 @@ function doPost(e) {
   AVEC_PAIE = Boolean(corps.paie);
   AVEC_DISCORD = Boolean(corps.discord);
   AVEC_RANGS = corps.rangs === true;
+  AVEC_INTENDANCE = corps.intendance === true;
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
@@ -512,6 +580,8 @@ function doPost(e) {
   var ecrire = ECRITURES[action];
   // 'permissions' (v3p) exists only for a caller that asks `rangs: true`: any other gets v3n's answer.
   if (!ecrire || (action === 'permissions' && !AVEC_RANGS)) return repondre({ ok: false, erreur: 'unknown action ' + action });
+  // 'intendance' (v3r) exists only for a caller that asks `intendance: true`: any other gets v3q's answer.
+  if (action === 'intendance' && !AVEC_INTENDANCE) return repondre({ ok: false, erreur: 'unknown action ' + action });
   return avecVerrou(function () { return ecrire(corps, action); }, true);
 }
 
@@ -590,7 +660,8 @@ function toutLire() {
   var res = {};
   Object.keys(ONGLETS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS[cle]); });
   // The missions' tabs (v3m): kept in the cache with the others, sent only to who asks (pourAppelant).
-  Object.keys(ONGLETS_MISSIONS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_MISSIONS[cle]); });
+  // v3r: the Demandes with their two new fields (stripped for the callers that do not ask `intendance: true`).
+  Object.keys(ONGLETS_MISSIONS).forEach(function (cle) { res[cle] = lireOnglet(cle === 'demandes' ? DEMANDES_V3R : ONGLETS_MISSIONS[cle]); });
   // The pay's tabs (v3n), the same way (sent only with `paie: true`).
   Object.keys(ONGLETS_PAIE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_PAIE[cle]); });
   // The ranks and the Grimoire's permissions (v3p), last (sent only with `rangs: true`).
@@ -598,6 +669,8 @@ function toutLire() {
   var perms = lirePermissions();
   res.permissions = perms.lignes;
   res.permissionsEntete = perms.entete;
+  // The Livre de l'Intendance (v3r), last (sent only with `intendance: true`).
+  Object.keys(ONGLETS_INTENDANCE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_INTENDANCE[cle]); });
   return res;
 }
 
@@ -750,7 +823,7 @@ function nouvelleVersion() {
  * run `grimoireViderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3q';
+var CACHE = 'registre-v3r';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -1322,19 +1395,30 @@ var ECRITURES = {
       plancher: nombreOuVide(d.plancher), pointsRessources: d.pointsRessources || 0, pointsFabrication: d.pointsFabrication || 0,
       statut: 'ouverte', note: d.note || '',
     };
+    // v3r (`intendance: true`): the sheet's title and the missive it was written for; the missive itself first.
+    var ecriteMissive = null;
+    if (AVEC_INTENDANCE) {
+      rangD.titre = String(d.titre || '').slice(0, 120);
+      rangD.missive = String(d.missive || '').slice(0, 40);
+      if (corps.missive) {
+        ecriteMissive = ECRITURES.missive(corps);
+        if (!ecriteMissive.ok) return ecriteMissive;
+      }
+    }
     var rangs = d.missions.map(function (m) {
       return {
         numero: m.numero, demande: d.numero, type: m.type, objet: m.objet, quantite: m.quantite, poids: nombreOuVide(m.poids),
         effort: m.effort, points: m.points, statut: 'ouverte', prisPar: '', prisLe: '', accomplieLe: '', note: m.note || '', journal: '',
       };
     });
-    ajouter(M.demandes, [rangD], preparerMasque(M.demandes));
+    ajouter(defDemandes(), [rangD], preparerMasque(defDemandes()));
     ajouter(M.missions, rangs, preparerMasque(M.missions));
     var graine = corps.ponderation && ongletVide(M.ponderation) ? ecrirePonderation(corps.ponderation) : null;
-    return {
+    var reponse = {
       ok: true, numero: d.numero, missions: rangs.length, ponderationSemee: Boolean(graine),
       maj: function (o) {
-        (o.demandes = o.demandes || []).push(complet(M.demandes, rangD));
+        if (ecriteMissive) ecriteMissive.maj(o);
+        (o.demandes = o.demandes || []).push(complet(defDemandes(), rangD));
         o.missions = o.missions || [];
         rangs.forEach(function (x) { o.missions.push(complet(M.missions, x)); });
         if (graine) {
@@ -1343,6 +1427,8 @@ var ECRITURES = {
         }
       },
     };
+    if (ecriteMissive) reponse.missive = ecriteMissive.numero;
+    return reponse;
   },
 
   /**
@@ -1812,6 +1898,118 @@ ECRITURES.permissions = function (corps) {
   });
   // No `maj`: the tabs are read again (a rare write).
   return { ok: true, seme: Boolean(d.semer), lignes: rangees.length, ajoutees: nouvelles.length, colonnes: ajout, cree: cree };
+};
+
+/** v3r: the Intendance rows' dates (an ISO text becomes a date cell). */
+function daterIntendance(o) {
+  var r = {};
+  Object.keys(o || {}).forEach(function (k) {
+    var v = o[k];
+    r[k] = (k === 'date' || k === 'le') && typeof v === 'string' && v ? new Date(v) : v === null || v === undefined ? '' : v;
+  });
+  return r;
+}
+
+/**
+ * v3r (`intendance: true` only): one gesture of the Livre de l'Intendance, under the lock. Every row to update is
+ * checked first (found by its « N° », its « Statut » one of `si`), so a deposit cannot be confirmed twice; nothing
+ * is written when one check fails. Then: the Intendance rows (new ones appended, the others updated in place), the
+ * chest's Mouvements rows ('dépôt' in, 'livraison' out), the Points rows, and a Membres row (Nom, Rôle) for each
+ * name to reserve that no row holds yet (compared like headers; a Rôle column missing: the name alone).
+ */
+ECRITURES.intendance = function (corps) {
+  // The payload is `coffre` (the flag `intendance: true` holds the key `intendance`).
+  var c = corps.coffre;
+  if (!c) return { ok: false, erreur: 'empty intendance' };
+  var def = ONGLETS_INTENDANCE.intendance;
+  var nouvelles = (c.lignes || []).map(daterIntendance);
+  var majs = c.maj || [];
+  var TYPES = { depot: 'dépôt', livraison: 'livraison' };
+  var mvts = (c.mouvements || []).map(function (m) {
+    return {
+      horodatage: new Date(m.horodatage), action: m.action || '', missive: m.missive || '', membre: m.membre || '',
+      type: TYPES[cleEntete(m.type)] || '', objet: m.objet, quantite: m.quantite, note: m.note || '',
+    };
+  });
+  if (mvts.some(function (m) { return !m.type || !m.objet; })) return { ok: false, erreur: 'bad movement' };
+  var points = (c.points || []).map(function (x) {
+    return { horodatage: new Date(x.horodatage), membre: x.membre, points: Number(x.points) || 0, raison: x.raison || '', mission: x.mission || '', confirmePar: x.confirmePar || '' };
+  });
+  if (!nouvelles.length && !majs.length && !mvts.length) return { ok: false, erreur: 'empty intendance' };
+  var o = ouvrirMasque(def);
+  var p = o.p;
+  var cellule = function (l, champ) { return p.cols[champ] ? l[p.cols[champ] - 1] : ''; };
+  var rangDe = function (id) {
+    for (var k = 0; k < o.lignes.length; k++) if (cleEntete(cellule(o.lignes[k], 'id')) === cleEntete(id)) return k;
+    return -1;
+  };
+  // 1. Every check, before anything is written.
+  var cibles = [];
+  for (var i = 0; i < majs.length; i++) {
+    var m = majs[i];
+    var r = m && m.id ? rangDe(m.id) : -1;
+    if (r < 0) return { ok: false, erreur: 'unknown row ' + (m && m.id) };
+    var st = cleEntete(cellule(o.lignes[r], 'statut'));
+    if (m.si && m.si.length && !m.si.some(function (s) { return cleEntete(s) === st; })) return { ok: false, erreur: 'already answered ' + m.id };
+    cibles.push({ r: r, id: m.id, champs: daterIntendance(m.champs) });
+  }
+  for (var j = 0; j < nouvelles.length; j++) {
+    if (!nouvelles[j].id || rangDe(nouvelles[j].id) >= 0) return { ok: false, erreur: 'row exists ' + nouvelles[j].id };
+  }
+  var membres = null;
+  var reserves = [];
+  if ((c.reserver || []).length) {
+    var fm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ONGLETS.membres.nom);
+    if (!fm || fm.getLastRow() < 1) return { ok: false, erreur: 'no members tab' };
+    var toutM = fm.getDataRange().getValues();
+    var idxM = indexColonnes(toutM[0], ONGLETS.membres);
+    if (idxM.nom < 0) return { ok: false, erreur: 'no members tab' };
+    var connus = {};
+    for (var rm = 1; rm < toutM.length; rm++) connus[cleEntete(toutM[rm][idxM.nom])] = true;
+    c.reserver.forEach(function (x) {
+      var nom = String((x && x.nom) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      var k = cleEntete(nom);
+      if (!k || connus[k]) return;
+      connus[k] = true;
+      reserves.push({ nom: nom, role: idxM.role >= 0 ? String(x.role || '').slice(0, 60) : '' });
+    });
+    membres = { feuille: fm, idx: idxM };
+  }
+  // 2. The writes.
+  cibles.forEach(function (x) {
+    o.lignes[x.r] = enLigne(p, x.champs, o.lignes[x.r]).slice(0, p.largeur);
+    p.feuille.getRange(x.r + 2, 1, 1, p.largeur).setValues([o.lignes[x.r]]);
+  });
+  if (nouvelles.length) ajouter(def, nouvelles, p);
+  if (mvts.length) ajouter(ONGLETS.mouvements, mvts);
+  if (points.length) ajouter(ONGLETS_MISSIONS.points, points, preparerMasque(ONGLETS_MISSIONS.points));
+  if (reserves.length) {
+    var largeurM = Math.max(membres.idx.nom, membres.idx.role) + 1;
+    var lignesM = reserves.map(function (x) {
+      var l = [];
+      for (var q = 0; q < largeurM; q++) l.push('');
+      l[membres.idx.nom] = x.nom;
+      if (membres.idx.role >= 0) l[membres.idx.role] = x.role;
+      return l;
+    });
+    membres.feuille.getRange(membres.feuille.getLastRow() + 1, 1, lignesM.length, largeurM).setValues(lignesM);
+  }
+  return {
+    ok: true, lignes: nouvelles.length, misesAJour: majs.length, reserves: reserves.map(function (x) { return x.nom; }),
+    maj: function (oc) {
+      oc.intendance = oc.intendance || [];
+      cibles.forEach(function (x) {
+        oc.intendance.forEach(function (y) {
+          if (cleEntete(y.id) !== cleEntete(x.id)) return;
+          Object.keys(x.champs).forEach(function (k) { if (p.cols[k]) y[k] = x.champs[k]; });
+        });
+      });
+      nouvelles.forEach(function (x) { oc.intendance.push(complet(def, x)); });
+      if (mvts.length) mvts.forEach(function (x) { (oc.mouvements = oc.mouvements || []).push(complet(ONGLETS.mouvements, x)); });
+      if (points.length) points.forEach(function (x) { (oc.points = oc.points || []).push(complet(ONGLETS_MISSIONS.points, x)); });
+      if (reserves.length) reserves.forEach(function (x) { (oc.membres = oc.membres || []).push(complet(ONGLETS.membres, x)); });
+    },
+  };
 };
 
 ECRITURES.clotureSemaine = function (corps) {
