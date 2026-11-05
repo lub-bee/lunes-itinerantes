@@ -508,6 +508,7 @@ refused by the script itself (`already closed`), under the lock.
 | `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
 | `livre` (v3l) | `{ livre: { fr, valeur } }` | `Livre` (« Ombre » / empty) on the article's Catalogues row (column added at the end of row 1 if missing) and on every Recettes row of the product. From v3l, `vente` and `recette` also write `livre` when sent `livre: 'Ombre'`; cache key `registre-v3l` |
 | `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
+| `feuillet` (v3s, only with `feuillets: true`) | `{ feuillet: { numero, si?, champs?: { titre, note, statut }, missions?: [{ numero, si?, quantite?, champs: { quantite, points, effort, statut, note }, journal? }], ajouts?: [rows] } }` | A sheet edited, closed or reopened: every check first (the Demandes row, its « Statut » one of `si`; each mission on that sheet, its « Statut » one of `si`, its « Quantité » still `quantite`: else 'sheet changed'; added numbers free), then the Demandes row, the Missions rows in place (`journal` appended), the rows added. No row is deleted (« retirée », « close »). Every answer to a `feuillets: true` caller carries `feuillets: true`. Without the flag, v3r's answers byte for byte. Cache key `registre-v3s` |
 | `intendance` (v3r, only with `intendance: true`) | `{ coffre: { lignes, maj: [{ id, si, champs }], mouvements, points, reserver: [{ nom, role }] } }` | The Livre de l'Intendance: Intendance rows appended or updated (each update checked first: its « Statut » one of `si`, else nothing is written, 'already answered'), Mouvements rows (`dépôt` / `livraison` only), Points rows, and a Membres row (Nom, Rôle) for each name to reserve that no row holds. `lire` with the flag also sends `intendance` (the tab) and the Demandes' `titre` / `missive`; `demande` then also writes them, and a top-level `missive` first (a sheet written as a missive). Without the flag, v3q's answers and sheet writes byte for byte. Cache key `registre-v3r` |
 | `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `grimoire.gs`; cache key `registre-v3p` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
@@ -618,11 +619,14 @@ the tree of needs, points), `lib/intendance.ts` (the Intendance's rows and what 
   quantity; an item with a recipe is translated into its tree (`proposer`: the raw materials to harvest, the intermediates and
   final crafts), any other item is one harvest. Each line shows what the tree needs, what the chest holds and what to ask
   (unticked by default when the chest already has enough); the writer unticks, raises or lowers, then « Publier »: one
-  Missions row per kept line. A line's points are its share of the merchandise's floor (75 % / 5 %, the pay's settings), pro
-  rata of the quantity kept. « C’est une missive » (v3r): the missive (client, deadline) and its sheet in one call.
+  Missions row per kept line, or (lot 2b) as many as the line's − / + asks (« 3 missions : 67, 67, 66 », the quantity and the
+  points shared evenly; `partager`). A line's points are its share of the merchandise's floor (75 % / 5 %, the pay's settings),
+  pro rata of the quantity kept. « C’est une missive » (v3r): the missive (client, deadline) and its sheet in one call.
 - **Points are internal**: only who opens the Trésor sees them (its « Les points de la caravane » page, and beside each mission).
   A hand-over earns its mission's rate per unit (`points ÷ quantité`), late or beyond the quantity alike; a gift without a
-  mission earns the free-donation rate from its minimum (`pointsDon`); an anonymous gift and an « Ami des Lunes » earn nothing.
+  mission earns the free-donation rate (`pointsDon`; lot 2b: whatever its quantity, the item's price × the resources' share when
+  no recipe gives a rate, at least 1 point; a mission written without any rate earns the same); an anonymous gift and an « Ami
+  des Lunes » earn nothing.
 - **Standing missions** (`Missions permanentes`): always open; their « quantité de référence » and points set the rate of each
   hand-over. Their weekly ceiling and the « takes » of the prototype are gone.
 - **Hand-overs made the prototype's way** (a mission « remise » before lot 2) are still answered (« À confirmer »).
@@ -644,6 +648,25 @@ own gesture: `remise` (record an entry, answer a declaration), `sortie` (new in 
   sortie » (a loss, with its reason), « Ventes prises au coffre » (S10: oui, sorti / non, pas du coffre).
 - **Le coffre**, **Écrire une mission** (the sheets written and their progress, the standing missions) and **La pondération**.
 - Until the script is v3r, these pages are read and say in character that the registre is not ready; nothing is written.
+
+### The missions in progress (lot 2b, script v3s)
+
+- **« En cours »** (`#en-cours`, the Intendance's first page): every open sheet (missive or caravane, author, filled count) with
+  each mission's Requis · Reçu · Manque and what waits for a confirmation; the standing missions (en pause / clore / rouvrir /
+  régler); the closed sheets (rouvrir). A search bar (title, author, client, items in French or English).
+- **Close / reopen** (gesture `ecrire`, action `fermer`): a mission or a whole sheet, after an in-character confirmation. A closed
+  one leaves the call and the pickers; what it received stays counted (stock, points); a declaration already waiting can still be
+  answered; a new hand-over naming it is refused (« consigne-le comme un don »). Statut « close » in Demandes / Missions.
+- **Correct a sheet** (action `feuillet`): title, note, a line's quantity (its rate per unit kept: points and effort follow), a
+  line removed (only when nothing was received nor declared: « retirée », the row stays), lines added (the rate the sheet's tree
+  gives that item, else the standing missions'; numbered after every number the sheet ever used).
+- **Lighten the upstream** (`allegements`, lib/missions.ts): when hand-overs cover an intermediate or the finished good, the tree
+  is recomputed from what is still to make; the open missions upstream that now ask too much are proposed lowered (never below
+  what they received) or closed (nothing received). The Réception, « En cours » and the sheet's page say so; nothing changes
+  before « Alléger ».
+- **One hand-over, several missions**: « Consigner une remise » and « Signaler une remise » tick several missions at once (each
+  pre-filled with what it lacks, a search by item); everything else typed below is a gift (« Hors mission : un don »).
+- Until the script is v3s, « En cours » reads and says so in character; closing and correcting are refused (409).
 
 Sheet tabs (Apps Script, created hidden when missing, editable by hand): `Pondération`, `Réglages missions`, `Demandes` (v3r adds
 `Titre` and `N° missive`), `Missions`, `Points`, `Missions permanentes`, and **`Intendance`** (v3r: `N°`, `Date`, `Genre` remise /
