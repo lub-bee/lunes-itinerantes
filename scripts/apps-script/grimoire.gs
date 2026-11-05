@@ -172,6 +172,28 @@
  *    - 'demande' also takes `demande.titre`, `demande.missive` and a top-level `missive` (written first, exactly as
  *      the 'missive' action: a mission sheet written as a missive).
  *    Cache key registre-v3r.
+ *
+ *  v3s (2026-11-05) — the missions in progress, from the Livre de l'Intendance (Missions v2, lot 2b). Everything new is
+ *  behind the caller flag `feuillets: true`; without it, every answer and every sheet write is exactly v3r's.
+ *    - Every answer to such a caller carries `feuillets: true` (the grimoire knows the script can do what follows).
+ *    - 'feuillet' { feuillet: { numero, si?: [statut], champs?: { titre, note, statut },
+ *                               missions?: [{ numero, si?: [statut], quantite?, champs: { quantite, points, effort,
+ *                                             statut, note }, journal? }],
+ *                               ajouts?: [{ numero, type, objet, quantite, poids, effort, points, note, journal }] } }
+ *                                                                            → under the lock, everything checked first:
+ *                                                                              the sheet's Demandes row found (its
+ *                                                                              « Statut » one of `si`), each mission found
+ *                                                                              on that sheet (its « Statut » one of `si`,
+ *                                                                              its « Quantité » still `quantite` when sent:
+ *                                                                              else 'sheet changed', nothing written), each
+ *                                                                              added number free; then the Demandes row,
+ *                                                                              the Missions rows updated in place
+ *                                                                              (`journal` appended to « Journal »), the
+ *                                                                              added rows appended (« ouverte »). A sheet or
+ *                                                                              a mission is closed / reopened by its
+ *                                                                              « Statut » (« close » / « ouverte »), a line
+ *                                                                              removed by « retirée »; no row is deleted.
+ *    Cache key registre-v3s.
  */
 
 /* ───────────────────────── Entry points (shared with conseil.gs) ───────────────────────── */
@@ -475,6 +497,8 @@ var AVEC_DISCORD = false;
 var AVEC_RANGS = false;
 /** v3r: the Intendance tab, the Demandes' new columns and the 'intendance' action (`intendance: true`). */
 var AVEC_INTENDANCE = false;
+/** v3s: the 'feuillet' action and the `feuillets` mark on every answer (`feuillets: true`). */
+var AVEC_FEUILLETS = false;
 
 /**
  * RANKS AND PERMISSIONS (v3p) — read and sent only to a caller that asks for them (`rangs: true`).
@@ -559,18 +583,19 @@ function doPost(e) {
   AVEC_DISCORD = Boolean(corps.discord);
   AVEC_RANGS = corps.rangs === true;
   AVEC_INTENDANCE = corps.intendance === true;
+  AVEC_FEUILLETS = corps.feuillets === true;
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
       var enCache = lireCache();
       etape('cache_lu');
-      if (enCache) return repondre({ ok: true, onglets: pourAppelant(enCache.onglets), version: enCache.version, cache: true });
+      if (enCache) return repondre(marquer({ ok: true, onglets: pourAppelant(enCache.onglets), version: enCache.version, cache: true }));
       var onglets = toutLire();
       etape('feuille_lue');
       var version = versionCourante();
       mettreEnCache(onglets, version);
       etape('cache_ecrit');
-      return repondre({ ok: true, onglets: pourAppelant(onglets), version: version, cache: false });
+      return repondre(marquer({ ok: true, onglets: pourAppelant(onglets), version: version, cache: false }));
     } catch (err) {
       return repondre({ ok: false, erreur: String(err) });
     }
@@ -582,7 +607,15 @@ function doPost(e) {
   if (!ecrire || (action === 'permissions' && !AVEC_RANGS)) return repondre({ ok: false, erreur: 'unknown action ' + action });
   // 'intendance' (v3r) exists only for a caller that asks `intendance: true`: any other gets v3q's answer.
   if (action === 'intendance' && !AVEC_INTENDANCE) return repondre({ ok: false, erreur: 'unknown action ' + action });
+  // 'feuillet' (v3s) exists only for a caller that asks `feuillets: true`: any other gets v3r's answer.
+  if (action === 'feuillet' && !AVEC_FEUILLETS) return repondre({ ok: false, erreur: 'unknown action ' + action });
   return avecVerrou(function () { return ecrire(corps, action); }, true);
+}
+
+/** v3s: a `feuillets: true` caller's answer says the script knows the 'feuillet' action (any other: untouched). */
+function marquer(res) {
+  if (AVEC_FEUILLETS) res.feuillets = true;
+  return res;
 }
 
 function doGet() {
@@ -790,6 +823,7 @@ function avecVerrou(f, avecOnglets) {
       mettreEnCache(res.onglets, res.version);
       etape('cache_ecrit');
       res.onglets = pourAppelant(res.onglets);
+      marquer(res);
     }
   } catch (err) {
     viderCache();
@@ -823,7 +857,7 @@ function nouvelleVersion() {
  * run `grimoireViderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3r';
+var CACHE = 'registre-v3s';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -2008,6 +2042,100 @@ ECRITURES.intendance = function (corps) {
       if (mvts.length) mvts.forEach(function (x) { (oc.mouvements = oc.mouvements || []).push(complet(ONGLETS.mouvements, x)); });
       if (points.length) points.forEach(function (x) { (oc.points = oc.points || []).push(complet(ONGLETS_MISSIONS.points, x)); });
       if (reserves.length) reserves.forEach(function (x) { (oc.membres = oc.membres || []).push(complet(ONGLETS.membres, x)); });
+    },
+  };
+};
+
+/**
+ * v3s (`feuillets: true` only): a sheet of missions edited, closed or reopened, under the lock. Everything is checked
+ * before anything is written: the sheet's Demandes row (its « Statut » one of `si`), each mission (on that sheet, its
+ * « Statut » one of `si`, its « Quantité » still the one the page saw), each added number free. Then the Demandes row,
+ * the Missions rows in place (only the fields below; `journal` appended to « Journal »), the added rows. No row is ever
+ * deleted: a line removed is « retirée », a closed one « close ».
+ */
+var CHAMPS_FEUILLET = ['titre', 'note', 'statut'];
+var CHAMPS_MISSION = ['quantite', 'points', 'effort', 'statut', 'note'];
+ECRITURES.feuillet = function (corps) {
+  var f = corps.feuillet;
+  if (!f || !f.numero) return { ok: false, erreur: 'empty sheet' };
+  var M = ONGLETS_MISSIONS;
+  var garder = function (o, cles) {
+    var r = {};
+    Object.keys(o || {}).forEach(function (k) { if (cles.indexOf(k) >= 0 && o[k] !== undefined && o[k] !== null) r[k] = o[k]; });
+    return r;
+  };
+  var parmi = function (si, v) { return !si || !si.length || si.some(function (s) { return cleEntete(s) === cleEntete(v); }); };
+  // 1. Every check, before anything is written (no tab is created for a sheet that cannot exist).
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  if (!classeur.getSheetByName(DEMANDES_V3R.nom) || !classeur.getSheetByName(M.missions.nom)) return { ok: false, erreur: 'unknown sheet ' + f.numero };
+  var od = ouvrirMasque(DEMANDES_V3R);
+  var pd = od.p;
+  var celD = function (l, c) { return pd.cols[c] ? l[pd.cols[c] - 1] : ''; };
+  var iD = -1;
+  for (var r = 0; r < od.lignes.length; r++) if (cleEntete(celD(od.lignes[r], 'numero')) === cleEntete(f.numero)) { iD = r; break; }
+  if (iD < 0) return { ok: false, erreur: 'unknown sheet ' + f.numero };
+  if (!parmi(f.si, celD(od.lignes[iD], 'statut'))) return { ok: false, erreur: 'sheet changed ' + f.numero };
+  var champsD = garder(f.champs, CHAMPS_FEUILLET);
+  if (champsD.titre !== undefined) champsD.titre = String(champsD.titre).slice(0, 120);
+  if (champsD.note !== undefined) champsD.note = String(champsD.note).slice(0, 200);
+  var om = ouvrirMasque(M.missions);
+  var pm = om.p;
+  var celM = function (l, c) { return pm.cols[c] ? l[pm.cols[c] - 1] : ''; };
+  var rangM = function (n) {
+    for (var k = 0; k < om.lignes.length; k++) if (cleEntete(celM(om.lignes[k], 'numero')) === cleEntete(n)) return k;
+    return -1;
+  };
+  var cibles = [];
+  var majs = f.missions || [];
+  for (var i = 0; i < majs.length; i++) {
+    var m = majs[i];
+    var k = m && m.numero ? rangM(m.numero) : -1;
+    if (k < 0 || cleEntete(celM(om.lignes[k], 'demande')) !== cleEntete(f.numero)) return { ok: false, erreur: 'unknown mission ' + (m && m.numero) };
+    if (!parmi(m.si, celM(om.lignes[k], 'statut'))) return { ok: false, erreur: 'sheet changed ' + m.numero };
+    if (m.quantite !== undefined && m.quantite !== null && Number(celM(om.lignes[k], 'quantite')) !== Number(m.quantite)) return { ok: false, erreur: 'sheet changed ' + m.numero };
+    var champs = garder(m.champs, CHAMPS_MISSION);
+    if (m.journal) {
+      var avant = String(celM(om.lignes[k], 'journal') || '');
+      champs.journal = (avant ? avant + ' · ' : '') + String(m.journal).slice(0, 200);
+    }
+    cibles.push({ k: k, numero: m.numero, champs: champs });
+  }
+  var ajouts = (f.ajouts || []).map(function (a) {
+    return {
+      numero: a.numero, demande: f.numero, type: a.type, objet: a.objet, quantite: a.quantite, poids: nombreOuVide(a.poids), effort: nombreOuVide(a.effort),
+      points: a.points || 0, statut: 'ouverte', prisPar: '', prisLe: '', accomplieLe: '', note: a.note || '', journal: String(a.journal || '').slice(0, 200),
+    };
+  });
+  for (var j = 0; j < ajouts.length; j++) {
+    if (!ajouts[j].numero || !ajouts[j].objet || rangM(ajouts[j].numero) >= 0) return { ok: false, erreur: 'row exists ' + ajouts[j].numero };
+  }
+  if (!Object.keys(champsD).length && !cibles.length && !ajouts.length) return { ok: false, erreur: 'empty sheet' };
+  // 2. The writes.
+  if (Object.keys(champsD).length) {
+    od.lignes[iD] = enLigne(pd, champsD, od.lignes[iD]).slice(0, pd.largeur);
+    pd.feuille.getRange(iD + 2, 1, 1, pd.largeur).setValues([od.lignes[iD]]);
+  }
+  cibles.forEach(function (x) {
+    om.lignes[x.k] = enLigne(pm, x.champs, om.lignes[x.k]).slice(0, pm.largeur);
+    pm.feuille.getRange(x.k + 2, 1, 1, pm.largeur).setValues([om.lignes[x.k]]);
+  });
+  if (ajouts.length) ajouter(M.missions, ajouts, pm);
+  return {
+    ok: true, numero: f.numero, missions: cibles.length, ajoutees: ajouts.length,
+    maj: function (o) {
+      if (Object.keys(champsD).length) {
+        (o.demandes || []).forEach(function (x) {
+          if (cleEntete(x.numero) !== cleEntete(f.numero)) return;
+          Object.keys(champsD).forEach(function (c) { x[c] = champsD[c]; });
+        });
+      }
+      cibles.forEach(function (y) {
+        (o.missions || []).forEach(function (x) {
+          if (cleEntete(x.numero) !== cleEntete(y.numero)) return;
+          Object.keys(y.champs).forEach(function (c) { x[c] = y.champs[c]; });
+        });
+      });
+      ajouts.forEach(function (x) { (o.missions = o.missions || []).push(complet(M.missions, x)); });
     },
   };
 };
