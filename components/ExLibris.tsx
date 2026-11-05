@@ -161,6 +161,8 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
   const tab = ctx.interactif ? 0 : -1
   /** A Discord seal's name unknown to the registre: the in-character question before a row is appended. */
   const [aCreer, setACreer] = useState<string | null>(null)
+  /** With that question, the register's free names close to the one typed (« C'est peut-être… »). */
+  const [proches, setProches] = useState<string[]>([])
   // A Discord seal not yet linked: the line is pre-filled with the Discord display name (once).
   const prerempli = useRef(false)
   useEffect(() => {
@@ -198,6 +200,7 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
     setEnvoi(false)
     if (rep.aCreer) {
       setACreer(tape)
+      setProches(rep.proches ?? [])
       return
     }
     if (!rep.ok) {
@@ -210,11 +213,15 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
     setTimeout(() => (ctx.signe ? ctx.signe() : ctx.aller?.(sommaire)), rep.message.length * PAS_LETTRE + DUREE_PARAPHE + APRES_SIGNATURE)
   }
 
-  /** « Oui, inscris-moi »: the row is appended with the seal's ID (server side), then the name is signed. */
-  const inscrire = async (tape: string) => {
+  /**
+   * « Oui, inscris-moi »: the row is appended with the seal's ID (server side), then the name is signed. A close name
+   * of the register touched instead (`creer` false): that row is linked, as if it had been typed.
+   */
+  const inscrire = async (tape: string, creer = true) => {
     if (!r || envoi) return
     setEnvoi(true)
-    const rep = await r.signer(tape, true)
+    if (!creer) setNom(tape)
+    const rep = await r.signer(tape, creer)
     setEnvoi(false)
     setACreer(null)
     if (!rep.ok) {
@@ -286,6 +293,18 @@ export function ExLibris({ ctx }: { ctx: Ctx }) {
           <div className="ex-libris-confirmer" role="dialog" aria-label="Inscrire au registre">
             <p>Inscrire « {aCreer} » au registre de la caravane ?</p>
             <p className="ex-libris-confirmer-note">Nul membre de ce nom n’y figure encore : ton sceau y sera inscrit, au rang de Membre. Les Patriarches t’attribueront ton rang.</p>
+            {proches.length > 0 && (
+              <div className="ex-libris-proches">
+                <p>Ou bien ton nom y est déjà, d’une autre plume :</p>
+                <div className="ex-libris-confirmer-gestes">
+                  {proches.map((n) => (
+                    <button key={n} type="button" className="lien-encre" tabIndex={tab} disabled={envoi} onClick={() => inscrire(n, false)}>
+                      C’est moi, {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="ex-libris-confirmer-gestes">
               <button type="button" className="lien-encre" tabIndex={tab} disabled={envoi} onClick={() => inscrire(aCreer)}>
                 Oui, inscris-moi

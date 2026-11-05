@@ -25,9 +25,10 @@ export const PARTIES: Partie[] = [
   { id: 'marchandises', titre: 'Livre des Marchandises', court: 'Marchandises', couleur: '#8a1c12', icone: 'coins' },
   // id kept 'atelier' (links, saved state); shown as the Livre des Recettes.
   { id: 'atelier', titre: 'Livre des Recettes', court: 'Recettes', couleur: '#2f5b3a', icone: 'cauldron' },
-  { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal' },
-  // The missions (prototype, branch `missions`).
+  // The missions (prototype, branch `missions`) and the missives share ONE ribbon, « Missions » (2026-11-05): the
+  // missions' tabs first, then, set apart and in their own colour, the missives' (`ruban`: the part whose ribbon holds it).
   { id: 'missions', titre: 'Livre des Missions', court: 'Missions', couleur: '#8a4b12', icone: 'treasure-map' },
+  { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal', ruban: 'missions' },
   // The pay (prototype, branch `missions`).
   { id: 'tresor', titre: 'Livre du Trésor', court: 'Trésor', couleur: '#1f5a56', icone: 'open-treasure-chest' },
   { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
@@ -216,15 +217,6 @@ export async function chargerLivre(): Promise<Livre> {
       type: 'atelier', vue: 'matieres', id: 'matieres', partie: 'atelier', titre: 'Matières premières', titreEn: 'Raw Materials', court: 'Matières', icone: 'wheat',
       intro: 'Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre : le prix qu’on en paie d’ordinaire, et celui auquel on achète sans hésiter.',
     },
-    {
-      type: 'missives', id: 'missives', partie: 'missives', titre: 'Missives', titreEn: 'Commissions', court: 'Missives', icone: 'wax-seal',
-      intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
-      citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
-    },
-    {
-      type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', titreEn: 'The Missive Chest', court: 'Le coffre', icone: 'open-chest',
-      intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
-    },
     // The missions (prototype): the call for missions and the member's points, then the Patriarch's table.
     {
       type: 'missions', id: 'missions', partie: 'missions', titre: 'L’appel aux missions', titreEn: 'The Call for Missions', court: 'Missions', icone: 'hunting-horn',
@@ -246,6 +238,16 @@ export async function chargerLivre(): Promise<Livre> {
     {
       type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'missions', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',
       intro: 'Combien en ramasse-t-on en une courte veillée ? Cent vingt brins de blé, mais huit cœurs de daedra. Chaque ressource a sa rareté et son origine : la rareté taille les missions et partage les points des ressources selon l’effort.',
+    },
+    // The missives (external orders) hang from the same ribbon, after the missions (2026-11-05: one ribbon).
+    {
+      type: 'missives', id: 'missives', partie: 'missives', titre: 'Missives', titreEn: 'Commissions', court: 'Missives', icone: 'wax-seal',
+      intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
+      citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
+    },
+    {
+      type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', titreEn: 'The Missive Chest', court: 'Le coffre', icone: 'open-chest',
+      intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
     },
     // The pay (prototype): the Patriarchs' accounts, open to every member for now.
     {

@@ -697,7 +697,7 @@ function Demandes({ reg }: { reg: CtxRegistre }) {
 }
 
 /** The sealing of a note: the scribe writes, the seal is stamped, the note goes. */
-export function useScelle(fermer: () => void) {
+export function useScelle(fermer: () => void, reste = false) {
   const [etat, setEtat] = useState<'repos' | 'ecrit' | 'scelle'>('repos')
   const [erreur, setErreur] = useState<string | null>(null)
   const envoyer = async (f: () => Promise<Reponse>, apres?: () => void) => {
@@ -714,6 +714,9 @@ export function useScelle(fermer: () => void) {
     setTimeout(() => {
       apres?.()
       fermer()
+      // `reste`: the form stays on its note (an event's ledger, its « corriger »), back at rest so it can be sent
+      // again. Otherwise the note rolls up showing « Consigné. ».
+      if (reste) setEtat('repos')
     }, 1100)
   }
   return { etat, erreur, envoyer }

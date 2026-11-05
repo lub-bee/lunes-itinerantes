@@ -34,7 +34,10 @@ export type InfoMarchand = {
 }
 
 /** `aCreer`: a Discord seal's name unknown to the registre: the page asks before a row is appended. */
-export type Reponse = { ok: boolean; message: string; numero?: string; aCreer?: boolean }
+/** `proches`: at the ex-libris, the free names of the register close to a name it does not hold (« Voulais-tu dire… »). */
+const SANS_NOMS: string[] = []
+
+export type Reponse = { ok: boolean; message: string; numero?: string; aCreer?: boolean; proches?: string[] }
 
 type Prevision = { id: number; prevoir: (d: DonneesRegistre) => DonneesRegistre }
 
@@ -49,6 +52,8 @@ export function useRegistre(articles: Article[]) {
   const [avis, setAvis] = useState<{ texte: string; n: number } | null>(null)
   /** Members by rank (signed readers only). */
   const [hierarchie, setHierarchie] = useState<Hierarchie | null>(null)
+  /** Every name of the register (signed readers), for the forms' name suggestions (components/ChampNom.tsx). */
+  const [noms, setNoms] = useState<string[]>(SANS_NOMS)
   const compteur = useRef(0)
   /** Newest registre version seen: the server never answers with an older one (own writes stay). */
   const version = useRef(0)
@@ -84,10 +89,17 @@ export function useRegistre(articles: Article[]) {
   // The caravan's ranks, once the reader has signed.
   const signe = marchand?.identite ?? null
   useEffect(() => {
-    if (!signe) return setHierarchie(null)
+    if (!signe) {
+      setHierarchie(null)
+      setNoms(SANS_NOMS)
+      return
+    }
     fetch('/api/caravane')
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { rangs?: Hierarchie } | null) => j?.rangs && setHierarchie(j.rangs))
+      .then((j: { rangs?: Hierarchie; noms?: string[] } | null) => {
+        if (j?.rangs) setHierarchie(j.rangs)
+        if (Array.isArray(j?.noms)) setNoms(j.noms)
+      })
       .catch(() => {})
   }, [signe])
 
@@ -101,8 +113,8 @@ export function useRegistre(articles: Article[]) {
   const signer = useCallback(async (nom: string, creer = false): Promise<Reponse> => {
     try {
       const rep = await fetch('/api/identite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom, creer }) })
-      const r = (await rep.json().catch(() => null)) as { ok?: boolean; nom?: string; message?: string; aCreer?: boolean; droits?: InfoMarchand['droits'] } | null
-      if (r?.aCreer) return { ok: false, aCreer: true, message: r.message ?? '' }
+      const r = (await rep.json().catch(() => null)) as { ok?: boolean; nom?: string; message?: string; aCreer?: boolean; proches?: string[]; droits?: InfoMarchand['droits'] } | null
+      if (r?.aCreer) return { ok: false, aCreer: true, message: r.message ?? '', proches: Array.isArray(r.proches) ? r.proches : [] }
       if (!rep.ok || !r?.ok || !r.nom) return { ok: false, message: r?.message ?? ECHEC }
       setMarchand((m) => (m ? { ...m, identite: r.nom!, droits: r.droits ?? m.droits } : m))
       return { ok: true, message: r.nom }
@@ -160,7 +172,7 @@ export function useRegistre(articles: Article[]) {
     return { valeur, recettes: indexRecettes(donnees.recettes, donnees.ressources), etats: calculerMissives(donnees, valeur) }
   }, [donnees, articles])
 
-  return { hierarchie, marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }
+  return { hierarchie, noms, marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }
 }
 
 export type EtatRegistre = ReturnType<typeof useRegistre>

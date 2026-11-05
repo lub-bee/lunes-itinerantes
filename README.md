@@ -310,9 +310,12 @@ top of `grimoire.gs` (header + value per column); the payload also carries `arti
 ## The book's parts (v3)
 
 Ribbons, in order: a bare **Sommaire** ribbon (its shape only, no word), **Marchandises** (price
-chapters), **Livre des Recettes** (id `atelier`: « Sommaire des recettes », one tab per craft, « Matières premières » set apart last), **Missives** (the list, one page per
-missive, « Le coffre »; only missives in progress get a side tab, closed ones are opened from the list)
-and **Caravane** (the roster still to be written, then the memo pages). When the sheet is linked (see
+chapters), **Livre des Recettes** (id `atelier`: « Sommaire des recettes », one tab per craft, « Matières premières » set apart last), **Missions**
+(branch `missions`, 2026-11-05: ONE ribbon for the missions and the missives — the missions' tabs first in amber, then,
+after a gap, the missives' tabs in blue-grey: the list, one tab per missive in progress, « Le coffre »; closed missives
+are opened from the list. A part may hang from another's ribbon with `ruban` in `lib/livre.ts`; surtitles, colours and
+the table of contents keep each part's own; page ids, hence links, are unchanged. Past 12 tabs they tighten.),
+**Trésor** (to its roles) and **Caravane** (the roster still to be written, then the memo pages). When the sheet is linked (see
 below), an **ex-libris** is the page before the title page: the book opens on it for a reader not yet
 signed, and turning back from the title spread always reaches it; folios still start at the title page.
 
@@ -593,7 +596,7 @@ to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane
 `components/Missions.tsx`; the permission rules are in `lib/droits.ts` (`demande`, `prendre`, `rendre`,
 `accomplir`, `ponderation`: all open for now).
 
-- **Livre des Missions** (its own ribbon): « L’appel aux missions » (open missions, filtered by type,
+- **Livre des Missions** (the « Missions » ribbon, shared with the missives since 2026-11-05): « L’appel aux missions » (open missions, filtered by type,
   identical ones shown once « ×N »; the member's missions « en cours » with *rendre* / *accomplie*),
   « Mes points » (total and history), then the Patriarch's table — « Les demandes du Patriarche » (a
   demand with its live preview, the demands with their progress), « Les points de la caravane » (every
@@ -674,7 +677,15 @@ whole accounting. Code: `lib/paie.ts` (pure), `app/api/paie/route.ts`, `componen
   « à payer » until marked « payé » (who, when).
 - **Events**: their own ledger (entries, expenses — invoices linked to the event count here —, lots given
   from the chest, written as `livraison` rows of Mouvements when asked, participants with a compensation,
-  payable like the pay). Their balance goes to the trésorerie, not into the week's pot.
+  payable like the pay). Participants are names of the register, several at once: in the new event's note (written
+  right after the event, a second script call) and in its ledger afterwards (one call for the whole list, refused
+  whole if one name is unknown or already in); each struck out with its ✕ until paid.
+- **Members' names typed** (event participants, the Patriarchs' list of the settings): one shared field,
+  `components/ChampNom.tsx` (`ChampNom` / `ChampNoms`), suggests the register's names closest to what is typed
+  (`lib/noms.ts`, cle() comparison: the same name, a beginning, a part, a near spelling), a tap or Enter takes one;
+  the names come with `/api/caravane` (`noms`, signed readers only). At the ex-libris the list never reaches the page:
+  only when a Discord seal is about to append a row, the answer carries up to three free rows' names close to the one
+  typed (« C'est moi, … »). Their balance goes to the trésorerie, not into the week's pot.
 - **Settings** (Réglages paie tab): every share, the Patriarchs' list, the week's first day, the rent, the
   default compensation. The missions read their 75 % / 5 % from here.
 - Tabs (Apps Script **v3n**, hidden, created on first write, sent only with `paie: true`): `Réglages paie`,

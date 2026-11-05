@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { PageTresor } from '@/lib/types'
 import { dateTamrielique, prix } from '@/lib/format'
 import { cle } from '@/lib/missives'
@@ -25,6 +25,8 @@ import { Action } from './Ornements'
 import { Geste, Signature, type CtxRegistre } from './Missives'
 import { ChampNombre, useScelle, type Reponse } from './Missions'
 import { Sceller } from './Fiche'
+import { ChampNoms, tousLesNoms, VIDE_NOMS, type ValeurNoms } from './ChampNom'
+import { nomsDeTexte, texteDeNoms } from '@/lib/noms'
 
 /*
  * The Livre du Trésor (the pay, lib/paie.ts): the week's accounts and pay (sealed weeks as they were
@@ -663,14 +665,17 @@ function FicheEvenement({ reg, icones, fermer, id }: EnvTresor & { id?: string }
   const e = d.evenements.find((x) => x.id === id)
   const [v, setV] = useState({ nom: e?.nom ?? '', date: isoJour(e?.date ?? new Date().toISOString()), note: e?.note ?? '', compensation: e?.compensation === null || e?.compensation === undefined ? '' : String(e.compensation) })
   const [edition, setEdition] = useState(!e)
-  const { etat, erreur, envoyer } = useScelle(e ? () => setEdition(false) : fermer)
+  // A new event's participants, inscribed with it (each one more line of its ledger); later ones from its ledger.
+  const [participants, setParticipants] = useState<ValeurNoms>(VIDE_NOMS)
+  const noms = reg.r.noms
+  const { etat, erreur, envoyer } = useScelle(e ? () => setEdition(false) : fermer, Boolean(e))
   if (!e || edition)
     return (
       <form
         className="fiche-form"
         onSubmit={(x: FormEvent) => {
           x.preventDefault()
-          envoyer(() => t.agir('evenement', { id, ...v }))
+          envoyer(() => t.agir('evenement', e ? { id, ...v } : { ...v, participants: peutFaire(reg, 'ecriture') ? tousLesNoms(participants, noms) : [] }))
         }}
       >
         <label className="fiche-champ">
@@ -691,6 +696,13 @@ function FicheEvenement({ reg, icones, fermer, id }: EnvTresor & { id?: string }
           <span>Note</span>
           <input type="text" value={v.note} maxLength={200} onChange={(x) => setV({ ...v, note: x.target.value })} />
         </label>
+        {!e && peutFaire(reg, 'ecriture') && (
+          <div className="fiche-champ">
+            <span>Participants</span>
+            <ChampNoms valeur={participants} changer={setParticipants} noms={noms} placeholder="un nom du registre" etiquette="Ajouter un participant" />
+            <em className="fiche-aide">facultatif : chacun reçoit la compensation ; on en ajoute ou en raye ensuite depuis le registre de l’événement.</em>
+          </div>
+        )}
         <Erreur texte={erreur} />
         <div className="fiche-pied">
           {e && etat === 'repos' && (
@@ -714,8 +726,15 @@ function RegistreEvenement({ reg, icones, e, corriger }: { reg: CtxRegistre; ico
   const lignes = d.ecritures.filter((x) => x.evenement === e.id)
   const factures = d.factures.filter((f) => f.evenement === e.id)
   const s = soldeEvenement(e, d.ecritures, d.factures)
-  const [n, setN] = useState({ genre: 'entrée' as GenreEcriture, libelle: '', montant: '', membre: '', objet: '', quantite: '', coffre: true })
-  const { etat, erreur, envoyer } = useScelle(() => setN({ ...n, libelle: '', montant: '', membre: '', objet: '', quantite: '' }))
+  const [n, setN] = useState({ genre: 'entrée' as GenreEcriture, libelle: '', montant: '', objet: '', quantite: '', coffre: true })
+  // The participants to add, several at once (one call): names of the register, those already in left out.
+  const [membres, setMembres] = useState<ValeurNoms>(VIDE_NOMS)
+  const noms = reg.r.noms
+  const inscrits = useMemo(() => lignes.filter((x) => x.genre === 'participant').map((x) => x.membre), [lignes])
+  const { etat, erreur, envoyer } = useScelle(() => {
+    setN({ ...n, libelle: '', montant: '', objet: '', quantite: '' })
+    setMembres(VIDE_NOMS)
+  }, true)
   const peut = peutFaire(reg, 'ecriture') && d.actif
   const compensation = e.compensation ?? d.reglages.compensation
   const ligne = (x: Ecriture) => (
@@ -732,7 +751,7 @@ function RegistreEvenement({ reg, icones, e, corriger }: { reg: CtxRegistre; ico
       <strong className={x.genre === 'entrée' ? '' : 'negatif'}>{x.genre === 'lot' && !x.montant ? '—' : `${x.genre === 'entrée' ? '+' : '−'}${prix(x.montant)}`}</strong>
       {x.genre === 'participant' && <Paiement reg={reg} onglet="ecrituresEvenement" id={x.id} statut={x.statut} par={x.payePar} le={x.payeLe} />}
       {peut && x.statut !== 'payé' && (
-        <button type="button" className="fiche-rayer" title="Rayer" aria-label={`Rayer ${x.libelle || x.membre}`} onClick={() => t.agir('ecriture', { supprimer: x.id })}>
+        <button type="button" className="fiche-rayer" title="Rayer" aria-label={`Rayer ${x.genre === 'participant' ? x.membre : x.libelle || x.objet}`} onClick={() => t.agir('ecriture', { supprimer: x.id })}>
           ✕
         </button>
       )}
@@ -771,7 +790,9 @@ function RegistreEvenement({ reg, icones, e, corriger }: { reg: CtxRegistre; ico
           className="fiche-form"
           onSubmit={(x: FormEvent) => {
             x.preventDefault()
-            envoyer(() => t.agir('ecriture', { evenement: e.id, ...n, montant: n.genre === 'participant' && !n.montant ? '' : n.montant }))
+            envoyer(() =>
+              t.agir('ecriture', n.genre === 'participant' ? { evenement: e.id, genre: n.genre, membres: tousLesNoms(membres, noms), montant: n.montant } : { evenement: e.id, ...n }),
+            )
           }}
         >
           <h3 className="fiche-sous-titre">Ajouter une ligne</h3>
@@ -783,16 +804,19 @@ function RegistreEvenement({ reg, icones, e, corriger }: { reg: CtxRegistre; ico
             ))}
           </div>
           {n.genre === 'participant' ? (
-            <div className="fiche-deux">
-              <label className="fiche-champ">
-                <span>Membre</span>
-                <input type="text" value={n.membre} placeholder="son nom au registre" onChange={(x) => setN({ ...n, membre: x.target.value })} />
-              </label>
-              <label className="fiche-champ">
-                <span>Compensation</span>
-                <input type="text" inputMode="decimal" value={n.montant} placeholder={prix(compensation)} onChange={(x) => setN({ ...n, montant: x.target.value.replace(/[^\d.,]/g, '') })} />
-              </label>
-            </div>
+            <>
+              {/* The whole width for the names (their tags wrap), the compensation under them. */}
+              <div className="fiche-champ">
+                <span>Participants</span>
+                <ChampNoms valeur={membres} changer={setMembres} noms={noms} exclure={inscrits} placeholder="un nom du registre" etiquette="Ajouter un participant" />
+              </div>
+              <div className="fiche-deux">
+                <label className="fiche-champ">
+                  <span>Compensation de chacun</span>
+                  <input type="text" inputMode="decimal" value={n.montant} placeholder={prix(compensation)} onChange={(x) => setN({ ...n, montant: x.target.value.replace(/[^\d.,]/g, '') })} />
+                </label>
+              </div>
+            </>
           ) : n.genre === 'lot' ? (
             <>
               <div className="fiche-deux">
@@ -824,7 +848,7 @@ function RegistreEvenement({ reg, icones, e, corriger }: { reg: CtxRegistre; ico
           <Erreur texte={erreur} />
           <div className="fiche-pied">
             <Sceller etat={etat} icones={icones}>
-              Inscrire la ligne
+              {n.genre !== 'participant' ? 'Inscrire la ligne' : tousLesNoms(membres, noms).length > 1 ? `Inscrire les ${tousLesNoms(membres, noms).length} participants` : 'Inscrire le participant'}
             </Sceller>
           </div>
         </form>
@@ -836,16 +860,36 @@ function RegistreEvenement({ reg, icones, e, corriger }: { reg: CtxRegistre; ico
 function FicheReglagesPaie({ reg, icones, fermer }: EnvTresor) {
   const t = reg.t!
   const [r, setR] = useState<ReglagesPaie>(t.donnees!.reglages)
+  const [patriarche, setPatriarche] = useState('')
   const { etat, erreur, envoyer } = useScelle(fermer)
   return (
     <form
       className="fiche-form ponderation-form"
       onSubmit={(e: FormEvent) => {
         e.preventDefault()
-        envoyer(() => t.agir('reglagesPaie', { reglages: r }))
+        // A name typed but not added yet is kept with the others.
+        envoyer(() => t.agir('reglagesPaie', { reglages: { ...r, listePatriarches: texteDeNoms(tousLesNoms({ choisis: nomsDeTexte(r.listePatriarches), saisie: patriarche }, reg.r.noms)) } }))
       }}
     >
-      {REGLAGES_PAIE.map((x) => (
+      {REGLAGES_PAIE.map((x) =>
+        x.cle === 'listePatriarches' ? (
+          // The Patriarchs' names, one tag each (the setting stays a comma-separated text).
+          <div key={x.cle} className="fiche-champ reglage">
+            <span>{x.libelle}</span>
+            <ChampNoms
+              valeur={{ choisis: nomsDeTexte(r.listePatriarches), saisie: patriarche }}
+              changer={(v) => {
+                setPatriarche(v.saisie)
+                setR({ ...r, listePatriarches: texteDeNoms(v.choisis) })
+              }}
+              noms={reg.r.noms}
+              libre
+              placeholder="un nom du registre"
+              etiquette="Ajouter un Patriarche"
+            />
+            <em className="fiche-aide">vide : le rôle Patriarche du registre</em>
+          </div>
+        ) : (
         <label key={x.cle} className="fiche-champ reglage">
           <span>{x.libelle}</span>
           {x.cle === 'jour' ? (
@@ -863,7 +907,8 @@ function FicheReglagesPaie({ reg, icones, fermer }: EnvTresor) {
           )}
           <em className="fiche-aide">{x.note}</em>
         </label>
-      ))}
+        ),
+      )}
       <Erreur texte={erreur} />
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones}>

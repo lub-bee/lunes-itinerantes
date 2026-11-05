@@ -3,6 +3,7 @@ import { lireSession } from '@/lib/sceau'
 import { libreDe, poserNom, qualitesDe, rangsDe, rangsReels, REFUS_AMI, REFUS_SCEAU, trouverMembre, trouverParDiscord } from '@/lib/identite'
 import { AMI, droitsDe, rangsEcrits } from '@/lib/droits'
 import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
+import { nomsProches } from '@/lib/noms'
 
 // Signing with one's name: POST { nom } is matched against the Membres tab (never sent to the page);
 // a known name is kept, in the sheet's spelling, in a signed cookie; an unknown one is refused and
@@ -56,8 +57,12 @@ export async function POST(req: NextRequest) {
     const rangs = rangsReels(s, lu.droits)
     const m = trouverMembre(tape, membres)
     if (m && !libreDe(m, s.membre.id)) return refus(REFUS_SCEAU, 403)
-    if (!m && creer !== true)
-      return NextResponse.json({ ok: false, aCreer: true, nom: tape, message: `Inscrire « ${tape} » au registre de la caravane ?` }, { status: 200 })
+    // Before a row is appended: the free rows (no seal, or this one's) whose name is close to the one typed, so a typo
+    // does not make a second row (lib/noms.ts). Only those few names reach the page, never the list.
+    if (!m && creer !== true) {
+      const proches = nomsProches(tape, membres.filter((x) => libreDe(x, s.membre.id)).map((x) => x.nom), 3, [], 0.75)
+      return NextResponse.json({ ok: false, aCreer: true, nom: tape, proches, message: `Inscrire « ${tape} » au registre de la caravane ?` }, { status: 200 })
+    }
     try {
       const r = await ecrireRegistre('membre', { membre: { nom: m?.nom ?? tape, discord: s.membre.id, pseudo: s.membre.nom, creer: !m, rangs: rangsEcrits(rangs) } })
       const nomEcrit = String((r as { nom?: unknown }).nom ?? m?.nom ?? tape)

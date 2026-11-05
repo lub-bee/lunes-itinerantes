@@ -86,6 +86,8 @@ function Surligne({ texte, requete }: { texte: string; requete: string }) {
 }
 
 const COURT_MAX = 18
+/** Beyond this many side tabs (the Missions ribbon with many open missives), the tabs tighten to stay on the book's edge. */
+const SERRES = 12
 
 /** A recipe matches a query by its French or English name, or its craft. */
 const recetteCorrespond = (r: Recette, requete: string) => nomsCorrespondent([r.produit, r.en, metierDe(r.artisan).nom], requete)
@@ -862,13 +864,22 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   }, [tourne])
 
   const destination = tourne?.vers ?? index
-  const partieActive: PartieId = pages[destination].partie
+  // A part without a ribbon of its own (`ruban`, the missives) is read as the part whose ribbon holds it.
+  const rubanDe = (id: PartieId): PartieId => livre.parties.find((x) => x.id === id)?.ruban ?? id
+  const partieActive: PartieId = rubanDe(pages[destination].partie)
   const partieOnglets: PartieId = partieActive === 'sommaire' ? 'marchandises' : partieActive
   // Closed missives keep their page (reached from the list) but get no side tab. On the colophon, its own tab only.
+  // A ribbon holding several parts (Missions, then Missives) shows them in turn, each in its colour, the next set apart.
   const onglets =
     pages[destination].type === 'colophon'
-      ? [{ p: pages[destination], i: destination }]
-      : pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === partieOnglets && !(p.type === 'missive' && p.close))
+      ? [{ p: pages[destination], i: destination, groupe: '' }]
+      : pages
+          .map((p, i) => ({ p, i }))
+          .filter(({ p }) => rubanDe(p.partie) === partieOnglets && !(p.type === 'missive' && p.close))
+          .map((o, k, tous) => ({
+            ...o,
+            groupe: `${tous.some((x) => x.p.partie !== partieOnglets) ? `onglet-partie-${o.p.partie}` : ''} ${k > 0 && tous[k - 1].p.partie !== o.p.partie ? 'onglet-groupe' : ''}`,
+          }))
   const avant = tourne ? tourne.vers > tourne.de : true
 
   const voletsDoubles = () => {
@@ -1104,7 +1115,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           </div>
         )}
         <nav className="rubans" aria-label="Livres du grimoire">
-          {parties.map((p) =>
+          {parties.filter((p) => !p.ruban).map((p) =>
             // The Sommaire ribbon is bare: only its shape and its forked end.
             p.id === 'sommaire' ? (
               <button
@@ -1122,7 +1133,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
                 type="button"
                 className={`ruban ${partieActive === p.id ? 'actif' : ''}`}
                 style={{ '--c': p.couleur } as CSSProperties}
-                onClick={() => aller(pages.findIndex((pg) => pg.partie === p.id))}
+                onClick={() => aller(pages.findIndex((pg) => rubanDe(pg.partie) === p.id))}
               >
                 <Icone corps={icones[p.icone]} className="ruban-icone" />
                 <span className="ruban-nom">{p.court}</span>
@@ -1131,12 +1142,12 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           )}
         </nav>
 
-        <nav className="onglets" aria-label="Chapitres">
-          {onglets.map(({ p, i }) => (
+        <nav className={`onglets ${onglets.length > SERRES ? 'serres' : ''}`} aria-label="Chapitres">
+          {onglets.map(({ p, i, groupe }) => (
             <button
               key={p.id}
               type="button"
-              className={`onglet ${destination === i ? 'actif' : ''} ${resultats.some((r) => r.i === i) ? 'trouve' : ''} ${p.type === 'ventes' ? 'onglet-ventes' : ''} ${p.type === 'atelier' && p.vue === 'matieres' ? 'onglet-matieres' : ''}`}
+              className={`onglet ${destination === i ? 'actif' : ''} ${resultats.some((r) => r.i === i) ? 'trouve' : ''} ${p.type === 'ventes' ? 'onglet-ventes' : ''} ${p.type === 'atelier' && p.vue === 'matieres' ? 'onglet-matieres' : ''} ${groupe}`}
               onClick={() => aller(i)}
               title={p.titre}
             >

@@ -124,8 +124,40 @@ function numero(prefixe: string): string {
   return `${prefixe}-${j}-${hasard.slice(0, 4)}`
 }
 
-type Ecriture = { action: string; charge: Record<string, unknown>; message: string }
+/** `puis`: a second write made after the first one succeeded (a new event's participants, in another tab). */
+type Ecriture = { action: string; charge: Record<string, unknown>; message: string; puis?: { action: string; charge: Record<string, unknown>; message: string } }
 const paie = (onglet: string, x: Record<string, unknown>) => ({ paie: { onglet, ...x } })
+
+/**
+ * Participants of an event, several at once (`membres`, or the single `membre` of older pages): each must be in the
+ * register (cle() comparison, the sheet's spelling kept), none twice, none already in the event; one ledger line each,
+ * paid the compensation typed, else the event's, else the setting's. The whole list is refused if one name is.
+ */
+function participants(e: { id: string; nom: string; compensation: number | null }, b: Record<string, unknown>, lu: Lu, qui: Identite, quand: string) {
+  const p = lu.paie
+  const tapes = (Array.isArray(b.membres) ? b.membres : [b.membre]).map((x) => mot(x, 80)).filter(Boolean).slice(0, 60)
+  if (!tapes.length) non('Inscris au moins un participant : un nom du registre des membres.')
+  const inconnus = tapes.filter((t) => !trouverMembre(t, lu.membres))
+  if (inconnus.length) non(`${inconnus.map((t) => `« ${t} »`).join(', ')} ${inconnus.length > 1 ? 'ne sont pas' : 'n’est pas'} au registre des membres. Rien n’a été consigné.`)
+  const noms: string[] = []
+  for (const t of tapes) {
+    const m = trouverMembre(t, lu.membres)!
+    if (!noms.some((n) => cle(n) === cle(m.nom))) noms.push(m.nom)
+  }
+  const deja = noms.filter((n) => p.ecritures.some((x) => x.evenement === e.id && x.genre === 'participant' && cle(x.membre) === cle(n)))
+  if (deja.length) non(`${deja.join(', ')} ${deja.length > 1 ? 'sont déjà inscrits' : 'est déjà inscrit'} à cet événement.`)
+  const c = b.montant === '' || b.montant === undefined || b.montant === null ? (e.compensation ?? p.reglages.compensation) : montant(b.montant, 'La compensation', 1e6)
+  const lignes = noms.map((n) => ({
+    id: numero('W'), evenement: e.id, date: quand, genre: 'participant', libelle: mot(b.libelle, 120) || 'Compensation', montant: c, membre: n, objet: '', quantite: '',
+    statut: c > 0 ? 'à payer' : '', payePar: '', payeLe: '', par: qui.nom,
+  }))
+  const qui2 = noms.length > 1 ? `${noms.slice(0, -1).join(', ')} et ${noms[noms.length - 1]} participent` : `${noms[0]} participe`
+  return {
+    action: 'paie',
+    charge: paie('ecrituresEvenement', { lignes }),
+    message: `${qui2} à « ${e.nom} »${c > 0 ? ` : ${c} septims de compensation à payer${noms.length > 1 ? ' à chacun' : ''}` : ''}.`,
+  }
+}
 
 async function preparer(action: ActionPaie, b: Record<string, unknown>, lu: Lu, qui: Identite): Promise<Ecriture> {
   const p = lu.paie
@@ -174,7 +206,12 @@ async function preparer(action: ActionPaie, b: Record<string, unknown>, lu: Lu, 
       if (id && !p.evenements.some((e) => e.id === id)) non('Cet événement est introuvable dans le registre.')
       const compensation = b.compensation === '' || b.compensation === null || b.compensation === undefined ? '' : montant(b.compensation, 'La compensation', 1e6)
       const ligne = { id: id || numero('E'), nom, date: jour(b.date), note: mot(b.note, 200), compensation, statut: mot(b.statut, 20) || 'ouvert' }
-      return { action: 'paie', charge: paie('evenements', { lignes: [ligne] }), message: `L’événement « ${nom} » est ${id ? 'corrigé' : 'inscrit'} au registre.` }
+      const message = `L’événement « ${nom} » est ${id ? 'corrigé' : 'inscrit'} au registre.`
+      // A new event may come with its participants: checked now, written right after the event (another tab).
+      const avec = !id && Array.isArray(b.participants) && b.participants.some((x) => mot(x, 80))
+      if (avec && !peut('ecriture', qui, lu.droits)) non('Inscrire des participants est réservé à d’autres pattes que les tiennes : inscris l’événement seul.')
+      const puis = avec ? participants({ id: ligne.id, nom, compensation: compensation === '' ? null : compensation }, { membres: b.participants }, lu, qui, quand) : undefined
+      return { action: 'paie', charge: paie('evenements', { lignes: [ligne] }), message, puis }
     }
 
     case 'ecriture': {
@@ -187,16 +224,7 @@ async function preparer(action: ActionPaie, b: Record<string, unknown>, lu: Lu, 
       const e = p.evenements.find((x) => x.id === mot(b.evenement, 40)) ?? non('Cet événement est introuvable dans le registre.')
       const genre = (['entrée', 'dépense', 'lot', 'participant'] as const).find((g) => g === b.genre) ?? non('Choisis le genre de l’écriture.')
       const base = { id: numero('W'), evenement: e.id, date: quand, genre, libelle: mot(b.libelle, 120), montant: 0, membre: '', objet: '', quantite: '', statut: '', payePar: '', payeLe: '', par: qui.nom }
-      if (genre === 'participant') {
-        const m = trouverMembre(mot(b.membre, 80), lu.membres) ?? non(`« ${mot(b.membre, 80)} » n’est pas au registre des membres.`)
-        if (p.ecritures.some((x) => x.evenement === e.id && x.genre === 'participant' && cle(x.membre) === cle(m.nom))) non(`${m.nom} est déjà inscrit à cet événement.`)
-        const c = b.montant === '' || b.montant === undefined ? (e.compensation ?? p.reglages.compensation) : montant(b.montant, 'La compensation', 1e6)
-        return {
-          action: 'paie',
-          charge: paie('ecrituresEvenement', { lignes: [{ ...base, libelle: base.libelle || 'Compensation', membre: m.nom, montant: c, statut: c > 0 ? 'à payer' : '' }] }),
-          message: `${m.nom} participe à « ${e.nom} »${c > 0 ? ` : ${c} septims de compensation à payer` : ''}.`,
-        }
-      }
+      if (genre === 'participant') return participants(e, b, lu, qui, quand)
       if (genre === 'lot') {
         const objet = mot(b.objet, 120) || non('Quel lot ?')
         const quantite = Math.round(montant(b.quantite, 'La quantité', 1e6))
@@ -281,5 +309,17 @@ export async function POST(req: NextRequest) {
     console.error(`[paie] ${action} refused by the script`, err)
     return refus(refusScript(String(err)), 502)
   }
-  return NextResponse.json({ ok: true, message: e.message, donnees: ecrit.lu ? await vue(ecrit.lu, qui, mot(b.semaineVue, 20) || null) : null })
+  let message = e.message
+  if (e.puis) {
+    // The first write stands; if the second fails, the page says what is missing (nothing is undone).
+    try {
+      const suite = await ecrireRegistre(e.puis.action, e.puis.charge)
+      if (suite.lu) ecrit = suite
+      message = `${message} ${e.puis.message}`
+    } catch (err) {
+      console.error(`[paie] ${action}: the follow-up write was refused by the script`, err)
+      message = `${message} Mais les participants n’ont pu être inscrits : ajoute-les depuis le registre de l’événement.`
+    }
+  }
+  return NextResponse.json({ ok: true, message, donnees: ecrit.lu ? await vue(ecrit.lu, qui, mot(b.semaineVue, 20) || null) : null })
 }

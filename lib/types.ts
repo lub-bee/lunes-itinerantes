@@ -18,7 +18,11 @@ export type Article = {
 
 export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'missions' | 'tresor' | 'caravane' | 'ombre'
 
-export type Partie = { id: PartieId; titre: string; court: string; couleur: string; icone: string }
+/**
+ * `ruban`: this part has no ribbon of its own; its pages hang from that part's ribbon, their side tabs set apart after the
+ * ribbon's own (the missives under « Missions »). Surtitles, colours and the table of contents keep the part's own.
+ */
+export type Partie = { id: PartieId; titre: string; court: string; couleur: string; icone: string; ruban?: PartieId }
 
 /**
  * `icone` is a game-icons.net name, resolved to its SVG body in `Livre.icones`. `titreEn`: the English title shown

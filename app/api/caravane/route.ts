@@ -3,7 +3,8 @@ import { identite } from '@/lib/identite'
 import { lireRegistre, registreRelie } from '@/lib/registre'
 import { rangDe, SANS_RANG, type Hierarchie } from '@/lib/rangs'
 
-// The caravan's members grouped by rank (Membres tab, « Rôle » column), for signed readers only.
+// The caravan's members grouped by rank (Membres tab, « Rôle » column), for signed readers only; `noms`: every name of
+// the register, sorted (the name suggestions of the forms, components/ChampNom.tsx).
 
 export const dynamic = 'force-dynamic'
 
@@ -24,5 +25,6 @@ export async function GET(req: NextRequest) {
     ;(rangs[k] ??= []).push(m.nom)
   }
   for (const k of Object.keys(rangs)) rangs[k].sort((a, b) => a.localeCompare(b, 'fr'))
-  return NextResponse.json({ ok: true, rangs })
+  const noms = [...new Set(lu.membres.map((m) => m.nom).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))
+  return NextResponse.json({ ok: true, rangs, noms })
 }
