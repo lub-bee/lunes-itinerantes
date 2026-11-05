@@ -192,7 +192,7 @@ const pts = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} pt${Math
 const voitPoints = (reg?: CtxRegistre) => reg?.r.marchand?.droits?.tresor === true
 /** A mission's points, or nothing for a member who may not see them. */
 function Pts({ reg, n }: { reg?: CtxRegistre; n: number }) {
-  return voitPoints(reg) ? <Pts reg={reg} n={n} /> : null
+  return voitPoints(reg) ? <strong className="mission-points">{pts(n)}</strong> : null
 }
 
 /** « rareté à fixer » when a mission was sized without a known rarity (the weight itself stays internal). */
