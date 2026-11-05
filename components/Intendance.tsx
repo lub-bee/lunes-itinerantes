@@ -3,14 +3,14 @@
 import { useMemo, useState } from 'react'
 import type { Article, PageIntendance } from '@/lib/types'
 import { dateTamrielique } from '@/lib/format'
-import { cle, enStock, recetteUsage, rejouer, variantesDe } from '@/lib/missives'
+import { avecAnglais, cle, dicoAnglais, enStock, recetteUsage, rejouer, variantesDe } from '@/lib/missives'
 import { nomDuRegistre } from '@/lib/noms'
 import { nomsCorrespondent } from '@/lib/recherche'
-import { estEntree, etatFaconnage, etatMission, objetQ, PETITES_LUNES, quoiLigne, tauxDe, type LigneIntendance } from '@/lib/intendance'
-import { avancement, pointsDon, VERBES, type DonneesMissions } from '@/lib/missions'
+import { estEntree, etatFaconnage, etatMission, objetQ, PETITES_LUNES, quoiLigne, tauxDe, TEXTES_FEUILLETS, type LigneIntendance } from '@/lib/intendance'
+import { allegements, avancement, feuilletClos, pointsDon, prixDon, VERBES, type Allegement, type Demande, type DonneesMissions, type Mission, type Permanente } from '@/lib/missions'
 import { Action } from './Ornements'
 import { ChampNom } from './ChampNom'
-import { Geste, Jauge, quand, Signature, type CtxRegistre, type RechercheLocale } from './Missives'
+import { Coche, Geste, Jauge, quand, Signature, type CtxRegistre, type RechercheLocale } from './Missives'
 import { Sceller } from './Fiche'
 import {
   ChampRecherche,
@@ -26,12 +26,15 @@ import {
   moiDe,
   nf,
   nomsObjets,
+  OptionsObjets,
   ouvert,
   permis,
   pts,
   useScelle,
   voitPoints,
+  type Cible,
   type LigneSaisie,
+  type NomsObjets,
 } from './MissionsCommun'
 import type { EnvMission } from './Missions'
 
@@ -223,8 +226,9 @@ function ChezLesArtisans({ reg, tab, sorties }: { reg: CtxRegistre; tab: number;
 /** The ledger: every entry (or exit), newest first, filtered by the page's search. */
 function Registre({ reg, lignes, requetes }: { reg: CtxRegistre; lignes: LigneIntendance[]; requetes: string[] }) {
   const d = reg.m!.donnees!
+  const dico = dicoAnglais(reg.r.donnees)
   const vus = lignes
-    .filter((l) => requetes.every((q) => !q.trim() || nomsCorrespondent([l.objet, l.membre, l.par, l.note, titreDe(d, l.demande)], q)))
+    .filter((l) => requetes.every((q) => !q.trim() || nomsCorrespondent([...avecAnglais([l.objet], dico), l.membre, l.par, l.note, titreDe(d, l.demande)], q)))
     .sort((a, b) => quandDe(b).localeCompare(quandDe(a)))
     .slice(0, 60)
   if (!vus.length) return <p className="vide-encre">{requetes.some((q) => q.trim()) ? 'Rien ne répond à ce nom.' : 'Rien encore n’est écrit ici.'}</p>
@@ -263,8 +267,14 @@ export function GaucheIntendance({ page, reg, icones, compact, recherche }: { pa
         <>
           <Signature reg={reg} />
           <Inactif reg={reg} intendance />
+          {page.vue === 'encours' && d.intendanceActive && !d.feuilletsActifs && <p className="missions-inactif">{TEXTES_FEUILLETS.inactif}</p>}
           <Message reg={reg} />
           <div className="gestes">
+            {page.vue === 'encours' && permis(reg, 'demande') && (
+              <Geste icone={icones['scroll-quill']} disabled={!d.actif} onClick={() => reg.ouvrir({ genre: 'ecrire' })}>
+                Écrire une mission ou une missive
+              </Geste>
+            )}
             {page.vue === 'reception' && permis(reg, 'entree') && (
               <>
                 <Geste icone={icones['entry-door']} disabled={!pret} onClick={() => reg.ouvrir({ genre: 'entree' })}>
@@ -301,7 +311,9 @@ export function GaucheIntendance({ page, reg, icones, compact, recherche }: { pa
           </div>
           {page.vue === 'reception' && <p className="note-encre">Ce qui attend au coffre des petites lunes n’est pas encore dans le coffre de la caravane : réponds « reçu » ligne par ligne en le vidant. Ce que personne n’a signalé, consigne-le au nom de qui l’a déposé, ou comme don anonyme.</p>}
           {page.vue === 'sorties' && <p className="note-encre">Une vente ne touche pas au coffre, sauf ses lignes cochées « pris au coffre » sur le bon : elles attendent ici qu’on confirme la sortie.</p>}
-          {page.vue !== 'ecrire' && <ChampRecherche recherche={recherche} placeholder={page.vue === 'reception' ? 'Chercher une entrée, un nom…' : 'Chercher une sortie, un nom…'} />}
+          {page.vue === 'encours' && <p className="note-encre">Une mission comblée reste ouverte : ce qui arrive après compte encore. Quand la caravane n’en a plus besoin, clos-la ; ce qu’elle a reçu reste compté.</p>}
+          {page.vue === 'encours' && <ChampRecherche recherche={recherche} placeholder="Chercher un feuillet, un objet, un nom…" />}
+          {(page.vue === 'reception' || page.vue === 'sorties') && <ChampRecherche recherche={recherche} placeholder={page.vue === 'reception' ? 'Chercher une entrée, un nom…' : 'Chercher une sortie, un nom…'} />}
           {page.vue === 'ecrire' && <ChampRecherche recherche={recherche} placeholder="Chercher un feuillet…" />}
         </>
       )}
@@ -313,9 +325,11 @@ export function DroiteIntendance({ page, reg, icones, interactif, requetes = [] 
   const d = reg?.m?.donnees
   if (!reg || !d?.relie) return null
   const tab = interactif ? 0 : -1
+  if (page.vue === 'encours') return <EnCours reg={reg} icones={icones} tab={tab} requetes={requetes} />
   if (page.vue === 'reception')
     return (
       <div className="intendance-droite">
+        <AvisAllegement reg={reg} tab={tab} />
         <EnAttente reg={reg} icones={icones} tab={tab} titre="Déposé, à confirmer" />
         <ChezLesArtisans reg={reg} tab={tab} sorties={false} />
         <h3 className="titre-section">Tout ce qui est entré</h3>
@@ -332,7 +346,8 @@ export function DroiteIntendance({ page, reg, icones, interactif, requetes = [] 
       </div>
     )
   // « Écrire une mission »: the sheets written, their progress; the standing missions.
-  const feuillets = [...d.demandes].reverse().filter((x) => requetes.every((q) => !q.trim() || nomsCorrespondent([x.titre, x.article, x.membre], q)))
+  const dico = dicoAnglais(reg.r.donnees)
+  const feuillets = [...d.demandes].reverse().filter((x) => requetes.every((q) => !q.trim() || nomsCorrespondent([x.titre, ...avecAnglais([x.article], dico), x.membre], q)))
   return (
     <div className="intendance-droite">
       <h3 className="titre-section">Les feuillets écrits</h3>
@@ -349,6 +364,7 @@ export function DroiteIntendance({ page, reg, icones, interactif, requetes = [] 
                   {x.horodatage && <>le {dateTamrielique(x.horodatage)}</>}
                   {x.membre && <> par {x.membre}</>}
                   {x.missive && <> · missive</>}
+                  {feuilletClos(x) && <strong className="tampon-clos"> · clos</strong>}
                 </span>
                 <span className="demande-avance">
                   <Jauge avance={a.avance} titre={`${a.comblees} missions comblées sur ${a.total}`} />
@@ -405,16 +421,122 @@ function premiereLigne(d: DonneesMissions, ref?: string): LigneSaisie {
   return p ? { objet: p.objet, quantite: '', mission: p.id } : LIGNE_VIDE
 }
 
+/* ───────────────────────── One hand-over, several missions (lot 2b) ───────────────────────── */
+
+/** The missions ticked on a hand-over and the quantity typed for each (ref → text). */
+type Choisies = Record<string, string>
+
+const MAX_VUES = 24
+
+/**
+ * The missions a hand-over can fill, to tick (lot 2b, Ludo: one giver, several missions in one go): those that still lack
+ * something first, a search by item (French or English) or sheet; a ticked one gets its quantity, pre-filled with what it
+ * lacks. Filled missions only show when searched (a late delivery still counts).
+ */
+function ChoixMissions({ cibles, choisies, changer, dico }: { cibles: Cible[]; choisies: Choisies; changer: (c: Choisies) => void; dico: Map<string, string> }) {
+  const [q, setQ] = useState('')
+  const cherche = q.trim()
+  const cochees = cibles.filter((c) => c.ref in choisies)
+  const autres = cibles.filter((c) => !(c.ref in choisies) && (cherche ? nomsCorrespondent([...avecAnglais([c.objet], dico), c.libelle], cherche) : c.manque > 0))
+  const vues = [...cochees, ...autres.slice(0, MAX_VUES)]
+  const cocher = (c: Cible, oui: boolean) => {
+    const x = { ...choisies }
+    if (oui) x[c.ref] = /^p-/i.test(c.ref) || c.manque <= 0 ? '' : String(c.manque)
+    else delete x[c.ref]
+    changer(x)
+  }
+  if (!cibles.length) return <p className="fiche-aide">Nulle mission n’attend rien pour l’heure : ce qui est remis est un don.</p>
+  return (
+    <div className="choix-missions">
+      {cibles.length > 6 && (
+        <input type="search" className="choix-missions-cherche" value={q} placeholder="Chercher une mission (Blé, Wheat…)" aria-label="Chercher une mission" onChange={(e) => setQ(e.target.value)} />
+      )}
+      <ul className="choix-missions-liste">
+        {vues.map((c) => {
+          const oui = c.ref in choisies
+          return (
+            <li key={c.ref} className={oui ? 'cochee' : ''}>
+              <label className="fiche-coche">
+                <input type="checkbox" checked={oui} onChange={(e) => cocher(c, e.target.checked)} />
+                <span>{c.libelle}</span>
+              </label>
+              {oui && (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="choix-missions-qte"
+                  value={choisies[c.ref]}
+                  placeholder="combien"
+                  aria-label={`Combien pour ${c.libelle}`}
+                  onChange={(e) => changer({ ...choisies, [c.ref]: e.target.value.replace(/\D/g, '').slice(0, 7) })}
+                />
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {autres.length > MAX_VUES && <p className="fiche-aide">Et {autres.length - MAX_VUES} autres : cherche-les par leur nom.</p>}
+      {cherche && !autres.length && <p className="fiche-aide">Nulle mission ne répond à ce nom.</p>}
+    </div>
+  )
+}
+
+/** The missions ticked as the server reads them; `null` while a ticked one has no quantity. */
+function lignesChoisies(choisies: Choisies, cibles: Cible[]) {
+  const res: { objet: string; quantite: number; mission: string }[] = []
+  for (const [ref, t] of Object.entries(choisies)) {
+    const c = cibles.find((x) => x.ref === ref)
+    if (!c) continue
+    if (!(Number(t) >= 1)) return null
+    res.push({ objet: c.objet, quantite: Number(t), mission: ref })
+  }
+  return res
+}
+
+/** The gift lines (not tied to a mission): [] when none is filled, `null` while one is incomplete. */
+const lignesDons = (lignes: LigneSaisie[], noms: NomsObjets) => (lignes.some((l) => l.objet.trim() || l.quantite) ? lignesEnvoyees(lignes, [], noms)?.map((l) => ({ ...l, mission: '' })) ?? null : [])
+
+/** « Blé » typed as a gift while a mission waits for it: said, so it is ticked above if it was for her. */
+function AvisDons({ dons, cibles, choisies, noms }: { dons: LigneSaisie[]; cibles: Cible[]; choisies: Choisies; noms: NomsObjets }) {
+  const pour = [...new Set(dons.map((l) => noms.get(cle(l.objet))).filter((x): x is string => Boolean(x)))].filter((fr) => cibles.some((c) => cle(c.objet) === cle(fr) && c.manque > 0 && !(c.ref in choisies)))
+  if (!pour.length) return null
+  return <p className="fiche-aide avis-don">{pour.join(', ')} : une mission en attend. Si c’était pour elle, coche-la plus haut ; sinon c’est un don.</p>
+}
+
+/** The two parts of a hand-over: the missions ticked, then what is given outside any mission (a gift). */
+function RemiseEtDons({ cibles, choisies, setChoisies, dons, setDons, noms, dico }: { cibles: Cible[]; choisies: Choisies; setChoisies: (c: Choisies) => void; dons: LigneSaisie[]; setDons: (l: LigneSaisie[]) => void; noms: NomsObjets; dico: Map<string, string> }) {
+  return (
+    <>
+      <h3 className="fiche-sous-titre">Pour des missions</h3>
+      <ChoixMissions cibles={cibles} choisies={choisies} changer={setChoisies} dico={dico} />
+      <h3 className="fiche-sous-titre">Hors mission : un don</h3>
+      <p className="fiche-aide">Tout ce qui ne remplit aucune mission est un don.</p>
+      <LignesObjets lignes={dons} changer={setDons} noms={noms} cibles={[]} sansMission />
+      <AvisDons dons={dons} cibles={cibles} choisies={choisies} noms={noms} />
+    </>
+  )
+}
+
+/** The mission a note was opened from, pre-ticked with what it lacks. */
+function choisiesDe(cibles: Cible[], mission?: string): Choisies {
+  const c = mission ? cibles.find((x) => x.ref === mission) : undefined
+  return c ? { [c.ref]: /^p-/i.test(c.ref) || c.manque <= 0 ? '' : String(c.manque) } : {}
+}
+
 /** A member's declaration (S5): left in the petites lunes chest, or handed to someone; it waits for a yes / no. */
 export function FicheSignaler({ reg, articles, icones, fermer, mission }: EnvMission & { mission?: string }) {
   const d = reg.m!.donnees!
   const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
+  const dico = useMemo(() => dicoAnglais(reg.r.donnees, articles), [reg.r.donnees, articles])
   const cibles = useMemo(() => ciblesDe(d), [d])
-  const [lignes, setLignes] = useState<LigneSaisie[]>([premiereLigne(d, mission)])
+  const [choisies, setChoisies] = useState<Choisies>(() => choisiesDe(cibles, mission))
+  const [dons, setDons] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE, mission: '' }])
   const [ou, setOu] = useState<'petites' | 'main'>('petites')
   const [note, setNote] = useState('')
   const { etat, erreur, envoyer } = useScelle(fermer)
-  const envoyees = lignesEnvoyees(lignes, cibles, noms)
+  const pourMissions = lignesChoisies(choisies, cibles)
+  const horsMission = lignesDons(dons, noms)
+  const envoyees = pourMissions && horsMission && pourMissions.length + horsMission.length ? [...pourMissions, ...horsMission] : null
   return (
     <form
       className="fiche-form intendance-form"
@@ -423,8 +545,8 @@ export function FicheSignaler({ reg, articles, icones, fermer, mission }: EnvMis
         if (envoyees) envoyer(() => reg.m!.agir('signaler', { lignes: envoyees, coffre: ou === 'petites' ? PETITES_LUNES : 'main', note }))
       }}
     >
-      <p className="fiche-aide">Ce que tu as remis pour la caravane. Une patte de l’Intendance répondra « reçu » ; d’ici là, rien n’est compté.</p>
-      <LignesObjets lignes={lignes} changer={setLignes} noms={noms} cibles={cibles} fige={Boolean(mission)} />
+      <p className="fiche-aide">Ce que tu as remis pour la caravane : coche les missions, ajoute ce qui n’en remplit aucune. Une patte de l’Intendance répondra « reçu » ; d’ici là, rien n’est compté.</p>
+      <RemiseEtDons cibles={cibles} choisies={choisies} setChoisies={setChoisies} dons={dons} setDons={setDons} noms={noms} dico={dico} />
       <fieldset className="fiche-choix">
         <legend>Où est-ce ?</legend>
         <label className="fiche-coche">
@@ -456,8 +578,8 @@ function pointsPrevus(reg: CtxRegistre, articles: Article[], lignes: { objet: st
   const recettes = reg.r.donnees?.recettes ?? []
   return lignes.reduce((t, l) => {
     const m = d.missions.find((x) => x.numero === l.mission) ?? d.permanentes.find((x) => x.id === l.mission)
-    if (m) return t + Math.round(tauxDe(m) * l.quantite)
-    return t + pointsDon(l.objet, l.quantite, recettes, articles, d.ponderation, false).points
+    if (m && tauxDe(m) > 0) return t + Math.round(tauxDe(m) * l.quantite)
+    return t + pointsDon(l.objet, l.quantite, recettes, articles, d.ponderation, false, prixDon(l.objet, reg.r.donnees?.ressources ?? [], articles)).points
   }, 0)
 }
 
@@ -475,11 +597,17 @@ export function FicheEntree({ reg, articles, icones, fermer, mission, lien, don 
   const [qui, setQui] = useState(f?.membre ?? '')
   const [anonyme, setAnonyme] = useState(false)
   const [petites, setPetites] = useState(petites0)
-  const [lignes, setLignes] = useState<LigneSaisie[]>(f ? [{ objet: f.objet, quantite: String(retour?.attendu || ''), mission: f.mission }] : [mission ? premiereLigne(d, mission) : { ...LIGNE_VIDE, mission: don ? '' : '?' }])
+  // A craft's return: its product (and its mission) set. Otherwise (lot 2b): the missions ticked, and the gifts.
+  const [lignes, setLignes] = useState<LigneSaisie[]>(f ? [{ objet: f.objet, quantite: String(retour?.attendu || ''), mission: f.mission }] : [])
+  const dico = useMemo(() => dicoAnglais(reg.r.donnees, articles), [reg.r.donnees, articles])
+  const [choisies, setChoisies] = useState<Choisies>(() => choisiesDe(cibles, mission))
+  const [dons, setDons] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE, mission: '' }])
   const [rentrees, setRentrees] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE, mission: '' }])
   const [note, setNote] = useState('')
   const { etat, erreur, envoyer } = useScelle(fermer)
-  const envoyees = lignesEnvoyees(lignes, cibles, noms)
+  const pourMissions = f ? lignesEnvoyees(lignes, cibles, noms) : lignesChoisies(choisies, cibles)
+  const horsMission = f ? [] : lignesDons(dons, noms)
+  const envoyees = pourMissions && horsMission && pourMissions.length + horsMission.length ? [...pourMissions, ...horsMission] : null
   const rentreesEnvoyees = f ? lignesEnvoyees(rentrees, [], noms) : null
   const nomTape = qui.trim()
   const connu = nomDuRegistre(nomTape, reg.r.noms)
@@ -530,7 +658,7 @@ export function FicheEntree({ reg, articles, icones, fermer, mission, lien, don 
           </label>
         </>
       )}
-      <LignesObjets lignes={lignes} changer={setLignes} noms={noms} cibles={cibles} fige={Boolean(mission || f)} />
+      {f ? <LignesObjets lignes={lignes} changer={setLignes} noms={noms} cibles={cibles} fige /> : <RemiseEtDons cibles={cibles} choisies={choisies} setChoisies={setChoisies} dons={dons} setDons={setDons} noms={noms} dico={dico} />}
       {f && (
         <>
           <h3 className="fiche-sous-titre">Matières rentrées (facultatif)</h3>
@@ -562,7 +690,10 @@ export function FicheFaconnage({ reg, articles, icones, fermer, produit: produit
   const m0 = mission ? d.missions.find((x) => x.numero === mission) : undefined
   const [v, setV] = useState({ artisan: '', produit: produit0 ?? m0?.objet ?? '', variante: '', quantite: m0 ? String(etatMission(m0, d.intendance).manque || '') : '', mission: mission ?? '' })
   const { etat, erreur, envoyer } = useScelle(fermer)
-  const nom = produits.find((p) => cle(p) === cle(v.produit)) ?? ''
+  // Found by its French or its English name (lot 2b).
+  const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
+  const tape = noms.get(cle(v.produit)) ?? v.produit
+  const nom = produits.find((p) => cle(p) === cle(tape)) ?? ''
   const vs = nom ? variantesDe(recettes, nom) : []
   const r = vs.find((x) => String(x.variante) === v.variante) ?? recetteUsage(vs)
   const Q = Number(v.quantite)
@@ -586,11 +717,7 @@ export function FicheFaconnage({ reg, articles, icones, fermer, produit: produit
         <label className="fiche-champ">
           <span>Quel ouvrage</span>
           <input type="text" list="produits-faconner" value={v.produit} placeholder="Potion de soin" onChange={(e) => setV({ ...v, produit: e.target.value, variante: '', mission: '' })} />
-          <datalist id="produits-faconner">
-            {produits.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
+          <OptionsObjets id="produits-faconner" noms={noms} seuls={(fr) => produits.some((p) => cle(p) === cle(fr))} />
         </label>
         <label className="fiche-champ">
           <span>Combien</span>
@@ -683,3 +810,423 @@ export function FichePerte({ reg, articles, icones, fermer }: EnvMission) {
   )
 }
 
+
+/* ───────────────────────── The missions in progress (lot 2b) ───────────────────────── */
+
+const titreFeuillet = (dm: Demande) => dm.titre || `${nf(dm.quantite)} ${dm.article}`
+
+/** The upstream missions each open sheet's hand-overs make unnecessary (lib/missions.ts `allegements`), by sheet. */
+export function aAlleger(reg: CtxRegistre): { dm: Demande; liste: Allegement[] }[] {
+  const d = reg.m?.donnees
+  if (!d) return []
+  const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
+  return d.demandes.filter((dm) => !feuilletClos(dm)).map((dm) => ({ dm, liste: allegements(dm, d.missions, d.intendance, recettes, d.ponderation) })).filter((x) => x.liste.length)
+}
+
+/**
+ * « Ce qui a été reçu rend des missions inutiles » (lot 2b): shown on the Réception, the missions in progress and the sheet's
+ * page while a sheet's hand-overs make upstream missions unnecessary; nothing is changed before someone confirms.
+ */
+export function AvisAllegement({ reg, numero, tab }: { reg: CtxRegistre; numero?: string; tab: number }) {
+  if (!permis(reg, 'feuillet')) return null
+  const x = aAlleger(reg).filter((y) => !numero || y.dm.numero === numero)
+  if (!x.length) return null
+  return (
+    <div className="avis-allegement" role="status">
+      {x.map(({ dm, liste }) => (
+        <p key={dm.numero}>
+          Ce qui a été reçu pour « {titreFeuillet(dm)} » rend {liste.length > 1 ? `${liste.length} missions en amont inutiles` : 'une mission en amont inutile'}.{' '}
+          <Action icone="clore" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'alleger', numero: dm.numero })}>
+            voir et alléger
+          </Action>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+/** One sheet in the missions in progress: its missions (Requis · Reçu · Manque, waiting), the gestures to correct or close. */
+function BlocEnCours({ dm, ms, reg, icones, tab }: { dm: Demande; ms: Mission[]; reg: CtxRegistre; icones: Record<string, string>; tab: number }) {
+  const d = reg.m!.donnees!
+  const clos = feuilletClos(dm)
+  const peut = permis(reg, 'fermer')
+  const pret = d.feuilletsActifs
+  const aide = pret ? undefined : TEXTES_FEUILLETS.inactif
+  const missive = dm.missive ? reg.r.calcul?.etats.find((e) => e.missive.numero === dm.missive)?.missive : undefined
+  const a = avancement(dm, ms, d.intendance)
+  return (
+    <li className={`feuillet encours-feuillet ${clos ? 'clos' : ''}`}>
+      <div className="encours-tete">
+        <button type="button" className="feuillet-titre" tabIndex={tab} onClick={() => reg.allerA(idDemande(dm.numero))}>
+          {titreFeuillet(dm)}
+        </button>
+        <span className="feuillet-meta">
+          {missive ? <>missive de {missive.commanditaire || missive.titre}</> : <>pour la caravane</>}
+          {dm.membre && <> · écrit par {dm.membre}</>}
+          {dm.horodatage && <> le {dateTamrielique(dm.horodatage)}</>}
+          {' · '}
+          {a.comblees}/{a.total} comblées
+          {clos && <strong className="tampon-clos"> · clos</strong>}
+        </span>
+        {peut && (
+          <span className="mission-gestes">
+            {!clos && (
+              <Action icone="corriger" tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'feuillet', numero: dm.numero })}>
+                corriger
+              </Action>
+            )}
+            <Action icone={clos ? 'rouvrir' : 'clore'} tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'feuillet', numero: dm.numero, ouvrir: clos })}>
+              {clos ? 'rouvrir le feuillet' : 'clore le feuillet'}
+            </Action>
+          </span>
+        )}
+      </div>
+      {!clos && (
+        <div className="besoins encours-besoins" role="table">
+          <div className="besoins-entete" role="row">
+            <span>Mission</span>
+            <span>Requis</span>
+            <span>Reçu</span>
+            <span>Manque</span>
+          </div>
+          {ms.map((m) => {
+            const e = etatMission(m, d.intendance)
+            const close = m.statut === 'close'
+            return (
+              <div key={m.numero} role="row" className={`besoins-ligne ${close ? 'close' : e.manque > 0 ? 'manquant' : 'reuni'}`}>
+                <span className="besoins-nom">
+                  <span className="besoins-mot">
+                    <GlypheType type={m.type} icones={icones} /> {VERBES[m.type]} {m.objet}
+                  </span>
+                  {close && <em>close : elle a quitté l’appel</em>}
+                  {e.attente > 0 && <em>{nf(e.attente)} en attente de confirmation</em>}
+                  {peut && (m.statut === 'ouverte' || close) && (
+                    <span className="encours-gestes">
+                      <Action icone={close ? 'rouvrir' : 'clore'} tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'mission', numero: m.numero, ouvrir: close })}>
+                        {close ? 'rouvrir' : 'clore'}
+                      </Action>
+                    </span>
+                  )}
+                </span>
+                <span>{nf(e.requis)}</span>
+                <span>{nf(e.recu)}</span>
+                <span className="besoins-manque">{close ? '—' : e.manque > 0 ? nf(e.manque) : <Coche />}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </li>
+  )
+}
+
+/** « Les missions en cours »: every open sheet, the standing missions, the closed sheets (to reopen). */
+function EnCours({ reg, icones, tab, requetes }: { reg: CtxRegistre; icones: Record<string, string>; tab: number; requetes: string[] }) {
+  const d = reg.m!.donnees!
+  const dico = dicoAnglais(reg.r.donnees)
+  const peut = permis(reg, 'fermer')
+  const etats = reg.r.calcul?.etats ?? []
+  const missiveDe = (n: string) => etats.find((e) => e.missive.numero === n)?.missive
+  const trouve = (dm: Demande, ms: Mission[]) =>
+    requetes.every((q) => !q.trim() || nomsCorrespondent([titreFeuillet(dm), dm.membre, missiveDe(dm.missive)?.titre ?? '', missiveDe(dm.missive)?.commanditaire ?? '', ...avecAnglais([dm.article, ...ms.map((m) => m.objet)], dico)], q))
+  const feuillets = [...d.demandes]
+    .reverse()
+    .map((dm) => ({ dm, ms: d.missions.filter((m) => m.demande === dm.numero) }))
+    .filter((x) => x.ms.length && trouve(x.dm, x.ms))
+  const ouverts = feuillets.filter((x) => !feuilletClos(x.dm))
+  const clos = feuillets.filter((x) => feuilletClos(x.dm))
+  const permanentes = d.permanentes.filter((x) => requetes.every((q) => !q.trim() || nomsCorrespondent(avecAnglais([x.objet], dico), q)))
+  const cherche = requetes.some((q) => q.trim())
+  return (
+    <div className="intendance-droite encours-droite">
+      <AvisAllegement reg={reg} tab={tab} />
+      <h3 className="titre-section">Les feuillets ouverts</h3>
+      {ouverts.length ? (
+        <ul className="liste-feuillets">
+          {ouverts.map((x) => (
+            <BlocEnCours key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} />
+          ))}
+        </ul>
+      ) : (
+        <p className="vide-encre">{cherche ? 'Nul feuillet ouvert ne répond à ce nom.' : 'Nul feuillet n’est ouvert : la caravane n’attend rien, pour l’heure.'}</p>
+      )}
+      {permanentes.length > 0 && (
+        <>
+          <h3 className="titre-section">Missions permanentes</h3>
+          <ul className="missions-liste">
+            {permanentes.map((x) => (
+              <li key={x.id} className={`mission permanente ${x.statut !== 'ouverte' ? 'fermee' : ''}`}>
+                <GlypheType type={x.type} icones={icones} />
+                <span className="mission-texte">
+                  <span className="mission-intitule">
+                    {VERBES[x.type]} {x.objet}
+                  </span>
+                  <Meta parts={[x.statut === 'ouverte' ? 'toujours ouverte' : x.statut, voitPoints(reg) && `${pts(x.points)} pour ${nf(x.quantite)}`]} />
+                </span>
+                <span className="mission-cote">
+                  {permis(reg, 'permanente') && (
+                    <span className="mission-gestes">
+                      {x.statut === 'ouverte' ? (
+                        <>
+                          <Action icone="pause" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'etat-permanente', id: x.id, statut: 'en pause' })}>
+                            en pause
+                          </Action>
+                          <Action icone="clore" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'etat-permanente', id: x.id, statut: 'close' })}>
+                            clore
+                          </Action>
+                        </>
+                      ) : (
+                        <Action icone="rouvrir" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'etat-permanente', id: x.id, statut: 'ouverte' })}>
+                          rouvrir
+                        </Action>
+                      )}
+                      <Action icone="corriger" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'permanente', id: x.id })}>
+                        régler
+                      </Action>
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {clos.length > 0 && (
+        <>
+          <h3 className="titre-section">Feuillets clos</h3>
+          <p className="note-encre">Ils ont quitté l’appel ; ce qu’ils ont reçu reste compté. On peut les rouvrir.</p>
+          <ul className="liste-feuillets">
+            {clos.map((x) => (
+              <BlocEnCours key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} />
+            ))}
+          </ul>
+        </>
+      )}
+      {!peut && <p className="note-encre">Corriger ou clore un feuillet est réservé à qui écrit les missions.</p>}
+    </div>
+  )
+}
+
+/* ───────────────────────── Correcting, closing, lightening (lot 2b) ───────────────────────── */
+
+type LigneCorrigee = { q: string; retirer: boolean }
+
+/**
+ * Correct a sheet: its title and note, each line's quantity (what was received stays: never below it is proposed), a line
+ * removed (only when nothing was received nor declared for it: else it is closed), lines added (the item, how many).
+ */
+export function FicheFeuillet({ reg, articles, icones, fermer, numero }: EnvMission & { numero: string }) {
+  const d = reg.m!.donnees!
+  const dm = d.demandes.find((x) => x.numero === numero)
+  const ms = useMemo(() => d.missions.filter((m) => m.demande === numero), [d.missions, numero])
+  const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
+  const [v, setV] = useState({ titre: dm?.titre ?? '', note: dm?.note ?? '' })
+  const [lignes, setLignes] = useState<Record<string, LigneCorrigee>>({})
+  const [ajouts, setAjouts] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE, mission: '' }])
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  if (!dm) return <p className="fiche-aide">Ce feuillet est introuvable dans le registre.</p>
+  const ligne = (m: Mission) => lignes[m.numero] ?? { q: String(m.quantite), retirer: false }
+  const changer = (m: Mission, x: Partial<LigneCorrigee>) => setLignes({ ...lignes, [m.numero]: { ...ligne(m), ...x } })
+  const ajoutes = lignesDons(ajouts, noms)
+  const envoyees = ms
+    .filter((m) => m.statut === 'ouverte' || m.statut === 'close')
+    .flatMap((m): { numero: string; retirer?: boolean; quantite?: number }[] => {
+      const l = ligne(m)
+      if (l.retirer) return [{ numero: m.numero, retirer: true }]
+      return Number(l.q) >= 1 && Number(l.q) !== m.quantite ? [{ numero: m.numero, quantite: Number(l.q) }] : []
+    })
+  const incomplet = ms.some((m) => !ligne(m).retirer && !(Number(ligne(m).q) >= 1)) || !ajoutes
+  const change = envoyees.length > 0 || (ajoutes?.length ?? 0) > 0 || v.titre.trim() !== dm.titre || v.note.trim() !== dm.note
+  const pret = change && !incomplet && d.feuilletsActifs
+  return (
+    <form
+      className="fiche-form intendance-form demande-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (pret) envoyer(() => reg.m!.agir('feuillet', { numero, titre: v.titre, note: v.note, lignes: envoyees, ajouts: (ajoutes ?? []).map((x) => ({ objet: x.objet, quantite: x.quantite })) }))
+      }}
+    >
+      {!d.feuilletsActifs && <p className="fiche-aide">{TEXTES_FEUILLETS.inactif}</p>}
+      <label className="fiche-champ">
+        <span>Titre</span>
+        <input type="text" value={v.titre} maxLength={120} placeholder={`${nf(dm.quantite)} ${dm.article}`} onChange={(e) => setV({ ...v, titre: e.target.value })} />
+      </label>
+      <h3 className="fiche-sous-titre">Les missions</h3>
+      <p className="fiche-aide">Change une quantité sur sa ligne. Ce qui a été reçu reste compté. Une mission qui a déjà reçu ne se retire pas : on la clôt depuis « En cours ».</p>
+      <div className="tri-missions corriger-missions" role="table">
+        <div className="tri-entete" role="row">
+          <span>Mission</span>
+          <span>Reçu</span>
+          <span>Il en faut</span>
+        </div>
+        {ms.map((m) => {
+          const e = etatMission(m, d.intendance)
+          const l = ligne(m)
+          const prise = m.statut !== 'ouverte' && m.statut !== 'close'
+          const retirable = !prise && e.recu === 0 && e.attente === 0
+          return (
+            <div key={m.numero} className={`tri-ligne ${l.retirer ? 'retiree' : ''}`} role="row">
+              <span className="tri-nom">
+                <GlypheType type={m.type} icones={icones} />
+                <span>
+                  {VERBES[m.type]} {m.objet}
+                  {m.statut === 'close' && <em> · close</em>}
+                  {e.attente > 0 && <em> · {nf(e.attente)} en attente</em>}
+                  {retirable && (
+                    <button type="button" className="lien-encre tri-retirer" onClick={() => changer(m, { retirer: !l.retirer })}>
+                      {l.retirer ? 'la garder' : 'retirer'}
+                    </button>
+                  )}
+                </span>
+              </span>
+              <span>{nf(e.recu)}</span>
+              <input type="text" inputMode="numeric" value={l.q} disabled={l.retirer || prise} aria-label={`${m.objet} : il en faut`} onChange={(x) => changer(m, { q: x.target.value.replace(/\D/g, '').slice(0, 7) })} />
+            </div>
+          )
+        })}
+      </div>
+      <h3 className="fiche-sous-titre">Ajouter une mission</h3>
+      <LignesObjets lignes={ajouts} changer={setAjouts} noms={noms} cibles={[]} sansMission />
+      <label className="fiche-champ">
+        <span>Note (facultative)</span>
+        <input type="text" value={v.note} maxLength={200} onChange={(e) => setV({ ...v, note: e.target.value })} />
+      </label>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!pret}>
+          Graver les corrections
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/** Closing (or reopening) a mission or a whole sheet: said in character, then confirmed. */
+export function FicheFermer({ reg, icones, fermer, cible, numero, ouvrir }: EnvMission & { cible: 'mission' | 'feuillet'; numero: string; ouvrir?: boolean }) {
+  const d = reg.m!.donnees!
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  const m = cible === 'mission' ? d.missions.find((x) => x.numero === numero) : undefined
+  const dm = cible === 'feuillet' ? d.demandes.find((x) => x.numero === numero) : undefined
+  if (!m && !dm) return <p className="fiche-aide">Introuvable dans le registre.</p>
+  const ms = dm ? d.missions.filter((x) => x.demande === dm.numero) : [m!]
+  const attente = ms.reduce((t, x) => t + etatMission(x, d.intendance).attente, 0)
+  const recu = ms.reduce((t, x) => t + etatMission(x, d.intendance).recu, 0)
+  const nom = m ? `« ${VERBES[m.type]} ${m.objet} »` : `le feuillet « ${titreFeuillet(dm!)} »`
+  return (
+    <form
+      className="fiche-form intendance-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => reg.m!.agir('fermer', { cible, numero, ouvrir: ouvrir === true }))
+      }}
+    >
+      {!d.feuilletsActifs && <p className="fiche-aide">{TEXTES_FEUILLETS.inactif}</p>}
+      {ouvrir ? (
+        <p className="fiche-aide">Rouvrir {nom} ? {m ? 'Elle revient' : 'Ses missions reviennent'} à l’appel aux missions, et chacun peut de nouveau y remettre.</p>
+      ) : (
+        <>
+          <p className="fiche-aide">
+            Clore {nom} ? {m ? 'Elle quitte' : 'Ses missions quittent'} l’appel aux missions : nul n’y remettra plus rien.
+          </p>
+          <ul className="fiche-aide-liste">
+            <li>Ce qui a été reçu ({nf(recu)}) reste compté : le coffre et les points ne bougent pas.</li>
+            {attente > 0 && <li>Les {nf(attente)} encore en attente de confirmation pourront toujours être reçus (ou refusés) à la Réception.</li>}
+            <li>On peut {m ? 'la' : 'le'} rouvrir à tout moment depuis « En cours ».</li>
+          </ul>
+        </>
+      )}
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!d.feuilletsActifs}>
+          {ouvrir ? 'Rouvrir' : 'Clore'}
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/** A standing mission paused, closed or reopened (its other settings unchanged), confirmed. */
+export function FicheEtatPermanente({ reg, icones, fermer, id, statut }: EnvMission & { id: string; statut: Permanente['statut'] }) {
+  const d = reg.m!.donnees!
+  const x = d.permanentes.find((y) => y.id === id)
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  if (!x) return <p className="fiche-aide">Cette mission permanente est introuvable.</p>
+  const texte =
+    statut === 'ouverte'
+      ? 'Elle revient à l’appel : chacun peut de nouveau y remettre.'
+      : statut === 'en pause'
+        ? 'Elle quitte l’appel pour un temps : ce qui a été reçu reste compté, on la rouvre quand on veut.'
+        : 'Elle quitte l’appel : ce qui a été reçu reste compté. On peut la rouvrir.'
+  return (
+    <form
+      className="fiche-form intendance-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        envoyer(() => reg.m!.agir('permanente', { id: x.id, objet: x.objet, quantite: x.quantite, points: x.points, statut, note: x.note }))
+      }}
+    >
+      <p className="fiche-aide">
+        {VERBES[x.type]} {x.objet} : {texte}
+      </p>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones}>
+          {statut === 'ouverte' ? 'Rouvrir' : statut === 'en pause' ? 'Mettre en pause' : 'Clore'}
+        </Sceller>
+      </div>
+    </form>
+  )
+}
+
+/**
+ * The upstream missions a sheet's hand-overs make unnecessary (lot 2b): each one ticked, lowered to what the tree still
+ * needs, or closed when it received nothing; untick what should stay. Nothing changes before « Alléger ».
+ */
+export function FicheAlleger({ reg, icones, fermer, numero }: EnvMission & { numero: string }) {
+  const d = reg.m!.donnees!
+  const dm = d.demandes.find((x) => x.numero === numero)
+  const liste = useMemo(() => aAlleger(reg).find((x) => x.dm.numero === numero)?.liste ?? [], [reg, numero])
+  const [non, setNon] = useState<Record<string, boolean>>({})
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  if (!dm) return <p className="fiche-aide">Ce feuillet est introuvable dans le registre.</p>
+  if (!liste.length) return <p className="fiche-aide">Rien n’est à alléger : chaque mission de ce feuillet sert encore.</p>
+  const gardees = liste.filter((x) => !non[x.numero])
+  const recus = d.missions
+    .filter((m) => m.demande === numero && (m.type === 'fabrication' || cle(m.objet) === cle(dm.article)))
+    .map((m) => ({ m, e: etatMission(m, d.intendance) }))
+    .filter((x) => x.e.recu > 0)
+  return (
+    <form
+      className="fiche-form intendance-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (gardees.length)
+          envoyer(() => reg.m!.agir('feuillet', { numero, allegement: true, lignes: gardees.map((x) => (x.fermer ? { numero: x.numero, fermer: true } : { numero: x.numero, quantite: x.apres })) }))
+      }}
+    >
+      {!d.feuilletsActifs && <p className="fiche-aide">{TEXTES_FEUILLETS.inactif}</p>}
+      <p className="fiche-aide">
+        Déjà reçu pour « {titreFeuillet(dm)} » : {recus.map((x) => objetQ(x.e.recu, x.m.objet)).join(', ')}. Il n’en faut donc plus autant en amont :
+      </p>
+      <ul className="choix-missions-liste">
+        {liste.map((x) => (
+          <li key={x.numero} className={non[x.numero] ? '' : 'cochee'}>
+            <label className="fiche-coche">
+              <input type="checkbox" checked={!non[x.numero]} onChange={(e) => setNon({ ...non, [x.numero]: !e.target.checked })} />
+              <span>
+                {VERBES[x.type]} {x.objet} : {x.fermer ? <>plus utile, la clore ({nf(x.avant)} demandés, rien reçu)</> : <>{nf(x.avant)} → {nf(x.apres)}{x.recu > 0 && <> (déjà {nf(x.recu)} reçus)</>}</>}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="fiche-aide">Ce qui a été reçu reste compté. Une mission close se rouvre depuis « En cours ».</p>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!gardees.length || !d.feuilletsActifs}>
+          Alléger
+        </Sceller>
+      </div>
+    </form>
+  )
+}

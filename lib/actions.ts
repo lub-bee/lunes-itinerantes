@@ -32,5 +32,9 @@ export const ICONES_ACTIONS = {
   sortir: 'exit-door',
   entree: 'entry-door',
   sceau: 'wax-seal',
+  // The missions in progress (lot 2b): close, reopen, pause.
+  clore: 'padlock',
+  rouvrir: 'padlock-open',
+  pause: 'pause-button',
 } as const
 

@@ -747,3 +747,20 @@ export function anglaisDe(d: Pick<DonneesRegistre, 'ressources' | 'recettes'> | 
     ''
   )
 }
+
+/**
+ * Every English name the registre and the catalogue know, by `cle` of the French name (lot 2b, Ludo: every search and
+ * every item field also matches the English name). Built once per render of a list, then `avecAnglais` per item.
+ */
+export function dicoAnglais(d: Pick<DonneesRegistre, 'ressources' | 'recettes' | 'catalogue'> | null | undefined, articles: { fr: string; en: string }[] = []): Map<string, string> {
+  const res = new Map<string, string>()
+  const mettre = (fr: string, en: string | undefined) => fr && en && !res.has(cle(fr)) && res.set(cle(fr), en)
+  d?.ressources.forEach((r) => mettre(r.nom, r.en))
+  d?.recettes.forEach((r) => mettre(r.produit, r.en))
+  d?.catalogue?.forEach((a) => mettre(a.fr, a.en))
+  articles.forEach((a) => mettre(a.fr, a.en))
+  return res
+}
+
+/** The names to search: each name followed by its English one when known (for `nomsCorrespondent`). */
+export const avecAnglais = (noms: string[], dico: Map<string, string>) => noms.flatMap((n) => [n, dico.get(cle(n)) ?? ''])

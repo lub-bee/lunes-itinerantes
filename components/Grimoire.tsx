@@ -10,7 +10,7 @@ import { GAUFRAGE } from '@/lib/gaufrage'
 import { articleCorrespond, compterDans, jetons, nomsCorrespondent, plages, slug } from '@/lib/recherche'
 import { artisanDe, metierDe } from '@/lib/metiers'
 import CHAPITRES from '@/content/chapitres.json'
-import { cle, type Recette } from '@/lib/missives'
+import { avecAnglais, cle, dicoAnglais, type Recette } from '@/lib/missives'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { Action, CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
@@ -89,8 +89,8 @@ const COURT_MAX = 18
 /** Beyond this many side tabs (the Missions ribbon with many open missives), the tabs tighten to stay on the book's edge. */
 const SERRES = 12
 
-/** A recipe matches a query by its French or English name, or its craft. */
-const recetteCorrespond = (r: Recette, requete: string) => nomsCorrespondent([r.produit, r.en, metierDe(r.artisan).nom], requete)
+/** A recipe matches a query by its French or English name (its own, else the registre's: lot 2b), or its craft. */
+const recetteCorrespond = (r: Recette, requete: string, dico: Map<string, string>) => nomsCorrespondent([r.produit, r.en || (dico.get(cle(r.produit)) ?? ''), metierDe(r.artisan).nom], requete)
 
 /** The pages that open with the Livre du Trésor: its own, the caravan's points among them. */
 const pageDuTresor = (p: Page) => p.partie === 'tresor' || (p.type === 'patriarche' && p.vue === 'points')
@@ -602,6 +602,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
 
   const resultats = useMemo((): Resultat[] => {
     if (!jetons(requete).length) return []
+    // Every French name with its English one (lot 2b: the search matches both, everywhere).
+    const dico = dicoAnglais(registre.donnees, pages.flatMap((p) => (p.type === 'chapitre' ? p.articles : [])))
     return pages.flatMap((p, i): Resultat[] => {
       if (p.type === 'chapitre') {
         const articles = p.articles.filter((a) => articleCorrespond(a, requete))
@@ -616,14 +618,14 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         const k = metierDe(p.metier).cle
         // One entry per product, found by any of its recipes' names.
         const recettes = produitsDe(registre.donnees?.recettes ?? [])
-          .filter((r) => (p.ombre ? r.ombre : !r.ombre && metierDe(r.artisan).cle === k) && r.toutes.some((v) => recetteCorrespond(v, requete)))
+          .filter((r) => (p.ombre ? r.ombre : !r.ombre && metierDe(r.artisan).cle === k) && r.toutes.some((v) => recetteCorrespond(v, requete, dico)))
           .sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
         return recettes.length ? [{ i, page: p, total: recettes.length, articles: [], recettes }] : []
       }
       if (p.type === 'atelier' && p.vue === 'matieres') {
         // Raw materials, by their French or English name.
         const autres = (registre.donnees?.ressources ?? [])
-          .filter((x) => nomsCorrespondent([x.nom, x.en], requete))
+          .filter((x) => nomsCorrespondent([x.nom, x.en || (dico.get(cle(x.nom)) ?? '')], requete))
           .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
           .map((x) => ({ cle: x.nom, fr: x.nom, en: x.en, fiche: { genre: 'ressource' as const, nom: x.nom } }))
         return autres.length ? [{ i, page: p, total: autres.length, articles: [], autres }] : []
@@ -632,13 +634,13 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
         // A sheet of missions, by its title, its merchandise or the items of its missions.
         const x = missions.donnees?.demandes.find((y) => y.numero === p.numero)
         const objets = (missions.donnees?.missions ?? []).filter((m) => m.demande === p.numero).map((m) => m.objet)
-        if (!x || !nomsCorrespondent([p.titre, x.article, ...objets], requete)) return []
+        if (!x || !nomsCorrespondent([p.titre, ...avecAnglais([x.article, ...objets], dico)], requete)) return []
         return [{ i, page: p, total: 1, articles: [], autres: [{ cle: x.numero, fr: p.titre, en: x.membre }] }]
       }
       if (p.type === 'missive') {
         // A missive, by its title, its client or the goods it asks for.
         const m = registre.donnees?.missives.find((x) => x.numero === p.numero)
-        if (!m || !nomsCorrespondent([m.titre, m.commanditaire, ...m.lignes.map((l) => l.produit)], requete)) return []
+        if (!m || !nomsCorrespondent([m.titre, m.commanditaire, ...avecAnglais(m.lignes.map((l) => l.produit), dico)], requete)) return []
         return [{ i, page: p, total: 1, articles: [], autres: [{ cle: m.numero, fr: m.titre, en: m.commanditaire }] }]
       }
       return []

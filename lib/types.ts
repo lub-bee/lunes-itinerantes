@@ -76,7 +76,8 @@ export type PageDemande = Base & { type: 'demande'; numero: string }
 /** Every member's points (in the Trésor) and the pondération (in the Intendance). */
 export type PagePatriarche = Base & { type: 'patriarche'; vue: 'points' | 'ponderation'; intro: string }
 /** The Livre de l'Intendance (lib/intendance.ts): what enters, what leaves, writing missions. */
-export type PageIntendance = Base & { type: 'intendance'; vue: 'reception' | 'sorties' | 'ecrire'; intro: string }
+/** `encours` (lot 2b): every open sheet, mission and standing mission, their state, and the gestures to correct or close them. */
+export type PageIntendance = Base & { type: 'intendance'; vue: 'encours' | 'reception' | 'sorties' | 'ecrire'; intro: string }
 
 /** The Livre du Trésor (the pay, lib/paie.ts): the week, the invoices, the events, the closings, the settings. */
 export type PageTresor = Base & { type: 'tresor'; vue: 'semaine' | 'factures' | 'evenements' | 'clotures' | 'reglages'; intro: string }

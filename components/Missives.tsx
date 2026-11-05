@@ -7,7 +7,7 @@ import { dateTamrielique, prix, prixParLot, septims } from '@/lib/format'
 import { nomsCorrespondent } from '@/lib/recherche'
 import { TEXTES as OMBRE } from '@/lib/ombre'
 import { quantiteLue } from '@/lib/commande'
-import { anglaisDe, arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
+import { anglaisDe, arbre, dicoAnglais, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import type { EtatMissions, FicheMission } from './Missions'
 import { etatMission } from '@/lib/intendance'
@@ -568,7 +568,7 @@ function MissionsDeLaMissive({ numero, reg, interactif }: { numero: string; reg:
                     {VERBES_MISSION[m.type]} {m.objet}
                   </button>
                   <span className="points" />
-                  {e.comblee ? <Coche titre="comblée" /> : <strong>{quantite(e.recu)} / {quantite(e.requis)}</strong>}
+                  {m.statut === 'close' || /^clos/i.test(x.statut) ? <em>close</em> : e.comblee ? <Coche titre="comblée" /> : <strong>{quantite(e.recu)} / {quantite(e.requis)}</strong>}
                 </li>
               )
             }),
@@ -690,8 +690,8 @@ function ChampRecette({ recherche }: { recherche?: RechercheLocale }) {
 }
 
 /** A recipe matches the page's search and the global one by its French or English name, or its craft. */
-const recetteCherchee = (x: Recette & { toutes?: Recette[] }, requetes: string[]) =>
-  requetes.every((q) => (x.toutes ?? [x]).some((v) => nomsCorrespondent([v.produit, v.en, metierDe(v.artisan).nom], q)))
+const recetteCherchee = (x: Recette & { toutes?: Recette[] }, requetes: string[], anglais?: (nom: string) => string) =>
+  requetes.every((q) => (x.toutes ?? [x]).some((v) => nomsCorrespondent([v.produit, v.en || anglais?.(v.produit) || '', metierDe(v.artisan).nom], q)))
 
 /** « 2 recettes » after a product that has several. */
 function MentionVariantes({ n }: { n: number }) {
@@ -764,7 +764,8 @@ export function DroiteAtelier({ page, reg, interactif, icones, requetes = [] }: 
   const tab = interactif ? 0 : -1
   if (page.vue === 'recettes' && requetes.some(Boolean)) {
     // Searching: every recipe whose French or English name answers, with its craft.
-    const trouvees = produitsDe(recettes).filter((x) => recetteCherchee(x, requetes)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+    const dico = dicoAnglais(r.donnees)
+    const trouvees = produitsDe(recettes).filter((x) => recetteCherchee(x, requetes, (n) => dico.get(cle(n)) ?? '')).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
     return (
       <div className="atelier-droite">
         <h3 className="titre-section">Recettes trouvées</h3>
@@ -963,7 +964,7 @@ export function DroiteMetier({ page, reg, interactif, anglais, requetes = [] }: 
   const k = metierDe(page.metier).cle
   // The shadow book's recipes page holds every « Ombre » recipe; a craft's page, its day recipes only.
   const toutes = produitsDe(r.donnees.recettes).filter((x) => (page.ombre ? x.ombre : !x.ombre && metierDe(x.artisan).cle === k))
-  const recettes = toutes.filter((x) => recetteCherchee(x, requetes)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
+  const recettes = toutes.filter((x) => recetteCherchee(x, requetes, anglais)).sort((a, b) => a.produit.localeCompare(b.produit, 'fr'))
   const tab = interactif ? 0 : -1
   return (
     <div className="atelier-droite">

@@ -47,8 +47,8 @@ export async function appelerScript<T = Record<string, unknown>>(corps: Record<s
   return r as T & { ok: true }
 }
 
-type Lecture = { onglets: Onglets; version: number }
-type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: boolean }
+type Lecture = { onglets: Onglets; version: number; feuillets?: boolean }
+type ReponseLire = { onglets: Onglets; version?: number; ms?: number; cache?: boolean; feuillets?: boolean }
 
 /** The last script call's own execution time, for Server-Timing. */
 export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: null, cache: null }
@@ -59,15 +59,17 @@ export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: n
 // ranks in « Rôle »; `intendance: true` a v3r script for the Livre de l'Intendance (lib/intendance.ts) and the
 // Demandes' titles and missives; an older script ignores them (then nothing is granted but to testers, and the
 // Intendance's gestures are refused in character).
-const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true, intendance: true }
+// `feuillets: true` (lot 2b) a v3s script for the 'feuillet' action (a sheet edited, closed, reopened); it answers
+// `feuillets: true` back, so the page knows those gestures will be written (an older script: refused in character).
+const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true, intendance: true, feuillets: true }
 
 async function lireScript(): Promise<Lecture> {
   const r = await appelerScript<ReponseLire>({ action: 'lire', ...DRAPEAUX })
   dernierScript = { ms: r.ms ?? null, cache: r.cache ?? null }
-  return { onglets: r.onglets, version: r.version ?? 0 }
+  return { onglets: r.onglets, version: r.version ?? 0, feuillets: r.feuillets === true }
 }
 
-const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3r'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3s'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
@@ -137,15 +139,15 @@ function lu(l: Lecture) {
   const paie = lirePaie(l.onglets)
   const missions = lireMissions(l.onglets)
   if (paie.actif) missions.ponderation = { ...missions.ponderation, reglages: { ...missions.ponderation.reglages, partRessources: paie.reglages.ressources, partFabrication: paie.reglages.fabrication } }
-  return { ...lireOnglets(l.onglets), missions, paie, intendance: lireIntendance(l.onglets), droits: lirePermissions(l.onglets), version: l.version }
+  return { ...lireOnglets(l.onglets), missions, paie, intendance: lireIntendance(l.onglets), droits: lirePermissions(l.onglets), feuillets: l.feuillets === true, version: l.version }
 }
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
-  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number> }>({ action, ...DRAPEAUX, ...charge })
+  const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number>; feuillets?: boolean }>({ action, ...DRAPEAUX, ...charge })
   dernierScript = { ms: r.ms ?? null, cache: null }
   if (!r.onglets) return { ...r, lu: null }
-  const l = { onglets: r.onglets, version: r.version ?? 0 }
+  const l = { onglets: r.onglets, version: r.version ?? 0, feuillets: r.feuillets === true }
   garder(l)
   return { ...r, lu: lu(l) }
 }

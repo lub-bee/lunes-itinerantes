@@ -68,6 +68,14 @@ export const TEXTES_INTENDANCE = {
   soiMeme: 'Nul ne reçoit ce qu’il a lui-même déposé : qu’une autre patte réponde.',
 }
 
+/** Lot 2b: the sheets and missions edited, closed and reopened from the Intendance (script v3s). */
+export const TEXTES_FEUILLETS = {
+  inactif: 'Le scribe du registre ne sait pas encore corriger ni clore un feuillet : les missions se lisent, mais ces gestes attendent que le dernier script du grimoire (v3s) soit recopié dans la feuille.',
+  refus: 'Le scribe du registre ne sait pas encore corriger ni clore un feuillet : qu’on recopie le dernier script du grimoire (v3s) dans la feuille, puis qu’on réessaie.',
+  change: 'Une autre patte a touché ce feuillet entre-temps : le registre est relu, regarde et recommence.',
+  missionClose: (objet: string) => `La mission « ${objet} » est close : rouvre-la depuis le Livre de l’Intendance, ou consigne ce qui arrive comme un don.`,
+}
+
 /* ───────────────────────── Reading ───────────────────────── */
 
 const texte = (v: unknown) => String(v ?? '').trim()

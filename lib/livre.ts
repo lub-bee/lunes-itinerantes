@@ -237,7 +237,12 @@ export async function chargerLivre(): Promise<Livre> {
       intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
       citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
     },
-    // The Livre de l'Intendance (lot 2): the chest first, then what enters, what leaves, writing missions, the weights.
+    // The Livre de l'Intendance (lot 2): the missions in progress first (lot 2b), the chest, then what enters, what
+    // leaves, writing missions, the weights.
+    {
+      type: 'intendance', vue: 'encours', id: 'en-cours', partie: 'intendance', titre: 'Les missions en cours', titreEn: 'Missions in Progress', court: 'En cours', icone: 'hunting-horn',
+      intro: 'Tout ce que la caravane attend encore : chaque feuillet, chaque mission, ce qu’il faut, ce qui est reçu, ce qui manque et ce qui attend qu’on le confirme. On y corrige un feuillet, on clôt une mission dont on n’a plus besoin, on rouvre ce qui a été clos trop tôt.',
+    },
     {
       type: 'coffre', id: 'coffre', partie: 'intendance', titre: 'Le coffre', titreEn: 'The Chest', court: 'Le coffre', icone: 'open-chest',
       intro: 'Ce que tient le coffre de la caravane, selon le registre, et chaque fois qu’on l’a compté. Quand le coffre et le registre ne disent pas la même chose, quelqu’un a pris ou oublié de consigner : on enquête.',

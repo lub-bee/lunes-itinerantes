@@ -4060,3 +4060,71 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 .champ-noms-ligne { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .champ-noms-ligne > .champ-nom { flex: 1; }
 .champ-noms-ajouter { flex: none; margin-top: 4px; }
+
+/* ───────── Lot 2b: the missions in progress, corrections, closings, several missions in one hand-over ───────── */
+
+/* A line of « Écrire une mission » split into several missions: − « 3 missions : 34, 33, 33 » +. */
+.tri-ligne > .tri-parts { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 2px 0 0 51px; text-align: left; font-size: 13.5px; font-style: italic; color: var(--encre-douce); }
+.tri-pas { width: 28px; height: 28px; padding: 0; border: 1px solid rgba(90, 64, 41, 0.45); border-radius: 50%; background: rgba(255, 250, 235, 0.5); font: inherit; font-size: 17px; font-style: normal; line-height: 1; color: var(--encre); cursor: pointer; }
+.tri-pas:disabled { opacity: 0.35; cursor: default; }
+.tri-pas:not(:disabled):hover, .tri-pas:focus-visible { outline: none; border-color: var(--encre-rouge); color: var(--encre-rouge); }
+
+/* Correcting a sheet: Mission · Reçu · Il en faut. */
+.corriger-missions .tri-entete, .corriger-missions .tri-ligne { grid-template-columns: minmax(0, 1fr) 58px 72px; }
+.corriger-missions .tri-nom { grid-template-columns: 24px minmax(0, 1fr); cursor: default; }
+.tri-retirer { margin-left: 8px; font-size: 13px; font-style: italic; }
+
+/* One hand-over, several missions: tick them, the quantity beside each. */
+.choix-missions { margin: 2px 0 6px; }
+.choix-missions-cherche { width: 100%; margin: 2px 0 6px; padding: 4px 6px; border: 0; border-bottom: 1.5px solid rgba(90, 64, 41, 0.45); background: transparent; font: inherit; font-size: 16px; color: var(--encre); outline: none; }
+.choix-missions-cherche:focus { border-color: var(--encre-rouge); }
+.choix-missions-liste { list-style: none; margin: 0; padding: 0; text-align: left; }
+.choix-missions-liste li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(110, 80, 45, 0.1); }
+.choix-missions-liste li .fiche-coche { margin: 3px 0; font-size: 15px; }
+.choix-missions-liste li.cochee .fiche-coche span { color: var(--encre); font-weight: 600; }
+.choix-missions-qte { width: 76px; padding: 0 3px; border: 0; border-bottom: 1.5px solid rgba(90, 64, 41, 0.45); background: transparent; font: inherit; font-size: 16px; text-align: right; color: var(--encre); outline: none; }
+.choix-missions-qte:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.3); }
+.avis-don { color: var(--encre-rouge); }
+
+/* The missions in progress. */
+.encours-feuillet { margin: 0 0 14px; }
+.encours-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.encours-tete .feuillet-meta { flex: 1 1 220px; }
+.encours-tete .mission-gestes { flex: 1 0 auto; }
+.encours-besoins { margin-top: 4px; }
+.encours-gestes { display: flex; gap: 12px; }
+.encours-gestes .action { font-size: 13.5px; }
+.besoins-ligne.close { color: var(--encre-pale); }
+.besoins-ligne.close .besoins-mot { text-decoration: line-through; text-decoration-color: rgba(142, 31, 20, 0.4); }
+.encours-feuillet.clos .feuillet-titre { color: var(--encre-pale); }
+.tampon-clos { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.06em; color: var(--encre-rouge); }
+.avis-allegement { margin: 0 0 10px; padding: 6px 10px; border-left: 3px solid var(--encre-rouge); background: rgba(201, 162, 78, 0.16); text-align: left; font-size: 15px; }
+.avis-allegement p { margin: 2px 0; }
+.fiche-aide-liste { margin: 4px 0 8px; padding-left: 20px; text-align: left; font-size: 14.5px; color: var(--encre-douce); }
+@media (max-width: 520px) {
+  .tri-ligne > .tri-parts { padding-left: 0; }
+  .corriger-missions .tri-entete, .corriger-missions .tri-ligne { grid-template-columns: minmax(0, 1fr) 46px 60px; }
+  .choix-missions-qte { width: 64px; }
+}
+
+/* ───────── Lot 2b: the event's ledger, one row per line, aligned in columns (name · amount · state · ✕) ───────── */
+.ecritures-evenement { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 22px; column-gap: 10px; align-items: baseline; }
+.ecritures-evenement li { display: contents; }
+.ecritures-evenement li > * { padding: 3px 0; }
+.ecritures-evenement li > span:first-child { grid-column: 1; min-width: 0; overflow-wrap: anywhere; }
+.ecritures-evenement li > .points { display: none; }
+.ecritures-evenement li > strong { grid-column: 2; text-align: right; white-space: nowrap; }
+.ecritures-evenement li > .statut-paie { grid-column: 3; flex-basis: auto; flex-wrap: nowrap; justify-content: flex-start; gap: 6px; white-space: nowrap; }
+.ecritures-evenement li > .fiche-rayer { grid-column: 4; justify-self: end; align-self: center; margin: 0; }
+.ecritures-evenement li.total > * { border-top: 1px solid rgba(110, 80, 45, 0.35); }
+.ecritures-evenement .statut-paie .tampon.petit { margin: 0; }
+.ecritures-evenement .statut-paie .action { font-size: 12.5px; }
+@media (max-width: 520px) {
+  .ecritures-evenement { column-gap: 6px; grid-template-columns: minmax(0, 1fr) auto auto 20px; }
+  .ecritures-evenement li { font-size: 14.5px; }
+  .ecritures-evenement li em { font-size: 11.5px; }
+  /* Who marked it paid: on hover / long press only (the stamp says « payé »). */
+  .ecritures-evenement .statut-paie.paye em { display: none; }
+}
+.ecritures-evenement li.total > span:first-child { grid-column: 1 / 3; white-space: nowrap; }
+.ecritures-evenement li.total > strong { grid-column: 3 / -1; }

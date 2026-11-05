@@ -323,6 +323,10 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
     case 'classes-missions':
     case 'refus-mission':
     case 'permanente':
+    case 'feuillet':
+    case 'fermer':
+    case 'etat-permanente':
+    case 'alleger':
     case 'matiere-mission': {
       const c = contenuMission(f, { reg: env.reg, articles: env.articles, chapitres: env.chapitres, icones: env.icones, fermer: env.fermer })
       return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
@@ -560,7 +564,8 @@ function useNoms(env: Env) {
 /** A row's suggestions among `noms` (with their English names), as the recipe form offers them. */
 function proposerDans(env: Env, noms: string[]) {
   const connus: Connu[] = noms.map((n) => ({ nom: n, en: anglaisDe(env.reg.r.donnees, n, env.articles) }))
-  return (t: string) => (connus.some((c) => cle(c.nom) === cle(t) || (c.en && cle(c.en) === cle(t))) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
+  // An English name typed whole still proposes its French one (lot 2b), which the row takes when the field is left.
+  return (t: string) => (connus.some((c) => cle(c.nom) === cle(t)) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
 }
 
 function Suggestions({ id, noms }: { id: string; noms: string[] }) {
@@ -642,7 +647,12 @@ function Lignes({
             value={l.objet}
             onChange={(e) => regler(i, { objet: e.target.value })}
             onFocus={() => setActive(i)}
-            onBlur={() => setActive((a) => (a === i ? null : a))}
+            onBlur={() => {
+              setActive((a) => (a === i ? null : a))
+              // An English name typed whole becomes the registre's French name (lot 2b).
+              const fr = proposer?.(l.objet).find((c) => c.en && cle(c.en) === cle(l.objet))
+              if (fr) regler(i, { objet: fr.nom })
+            }}
             placeholder="Objet"
             aria-label="Objet"
             maxLength={120}
@@ -1153,7 +1163,7 @@ function FormRecette({ nom, variante, nouvelle: ajout, artisanPropose, ombre = f
     return { connus: [...m.values()], ressourcesEtProduits }
   }, [d, env.articles])
   const estConnu = (t: string) => connus.some((c) => cle(c.nom) === cle(t) || (c.en && cle(c.en) === cle(t)))
-  const proposer = (t: string) => (estConnu(t) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
+  const proposer = (t: string) => (connus.some((c) => cle(c.nom) === cle(t)) ? [] : proches(t, connus, (c) => [c.nom, c.en], 4))
   // While naming a new recipe (or renaming one): the recipes already written under a close name.
   const autresRecettes = (d?.recettes ?? []).filter((r) => r !== ancienne)
   const doublons = [produit, en]

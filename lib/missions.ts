@@ -16,8 +16,11 @@ import { etatMission, type LigneIntendance } from './intendance'
 
 /** Two kinds only (Ludo, 2026-10-28): crafting an intermediate (Cuir from Peaux) is a « fabrication » too. */
 export type TypeMission = 'récolte' | 'fabrication'
-/** « remise »: the holder handed the loot over, waiting for another member's confirmation (v3n). */
-export type StatutMission = 'ouverte' | 'en cours' | 'remise' | 'accomplie'
+/**
+ * « remise »: the holder handed the loot over, waiting for another member's confirmation (v3n). « close » (lot 2b): closed
+ * by hand from the Intendance; it leaves the call, what it received stays counted, it can be reopened.
+ */
+export type StatutMission = 'ouverte' | 'en cours' | 'remise' | 'accomplie' | 'close'
 export const TYPES_MISSION: TypeMission[] = ['récolte', 'fabrication']
 
 /**
@@ -124,6 +127,8 @@ export type DonneesMissions = {
   actif: boolean
   /** The sheet's script holds the Livre de l'Intendance (v3r): hand-overs, gifts, exits, missives' missions. */
   intendanceActive: boolean
+  /** The sheet's script edits, closes and reopens sheets and missions (v3s, lot 2b). */
+  feuilletsActifs: boolean
   ponderation: Ponderation
   demandes: Demande[]
   missions: Mission[]
@@ -142,8 +147,10 @@ export type DonneesMissions = {
  * the chest, `clore` closes a craft whose rest will not come back; `confirmer` / `refuser` answer a hand-over of the
  * prototype's way (a mission « remise » before lot 2).
  */
-export type ActionMission = 'demande' | 'entree' | 'signaler' | 'recevoir' | 'faconnage' | 'sortie' | 'sortir' | 'clore' | 'confirmer' | 'refuser' | 'ponderation' | 'permanente'
-export const ACTIONS_MISSION: ActionMission[] = ['demande', 'entree', 'signaler', 'recevoir', 'faconnage', 'sortie', 'sortir', 'clore', 'confirmer', 'refuser', 'ponderation', 'permanente']
+// Lot 2b: `feuillet` edits a sheet (title, note, quantities, a line removed or added), `fermer` closes or reopens a
+// mission or a whole sheet.
+export type ActionMission = 'demande' | 'entree' | 'signaler' | 'recevoir' | 'faconnage' | 'sortie' | 'sortir' | 'clore' | 'confirmer' | 'refuser' | 'ponderation' | 'permanente' | 'feuillet' | 'fermer'
+export const ACTIONS_MISSION: ActionMission[] = ['demande', 'entree', 'signaler', 'recevoir', 'faconnage', 'sortie', 'sortir', 'clore', 'confirmer', 'refuser', 'ponderation', 'permanente', 'feuillet', 'fermer']
 
 /* ───────────────────────── Defaults (missions/ponderation.md, 2026-10-28) ───────────────────────── */
 
@@ -464,6 +471,15 @@ export function decouper(total: number, lot: number, arrondir = true): number[] 
   return Array.from({ length: k }, (_, i) => base + (i < plus ? 1 : 0))
 }
 
+/** `total` split into `n` missions as even as can be, the bigger ones first (100 in 3 → 34, 33, 33; lot 2b). */
+export function partager(total: number, n: number): number[] {
+  const t = Math.max(0, Math.round(total))
+  const k = Math.max(1, Math.min(Math.floor(n), t || 1))
+  const base = Math.floor(t / k)
+  const plus = t - base * k
+  return Array.from({ length: k }, (_, i) => base + (i < plus ? 1 : 0))
+}
+
 /** Exact packs: as many full lots as fit, then the rest (250 by 40 → 40 ×6, 10). */
 export function paquets(total: number, lot: number): number[] {
   const t = Math.max(0, Math.round(total))
@@ -655,10 +671,14 @@ export const pointsDeLigne = (l: Pick<LigneProposee, 'points' | 'total'>, q: num
 const TYPES: Record<string, TypeMission> = { recolte: 'récolte', transformation: 'fabrication', fabrication: 'fabrication' }
 const statutLu = (s: unknown): StatutMission => {
   const k = cle(texte(s))
-  return k.startsWith('encours') || k.startsWith('prise') ? 'en cours' : k.startsWith('remise') ? 'remise' : k.startsWith('accompli') ? 'accomplie' : 'ouverte'
+  return k.startsWith('encours') || k.startsWith('prise') ? 'en cours' : k.startsWith('remise') ? 'remise' : k.startsWith('accompli') ? 'accomplie' : k.startsWith('clos') ? 'close' : 'ouverte'
 }
 
-export type MissionsLues = { actif: boolean; ponderation: Ponderation; demandes: Demande[]; missions: Mission[]; points: LignePoints[]; permanentes: Permanente[] }
+/**
+ * `retirees`: the numbers of the lines removed from a sheet (« retirée », lot 2b): gone from every page, kept so a line
+ * added later never takes one of their numbers.
+ */
+export type MissionsLues = { actif: boolean; ponderation: Ponderation; demandes: Demande[]; missions: Mission[]; points: LignePoints[]; permanentes: Permanente[]; retirees: string[] }
 
 /** The missions' tabs (from a v3m script, asked with `missions: true`; absent keys: an older script). */
 export function lireMissions(o: Onglets): MissionsLues {
@@ -698,8 +718,9 @@ export function lireMissions(o: Onglets): MissionsLues {
       note: texte(r.note),
       journal: texte(r.journal),
     }))
-    // A take of a standing mission given up (« abandonnée ») is gone.
-    .filter((m, i) => m.numero && m.objet && !/^(abandon|refus)/.test(cle(texte((o.missions ?? [])[i]?.statut))))
+    // A take of a standing mission given up (« abandonnée »), a line removed from its sheet (« retirée », lot 2b): gone.
+    .filter((m, i) => m.numero && m.objet && !/^(abandon|refus|retir)/.test(cle(texte((o.missions ?? [])[i]?.statut))))
+  const retirees = (o.missions ?? []).filter((r) => /^retir/.test(cle(texte(r.statut)))).map((r) => texte(r.numero))
   const points: LignePoints[] = (o.points ?? [])
     .map((r) => ({ horodatage: date(r.horodatage), membre: texte(r.membre), points: nombre(r.points) ?? 0, raison: texte(r.raison), mission: texte(r.mission), confirmePar: texte(r.confirmePar) }))
     .filter((p) => p.membre)
@@ -721,7 +742,18 @@ export function lireMissions(o: Onglets): MissionsLues {
       }
     })
     .filter((x) => x.id && x.objet && x.quantite > 0)
-  return { actif, ponderation: ponderationLue(o.ponderation ?? [], o.reglagesMissions ?? []), demandes, missions, points, permanentes }
+  return { actif, ponderation: ponderationLue(o.ponderation ?? [], o.reglagesMissions ?? []), demandes, missions, points, permanentes, retirees }
+}
+
+/* ───────────────────────── Closed sheets and missions (lot 2b) ───────────────────────── */
+
+/** A sheet closed by hand (« close »): it leaves the call with all its missions; it can be reopened. */
+export const feuilletClos = (d: Pick<Demande, 'statut'> | undefined) => Boolean(d && cle(d.statut).startsWith('clos'))
+
+/** Whether a mission still stands in the call: not closed by hand, nor its sheet. */
+export function missionOuverte(m: Pick<Mission, 'statut' | 'demande'>, demandes: Pick<Demande, 'numero' | 'statut'>[]): boolean {
+  if (m.statut === 'close') return false
+  return !feuilletClos(demandes.find((d) => d.numero === m.demande))
 }
 
 /* ───────────────────────── Demands ───────────────────────── */
@@ -798,20 +830,31 @@ export function quantiteReference(p: Ponderation, nom: string, recettes: Recette
   return w ? Math.max(1, Math.round(p.reglages.budget / w)) : null
 }
 
-/** A free donation's minimum to earn points: the item's own (« don minimum »), else its quantity per mission × the multiple. */
+/** A free donation's former minimum to earn points (no longer applied since lot 2b: a named gift always earns). */
 export const minimumDon = (p: Ponderation, nom: string, recettes: Recette[], fini = false) =>
   p.donsMin?.find((l) => cle(l.nom) === cle(nom))?.lot ?? quantiteParMission(p, nom, recettes, fini) * p.reglages.multipleDon
 
 /**
- * A free donation's points: the missions' rate per unit for that item (pointsParPrise) × quantity, only from
- * its minimum (below: 0, accepted all the same); + the big donations' bonus from the threshold, if set.
+ * A named free donation's points (lot 2b, Ludo: a gift never earns 0): the missions' rate per unit for that item
+ * (pointsParPrise) × quantity, whatever the quantity (the « don minimum » no longer zeroes a small gift); when that rate
+ * is unknown (an item no recipe of the day book uses, without a floor), its price × the resources' share (`prix`: the
+ * raw material's « Prix courant » per unit, else the merchandise's floor per unit); at least 1 point. + the big
+ * donations' bonus from the threshold, if set. An anonymous gift earns nothing (the caller does not ask).
  */
-export function pointsDon(objet: string, quantite: number, recettes: Recette[], articles: { fr: string; min: number | null; ombre?: boolean }[], p: Ponderation, fini: boolean) {
-  const minimum = minimumDon(p, objet, recettes, fini)
-  if (quantite < minimum) return { points: 0, minimum, bonus: false }
-  const base = pointsParPrise(objet, quantite, recettes, articles, p, fini)
+export function pointsDon(objet: string, quantite: number, recettes: Recette[], articles: { fr: string; min: number | null; ombre?: boolean }[], p: Ponderation, fini: boolean, prix: number | null = null) {
+  if (quantite <= 0) return { points: 0, bonus: false }
+  let base = pointsParPrise(objet, quantite, recettes, articles, p, fini)
+  if (base <= 0 && prix && prix > 0) base = Math.round((prix * quantite * p.reglages.partRessources) / 100)
   const bonus = p.reglages.bonusDon > 0 && quantite >= quantiteParMission(p, objet, recettes, fini) * p.reglages.seuilBonusDon
-  return { points: bonus ? Math.round(base * (1 + p.reglages.bonusDon / 100)) : base, minimum, bonus }
+  return { points: Math.max(1, bonus ? Math.round(base * (1 + p.reglages.bonusDon / 100)) : base), bonus }
+}
+
+/** An item's price per unit for a gift's points: the raw material's « Prix courant » (÷ its lot), else the merchandise's floor (÷ its lot). */
+export function prixDon(nom: string, ressources: { nom: string; prix: number | null; lot?: number }[], articles: { fr: string; min: number | null; lot?: number | null; ombre?: boolean }[]): number | null {
+  const r = ressources.find((x) => cle(x.nom) === cle(nom))
+  if (r?.prix) return r.prix / Math.max(1, r.lot ?? 1)
+  const a = articles.find((x) => !x.ombre && cle(x.fr) === cle(nom))
+  return a?.min ? a.min / Math.max(1, a.lot ?? 1) : null
 }
 
 export const estDon = (m: Pick<Mission, 'demande'>) => /^don/i.test(m.demande)
@@ -822,3 +865,88 @@ export const intitule = (m: Pick<Mission, 'type' | 'quantite' | 'objet'>) => `${
 /** The reason written on a points row. */
 export const raisonPoints = (m: Pick<Mission, 'type' | 'quantite' | 'objet'> & { demande?: string }) =>
   m.demande && /^don/i.test(m.demande) ? `Don : ${new Intl.NumberFormat('fr-FR').format(m.quantite)} ${m.objet}` : `Mission de ${m.type} : ${intitule(m)}`
+
+/* ───────────────────────── Upstream missions a hand-over makes unnecessary (lot 2b) ───────────────────────── */
+
+/** One mission to lighten: its quantity lowered (`apres`), or closed (`fermer`: nothing received, nothing left to ask). */
+export type Allegement = { numero: string; type: TypeMission; objet: string; avant: number; apres: number; recu: number; fermer: boolean }
+
+/**
+ * What a sheet's hand-overs make unnecessary upstream (Ludo, lot 2b: 40 Bière handed in, the harvests and crafts of the
+ * beer's ingredients are no longer needed). The tree is walked from the sheet's merchandise down its usual recipes (as
+ * when it was written): each item still to obtain is its need minus what was received for it, and only that rest is
+ * crafted, so its ingredients need less. An item whose open missions still ask more than the tree now needs gets them
+ * lowered (the last ones first, never below what they received), or closed when they received nothing; only when
+ * something was received downstream of it (a line raised by hand is never cut otherwise). Received quantities always
+ * stay counted. Pure: the page proposes, the person allowed confirms (never silently).
+ */
+export function allegements(dm: Pick<Demande, 'numero' | 'article' | 'quantite'>, missions: Mission[], intendance: LigneIntendance[], recettes: Recette[], p: Ponderation): Allegement[] {
+  const racine = recetteDe(recettes, dm.article)
+  if (!racine) return []
+  const { assignee } = peser(p)
+  const kRacine = cle(racine.produit)
+  const intermediaire = (nom: string): Recette | null => {
+    if (cle(nom) === kRacine) return racine
+    const r = recetteDe(recettes, nom)
+    if (!r) return null
+    const a = assignee(nom)
+    return a?.classe && cle(a.classe) !== cle(CODE_TRANSFORMATION) ? null : r
+  }
+  // Consumers before their ingredients (a loop: nothing proposed).
+  const ordre: string[] = []
+  const noms = new Map<string, string>()
+  const fini = new Set<string>()
+  try {
+    const visiter = (nom: string, vus: string[]) => {
+      const k = cle(nom)
+      if (vus.includes(k)) throw new Cycle([nom])
+      if (fini.has(k)) return
+      noms.set(k, nom)
+      const r = intermediaire(nom)
+      if (r) for (const i of r.ingredients) visiter(i.nom, [...vus, k])
+      fini.add(k)
+      ordre.push(k)
+    }
+    visiter(racine.produit, [])
+  } catch (e) {
+    if (e instanceof Cycle) return []
+    throw e
+  }
+  ordre.reverse()
+  const ms = missions.filter((m) => m.demande === dm.numero)
+  const etats = new Map(ms.map((m) => [m.numero, etatMission(m, intendance)]))
+  const recuDe = (k: string) => ms.filter((m) => cle(m.objet) === k).reduce((t, m) => t + (etats.get(m.numero)?.recu ?? 0), 0)
+  /** Each item's need through the tree; `avecRecus`: what was received for an item is not crafted again. */
+  const besoins = (avecRecus: boolean) => {
+    const besoin = new Map<string, number>([[kRacine, Math.max(0, dm.quantite)]])
+    for (const k of ordre) {
+      const r = intermediaire(noms.get(k)!)
+      if (!r) continue
+      const reste = Math.max(0, (besoin.get(k) ?? 0) - (avecRecus ? recuDe(k) : 0))
+      const fournees = Math.ceil(reste / Math.max(1, r.rendement) - 1e-9)
+      for (const i of r.ingredients) besoin.set(cle(i.nom), (besoin.get(cle(i.nom)) ?? 0) + i.quantite * fournees)
+    }
+    return besoin
+  }
+  const sans = besoins(false)
+  const avec = besoins(true)
+  const res: Allegement[] = []
+  for (const k of ordre) {
+    // Only when something downstream was received (the tree needs less of it than when the sheet was written).
+    if ((avec.get(k) ?? 0) >= (sans.get(k) ?? 0) - 1e-9) continue
+    const ouvertes = ms.filter((m) => cle(m.objet) === k && m.statut === 'ouverte')
+    const demande = ouvertes.reduce((t, m) => t + Math.max(0, m.quantite - (etats.get(m.numero)?.recu ?? 0)), 0)
+    const encore = Math.max(0, Math.ceil((avec.get(k) ?? 0) - 1e-9) - recuDe(k))
+    let trop = demande - encore
+    for (const m of [...ouvertes].reverse()) {
+      if (trop <= 0) break
+      const recu = etats.get(m.numero)?.recu ?? 0
+      const coupe = Math.min(trop, Math.max(0, m.quantite - recu))
+      if (coupe <= 0) continue
+      trop -= coupe
+      const apres = m.quantite - coupe
+      res.push({ numero: m.numero, type: m.type, objet: m.objet, avant: m.quantite, apres, recu, fermer: apres <= 0 })
+    }
+  }
+  return res
+}

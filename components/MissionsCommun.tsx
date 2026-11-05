@@ -2,9 +2,9 @@
 
 import { useEffect, useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import type { Article } from '@/lib/types'
-import { cle } from '@/lib/missives'
+import { cle, dicoAnglais } from '@/lib/missives'
 import { etatMission, TEXTES_INTENDANCE } from '@/lib/intendance'
-import { ICONES_TYPES, TEXTES, VERBES, type DonneesMissions, type Mission, type TypeMission } from '@/lib/missions'
+import { ICONES_TYPES, missionOuverte, TEXTES, VERBES, type DonneesMissions, type Mission, type TypeMission } from '@/lib/missions'
 import { Action, Icone, Plume } from './Ornements'
 import type { CtxRegistre, RechercheLocale } from './Missives'
 
@@ -178,14 +178,48 @@ export function ChampNombre({ valeur, changer, ...props }: { valeur: number | nu
 
 /* ───────────────────────── Items and missions a hand-over can name ───────────────────────── */
 
-/** Every name a mission or a gift can be about: raw materials, recipe ingredients and products, the day book's merchandise. */
-export function nomsObjets(reg: CtxRegistre, articles: Article[]) {
+/**
+ * Every name a mission or a gift can be about: raw materials, recipe ingredients and products, the day book's merchandise,
+ * keyed by `cle` of the French name AND of the English one (lot 2b: « Wheat » finds « Blé »); the value is always the
+ * French name. `anglais`: [English, French] pairs, for the fields' suggestions.
+ */
+export type NomsObjets = Map<string, string> & { anglais: [string, string][] }
+export function nomsObjets(reg: CtxRegistre, articles: Article[]): NomsObjets {
   const noms = new Map<string, string>()
   const ajouter = (n: string) => n && !noms.has(cle(n)) && noms.set(cle(n), n)
   ;(reg.r.donnees?.ressources ?? []).forEach((r) => ajouter(r.nom))
   ;(reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre).forEach((r) => (ajouter(r.produit), r.ingredients.forEach((i) => ajouter(i.nom))))
   articles.filter((a) => !a.ombre).forEach((a) => ajouter(a.fr))
-  return noms
+  const dico = dicoAnglais(reg.r.donnees, articles)
+  const anglais: [string, string][] = []
+  for (const fr of [...noms.values()]) {
+    const en = dico.get(cle(fr))
+    if (en && !noms.has(cle(en))) {
+      noms.set(cle(en), fr)
+      anglais.push([en, fr])
+    }
+  }
+  return Object.assign(noms, { anglais })
+}
+
+/** The French names of `nomsObjets`, once each, in alphabetical order. */
+export const nomsFrancais = (noms: Map<string, string>) => [...new Set(noms.values())].sort((a, b) => a.localeCompare(b, 'fr'))
+
+/** An item field's suggestions: every French name, then every English one (its French name as the label). */
+export function OptionsObjets({ id, noms, seuls }: { id: string; noms: NomsObjets; seuls?: (fr: string) => boolean }) {
+  const fr = nomsFrancais(noms).filter((n) => !seuls || seuls(n))
+  return (
+    <datalist id={id}>
+      {fr.map((n) => (
+        <option key={n} value={n} />
+      ))}
+      {noms.anglais
+        .filter(([, f]) => !seuls || seuls(f))
+        .map(([en, f]) => (
+          <option key={`en-${en}`} value={en} label={f} />
+        ))}
+    </datalist>
+  )
 }
 
 /** A mission a line can fill: a Missions row or a standing mission, with what it still lacks. */
@@ -196,11 +230,13 @@ export function ciblesDe(d: DonneesMissions): Cible[] {
   const titres = new Map(d.demandes.map((x) => [x.numero, x.titre || `${nf(x.quantite)} ${x.article}`]))
   const res: Cible[] = []
   for (const m of [...d.missions].reverse()) {
-    if (/^(don|p-)/i.test(m.demande)) continue
+    // Closed by hand, or its sheet (lot 2b): no new hand-over names it.
+    if (/^(don|p-)/i.test(m.demande) || !missionOuverte(m, d.demandes)) continue
     const e = etatMission(m, d.intendance)
     res.push({ ref: m.numero, objet: m.objet, libelle: `${VERBES[m.type]} ${m.objet} · ${titres.get(m.demande) ?? m.demande}${e.comblee ? ' (comblée)' : ` (manque ${nf(e.manque)})`}`, manque: e.manque })
   }
-  for (const p of d.permanentes) if (p.statut !== 'close') res.push({ ref: p.id, objet: p.objet, libelle: `${VERBES[p.type]} ${p.objet} · mission permanente`, manque: 1 })
+  // A standing mission paused or closed is not offered (lot 2b: paused from « En cours »).
+  for (const p of d.permanentes) if (p.statut === 'ouverte') res.push({ ref: p.id, objet: p.objet, libelle: `${VERBES[p.type]} ${p.objet} · mission permanente`, manque: 1 })
   return res
 }
 
@@ -228,17 +264,12 @@ export function lignesEnvoyees(lignes: LigneSaisie[], cibles: Cible[], noms: Map
  * of that item; « aucune : un don »). `fige`: the first line's item and mission are set (opened from a mission);
  * `unique`: one line only.
  */
-export function LignesObjets({ lignes, changer, noms, cibles, fige = false, sansMission = false, unique = false }: { lignes: LigneSaisie[]; changer: (l: LigneSaisie[]) => void; noms: Map<string, string>; cibles: Cible[]; fige?: boolean; sansMission?: boolean; unique?: boolean }) {
+export function LignesObjets({ lignes, changer, noms, cibles, fige = false, sansMission = false, unique = false }: { lignes: LigneSaisie[]; changer: (l: LigneSaisie[]) => void; noms: NomsObjets; cibles: Cible[]; fige?: boolean; sansMission?: boolean; unique?: boolean }) {
   const id = useId()
-  const liste = [...noms.values()].sort((a, b) => a.localeCompare(b, 'fr'))
   const regler = (i: number, x: Partial<LigneSaisie>) => changer(lignes.map((l, k) => (k === i ? { ...l, ...x } : l)))
   return (
     <div className="lignes-objets">
-      <datalist id={id}>
-        {liste.map((n) => (
-          <option key={n} value={n} />
-        ))}
-      </datalist>
+      <OptionsObjets id={id} noms={noms} />
       {lignes.map((l, i) => {
         const k = cle(l.objet)
         const connu = noms.get(k)

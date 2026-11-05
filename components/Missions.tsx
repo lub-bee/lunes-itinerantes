@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Article, PageCarnet, PageDemande, PageMissions, PagePatriarche } from '@/lib/types'
 import { dateTamrielique, prix } from '@/lib/format'
-import { cle, estClose, rejouer, enStock, type EtatMissive } from '@/lib/missives'
+import { avecAnglais, cle, dicoAnglais, estClose, rejouer, enStock, type EtatMissive } from '@/lib/missives'
 import { nomsCorrespondent } from '@/lib/recherche'
-import { estEntree, etatMission, porteurs, PETITES_LUNES, TEXTES_INTENDANCE, type LigneIntendance } from '@/lib/intendance'
+import { estEntree, etatMission, porteurs, PETITES_LUNES, TEXTES_FEUILLETS, TEXTES_INTENDANCE, type LigneIntendance } from '@/lib/intendance'
 import {
   avancement,
   CODE_TRANSFORMATION,
+  feuilletClos,
+  missionOuverte,
+  partager,
   ORIGINES,
   pointsDeLigne,
   pointsParPrise,
@@ -30,8 +33,8 @@ import {
 import { Action, Icone } from './Ornements'
 import { Coche, Geste, idMissive, Jauge, quand, quantite, Signature, echeance, type CtxRegistre, type RechercheLocale } from './Missives'
 import { Sceller } from './Fiche'
-import { ChampNombre, ChampRecherche, ciblesDe, Ferme, GlypheType, Inactif, Message, Meta, moiDe, nf, nomsObjets, ouvert, permis, poids, Pts, pts, useScelle, voitPoints, type Reponse } from './MissionsCommun'
-import { EnAttente, FicheEntree, FicheFaconnage, FichePerte, FicheSignaler } from './Intendance'
+import { ChampNombre, ChampRecherche, ciblesDe, Ferme, GlypheType, Inactif, Message, Meta, moiDe, nf, nomsObjets, OptionsObjets, ouvert, permis, poids, Pts, pts, useScelle, voitPoints, type Reponse } from './MissionsCommun'
+import { AvisAllegement, EnAttente, FicheAlleger, FicheEntree, FicheEtatPermanente, FicheFaconnage, FicheFermer, FicheFeuillet, FichePerte, FicheSignaler } from './Intendance'
 
 /*
  * The book of Missions (Missions v2, lot 2), in the missives' interface: the call lists the missives in progress
@@ -156,7 +159,8 @@ export type EtatMissions = ReturnType<typeof useMissions>
 export const idDemande = (numero: string) => `demande-${numero}`
 
 /** The settings shown: nobody takes a mission any more (lot 2), so the hold limit and the crafts' split are left out. */
-const REGLAGES_VUS = REGLAGES.filter((r) => r.cle !== 'maxEnCours' && r.cle !== 'objetsParFabrication')
+// Lot 2b: a named gift always earns, so the gifts' minimum multiple no longer does anything either (its value stays).
+const REGLAGES_VUS = REGLAGES.filter((r) => r.cle !== 'maxEnCours' && r.cle !== 'objetsParFabrication' && r.cle !== 'multipleDon')
 
 /** A sheet's title: the one written, else « 1 000 Flèches en fer ». */
 export const titreDemande = (d: Pick<Demande, 'titre' | 'quantite' | 'article'>) => d.titre || `${nf(d.quantite)} ${d.article}`
@@ -287,18 +291,21 @@ export function DroiteMissions({ reg, icones, interactif, citation, requetes = [
   const etats = reg.r.calcul?.etats ?? []
   const missivesEnCours = etats.filter((e) => !estClose(e.missive))
   const ouvertes = new Set(missivesEnCours.map((e) => e.missive.numero))
-  const demandes = [...d.demandes].reverse()
-  const avec = demandes.map((dm) => ({ dm, ms: missionsDe(d, dm.numero).filter(enJeu) })).filter((x) => x.ms.length)
+  // A sheet closed by hand, and the missions closed by hand, leave the call (lot 2b).
+  const demandes = [...d.demandes].reverse().filter((dm) => !feuilletClos(dm))
+  const avec = demandes.map((dm) => ({ dm, ms: missionsDe(d, dm.numero).filter((m) => enJeu(m) && m.statut !== 'close') })).filter((x) => x.ms.length)
   const comblee = (x: { ms: Mission[] }) => x.ms.every((m) => etatMission(m, d.intendance).comblee)
+  // Items found by their French or English name (lot 2b).
+  const dico = dicoAnglais(reg.r.donnees)
   const trouve = (x: { dm: Demande; ms: Mission[] }, e?: EtatMissive) =>
-    cherche(requetes, [titreDemande(x.dm), x.dm.article, ...x.ms.map((m) => m.objet), ...(e ? [e.missive.titre, e.missive.commanditaire] : [])])
+    cherche(requetes, [titreDemande(x.dm), ...avecAnglais([x.dm.article, ...x.ms.map((m) => m.objet)], dico), ...(e ? [e.missive.titre, e.missive.commanditaire] : [])])
   const internes = avec.filter((x) => !ouvertes.has(x.dm.missive) && trouve(x))
   const enCours = internes.filter((x) => !comblee(x))
   const comblees = internes.filter(comblee)
-  const permanentes = d.permanentes.filter((x) => x.statut === 'ouverte' && cherche(requetes, [x.objet]))
+  const permanentes = d.permanentes.filter((x) => x.statut === 'ouverte' && cherche(requetes, avecAnglais([x.objet], dico)))
   const missives = missivesEnCours
     .map((e) => ({ e, feuillets: avec.filter((x) => x.dm.missive === e.missive.numero) }))
-    .filter(({ e, feuillets }) => (feuillets.length ? feuillets.some((x) => trouve(x, e)) : cherche(requetes, [e.missive.titre, e.missive.commanditaire, ...e.missive.lignes.map((l) => l.produit)])))
+    .filter(({ e, feuillets }) => (feuillets.length ? feuillets.some((x) => trouve(x, e)) : cherche(requetes, [e.missive.titre, e.missive.commanditaire, ...avecAnglais(e.missive.lignes.map((l) => l.produit), dico)])))
   const rien = !missives.length && !enCours.length && !permanentes.length && !comblees.length
   return (
     <div className="missions-droite">
@@ -459,7 +466,7 @@ function Avancement({ reg, moi, tab }: { reg: CtxRegistre; moi: string; tab: num
     }
   }
   const suivies = d.missions.filter((m) => m.numero in v)
-  const libres = d.missions.filter((m) => enJeu(m) && !(m.numero in v) && !etatMission(m, d.intendance).comblee)
+  const libres = d.missions.filter((m) => enJeu(m) && !(m.numero in v) && missionOuverte(m, d.demandes) && !etatMission(m, d.intendance).comblee)
   const titres = new Map(d.demandes.map((x) => [x.numero, titreDemande(x)]))
   return (
     <section className="avancement">
@@ -586,7 +593,11 @@ export function GaucheDemande({ page, reg, icones }: { page: PageDemande; reg?: 
   const d = reg.m!.donnees!
   const missive = dm.missive ? reg.r.calcul?.etats.find((e) => e.missive.numero === dm.missive)?.missive : undefined
   const a = avancement(dm, d.missions, d.intendance)
-  const premiere = missionsDe(d, dm.numero).find((m) => !etatMission(m, d.intendance).comblee) ?? missionsDe(d, dm.numero)[0]
+  const clos = feuilletClos(dm)
+  // Lot 2b: a closed sheet, a closed mission: no hand-over offered from here.
+  const ouvertes = clos ? [] : missionsDe(d, dm.numero).filter((m) => m.statut !== 'close')
+  const premiere = ouvertes.find((m) => !etatMission(m, d.intendance).comblee) ?? ouvertes[0]
+  const pret = d.feuilletsActifs
   return (
     <>
       <div className="missive-meta">
@@ -609,6 +620,7 @@ export function GaucheDemande({ page, reg, icones }: { page: PageDemande; reg?: 
       </div>
       <p className="missive-resume">
         {a.total} mission{a.total > 1 ? 's' : ''} · {a.comblees === a.total ? 'toutes comblées' : `${a.comblees} comblée${a.comblees > 1 ? 's' : ''}`} · {Math.round(a.avance * 100)} % réuni
+        {clos && <strong className="tampon-clos"> · feuillet clos</strong>}
       </p>
       <Signature reg={reg} />
       <Inactif reg={reg} intendance />
@@ -624,7 +636,19 @@ export function GaucheDemande({ page, reg, icones }: { page: PageDemande; reg?: 
             Consigner une remise
           </Geste>
         )}
+        {permis(reg, 'feuillet') && !clos && (
+          <Geste icone={icones['quill-ink']} disabled={!pret} onClick={() => reg.ouvrir({ genre: 'feuillet', numero: dm.numero })}>
+            Corriger le feuillet
+          </Geste>
+        )}
+        {permis(reg, 'fermer') && (
+          <Geste icone={icones[clos ? 'padlock-open' : 'padlock']} disabled={!pret} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'feuillet', numero: dm.numero, ouvrir: clos })}>
+            {clos ? 'Rouvrir le feuillet' : 'Clore le feuillet'}
+          </Geste>
+        )}
       </div>
+      {(permis(reg, 'feuillet') || permis(reg, 'fermer')) && !pret && d.intendanceActive && <p className="missions-inactif">{TEXTES_FEUILLETS.inactif}</p>}
+      <AvisAllegement reg={reg} numero={dm.numero} tab={0} />
     </>
   )
 }
@@ -639,7 +663,7 @@ export function DroiteDemande({ page, reg, icones, interactif }: { page: PageDem
   const journal = d.intendance.filter((l) => numeros.has(l.mission) && estEntree(l)).sort((a, b) => (b.date || b.le).localeCompare(a.date || a.le))
   const tab = interactif ? 0 : -1
   const ouvrir = (m: Mission) => (permis(reg, 'entree') ? reg.ouvrir({ genre: 'entree', mission: m.numero }) : permis(reg, 'signaler') ? reg.ouvrir({ genre: 'signaler', mission: m.numero }) : undefined)
-  const actionnable = interactif && d.intendanceActive && (permis(reg, 'entree') || permis(reg, 'signaler'))
+  const actionnable = interactif && d.intendanceActive && !feuilletClos(dm) && (permis(reg, 'entree') || permis(reg, 'signaler'))
   return (
     <div className="missive-droite demande-droite">
       <h3 className="titre-section">Ce qu’il faut réunir</h3>
@@ -652,12 +676,13 @@ export function DroiteDemande({ page, reg, icones, interactif }: { page: PageDem
         </div>
         {ms.map((m) => {
           const e = etatMission(m, d.intendance)
+          const close = m.statut === 'close'
           return (
             <div
               key={m.numero}
               role="row"
-              className={`besoins-ligne ${e.manque > 0 ? 'manquant' : 'reuni'} ${actionnable ? 'actionnable' : ''}`}
-              {...(actionnable
+              className={`besoins-ligne ${close ? 'close' : e.manque > 0 ? 'manquant' : 'reuni'} ${actionnable && !close ? 'actionnable' : ''}`}
+              {...(actionnable && !close
                 ? {
                     tabIndex: tab,
                     title: permis(reg, 'entree') ? `Consigner une remise pour ${m.objet}` : `Signaler une remise pour ${m.objet}`,
@@ -674,6 +699,7 @@ export function DroiteDemande({ page, reg, icones, interactif }: { page: PageDem
                 <span className="besoins-mot">
                   <GlypheType type={m.type} icones={icones} /> {VERBES[m.type]} {m.objet}
                 </span>
+                {close && <em>close</em>}
                 {e.attente > 0 && <em>{nf(e.attente)} en attente de confirmation</em>}
                 {voitPoints(reg) && <em>{pts(m.points)}</em>}
                 <Jauge avance={e.avance} />
@@ -726,7 +752,13 @@ export function DroiteDemande({ page, reg, icones, interactif }: { page: PageDem
 
 /* ───────────────────────── Writing a sheet: the tree, sorted before publishing (S8) ───────────────────────── */
 
-type Choix = Record<string, { garde?: boolean; q?: string }>
+/** Per line: kept or not, its quantity, and (lot 2b) how many missions it is split into. */
+/** Missions one line may be split into (the server's limit too). */
+const MAX_PARTS = 50
+/** « 34, 33, 33 » or « 3 × 40 ». */
+const resumeParts = (qs: number[]) => (qs.every((x) => x === qs[0]) ? `${qs.length} × ${nf(qs[0])}` : qs.map(nf).join(', '))
+
+type Choix = Record<string, { garde?: boolean; q?: string; parts?: number }>
 
 function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quantite: q0, missive: missive0 }: EnvMission & { objet?: string; quantite?: number; missive?: string }) {
   const m = reg.m!
@@ -748,10 +780,14 @@ function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quanti
     const auCoffre = Math.max(0, enStock(stock, l.objet))
     const manque = Math.max(0, l.total - auCoffre)
     const q = c.q ?? String(manque || l.total)
-    return { auCoffre, manque, garde: c.garde ?? manque > 0, q, n: Number(q) }
+    const n = Number(q)
+    // Lot 2b: the line split into `parts` missions (1 by default), never more missions than units.
+    const parts = Math.max(1, Math.min(c.parts ?? 1, MAX_PARTS, Math.max(1, n || 1)))
+    return { auCoffre, manque, garde: c.garde ?? manque > 0, q, n, parts }
   }
   const lignes = p?.ok ? p.lignes.map((l) => ({ l, ...ligne(l) })) : []
   const gardees = lignes.filter((x) => x.garde && x.n >= 1)
+  const nbMissions = gardees.reduce((t, x) => t + x.parts, 0)
   const pret = Boolean(p?.ok) && gardees.length > 0 && (!v.missive || v.commanditaire.trim()) && lignes.every((x) => !x.garde || x.n >= 1)
   const changer = (k: string, x: Choix[string]) => setChoix({ ...choix, [k]: { ...choix[k], ...x } })
   const publier = (e: FormEvent) => {
@@ -763,12 +799,11 @@ function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quanti
         quantite: Q,
         titre: v.titre,
         note: v.note,
-        lignes: gardees.map((x) => ({ cle: x.l.cle, quantite: x.n })),
+        lignes: gardees.map((x) => ({ cle: x.l.cle, quantite: x.n, parts: x.parts })),
         ...(missiveLiee ? { missive: missiveLiee.numero } : v.missive ? { missive: { commanditaire: v.commanditaire, echeance: v.echeance } } : {}),
       }),
     )
   }
-  const liste = [...noms.values()].sort((a, b) => a.localeCompare(b, 'fr'))
   return (
     <form className="fiche-form demande-form" onSubmit={publier}>
       {missiveLiee && (
@@ -780,11 +815,7 @@ function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quanti
         <label className="fiche-champ">
           <span>Ce qu’il faut réunir</span>
           <input type="text" list="objets-ecrire" value={v.objet} placeholder="Flèches en fer, Blé…" maxLength={120} onChange={(e) => (setV({ ...v, objet: e.target.value }), setChoix({}))} />
-          <datalist id="objets-ecrire">
-            {liste.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
+          <OptionsObjets id="objets-ecrire" noms={noms} />
         </label>
         <label className="fiche-champ">
           <span>Combien</span>
@@ -827,7 +858,7 @@ function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quanti
               <span>Au coffre</span>
               <span>À demander</span>
             </div>
-            {lignes.map(({ l, auCoffre, garde, q, n }) => (
+            {lignes.map(({ l, auCoffre, garde, q, n, parts }) => (
               <div key={l.cle} className={`tri-ligne ${garde ? '' : 'retiree'}`} role="row">
                 <label className="tri-nom">
                   <input type="checkbox" checked={garde} onChange={(e) => changer(l.cle, { garde: e.target.checked })} />
@@ -848,11 +879,24 @@ function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quanti
                   aria-label={`${l.objet} : quantité à demander`}
                   onChange={(e) => changer(l.cle, { q: e.target.value.replace(/\D/g, '').slice(0, 7) })}
                 />
+                {garde && n >= 1 && (
+                  <span className="tri-parts">
+                    <button type="button" className="tri-pas" aria-label={`Une mission de moins pour ${l.objet}`} disabled={parts <= 1} onClick={() => changer(l.cle, { parts: parts - 1 })}>
+                      −
+                    </button>
+                    <span>
+                      {parts === 1 ? '1 mission' : `${parts} missions : ${resumeParts(partager(n, parts))}`}
+                    </span>
+                    <button type="button" className="tri-pas" aria-label={`Une mission de plus pour ${l.objet}`} disabled={parts >= Math.min(MAX_PARTS, n)} onClick={() => changer(l.cle, { parts: parts + 1 })}>
+                      +
+                    </button>
+                  </span>
+                )}
               </div>
             ))}
           </div>
           <p className="fiche-partage">
-            <strong>{gardees.length}</strong> mission{gardees.length > 1 ? 's' : ''} à publier
+            <strong>{nbMissions}</strong> mission{nbMissions > 1 ? 's' : ''} à publier
             {lignes.length > gardees.length && <>, {lignes.length - gardees.length} retirée{lignes.length - gardees.length > 1 ? 's' : ''}</>}.
           </p>
         </>
@@ -1033,7 +1077,6 @@ function VuePonderation({ reg }: { reg: CtxRegistre }) {
           <span className={x.aFixer ? 'a-fixer' : ''}>{x.niveau}</span>
           {x.origine && <> · {x.origine}</>} — <b className={x.source === 'réglé à la main' ? 'fixe' : ''}>{quantite(x.parMission)} par mission</b>
           {x.source && <em> ({x.source})</em>}
-          {x.donMinPropre && <em> · don minimum {quantite(x.donMin)}</em>}
         </span>
       </button>
     )
@@ -1189,7 +1232,7 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
     >
       <p className="fiche-aide">
         {nom} — {x.niveau}
-        {x.origine && ` · ${x.origine}`} — {quantite(x.parMission)} par mission{x.source && ` (${x.source})`} · don minimum {quantite(x.donMin)}
+        {x.origine && ` · ${x.origine}`} — {quantite(x.parMission)} par mission{x.source && ` (${x.source})`}
       </p>
       {!fini && (
         <>
@@ -1227,11 +1270,7 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
         <ChampNombre valeur={lot} placeholder={`${quantite(sans.parMission)} (par défaut)`} changer={(v) => setLot(v === null ? null : Math.round(v))} />
       </label>
       <p className="fiche-aide">Ce que tient une mission, s’il diffère{fini ? ' (par défaut : le réglage « objets par mission »)' : ' de la référence'} ; ne change pas le poids. Des paquets pleins, le reste en dernier.</p>
-      <label className="fiche-champ">
-        <span>Don minimum</span>
-        <ChampNombre valeur={donMin} placeholder={`${quantite(sans.donMin)} (référence × ${prix(p.reglages.multipleDon)})`} changer={(v) => setDonMin(v === null ? null : Math.round(v))} />
-      </label>
-      <p className="fiche-aide">Un don libre rapporte des points à partir de cette quantité ; en dessous, il est reçu au coffre sans point. Ne change pas le poids.</p>
+      {/* Lot 2b: a named gift always earns, whatever its quantity: the « don minimum » no longer applies (its rows stay). */}
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones}>
@@ -1272,11 +1311,7 @@ function FichePermanente({ reg, icones, fermer, id, articles }: EnvMission & { i
       <label className="fiche-champ">
         <span>Ressource ou ouvrage</span>
         <input type="text" list="objets-permanente" value={v.objet} placeholder="Blé" onChange={(e) => setV({ ...v, objet: e.target.value })} />
-        <datalist id="objets-permanente">
-          {[...noms.values()].sort((a, b) => a.localeCompare(b, 'fr')).map((n) => (
-            <option key={n} value={n} />
-          ))}
-        </datalist>
+        <OptionsObjets id="objets-permanente" noms={noms} />
       </label>
       {v.objet && !objet && <p className="message-encre erreur">Khajiit ne connaît nulle ressource ni ouvrage de ce nom.</p>}
       <div className="fiche-deux">
@@ -1357,8 +1392,13 @@ export type FicheMission =
   | { genre: 'matiere-mission'; nom: string }
   | { genre: 'refus-mission'; numero: string }
   | { genre: 'permanente'; id?: string }
+  // Lot 2b: a sheet corrected, a mission or a sheet closed / reopened, a standing mission paused, the upstream lightened.
+  | { genre: 'feuillet'; numero: string }
+  | { genre: 'fermer'; cible: 'mission' | 'feuillet'; numero: string; ouvrir?: boolean }
+  | { genre: 'etat-permanente'; id: string; statut: 'ouverte' | 'en pause' | 'close' }
+  | { genre: 'alleger'; numero: string }
 
-export const GENRES_MISSION: FicheMission['genre'][] = ['ecrire', 'signaler', 'entree', 'faconnage', 'perte', 'reglages-missions', 'classes-missions', 'matiere-mission', 'refus-mission', 'permanente']
+export const GENRES_MISSION: FicheMission['genre'][] = ['ecrire', 'signaler', 'entree', 'faconnage', 'perte', 'reglages-missions', 'classes-missions', 'matiere-mission', 'refus-mission', 'permanente', 'feuillet', 'fermer', 'etat-permanente', 'alleger']
 
 export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: string; titre: string; corps: ReactNode; action: ActionMission } {
   if (!env.reg.m?.donnees) return { surtitre: 'Livre des Missions', titre: 'Missions', corps: <p className="registre-ferme attente-encre">Le scribe déroule le registre des missions…</p>, action: 'demande' }
@@ -1383,5 +1423,18 @@ export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: st
       return { surtitre: 'À confirmer', titre: 'Pas reçu', corps: <FicheRefus {...env} numero={f.numero} />, action: 'refuser' }
     case 'permanente':
       return { surtitre: 'Livre de l’Intendance', titre: f.id ? 'Régler la mission permanente' : 'Ouvrir une mission permanente', corps: <FichePermanente {...env} id={f.id} />, action: 'permanente' }
+    case 'feuillet':
+      return { surtitre: 'Les missions en cours', titre: 'Corriger le feuillet', corps: <FicheFeuillet {...env} numero={f.numero} />, action: 'feuillet' }
+    case 'fermer':
+      return {
+        surtitre: 'Les missions en cours',
+        titre: f.ouvrir ? (f.cible === 'feuillet' ? 'Rouvrir le feuillet' : 'Rouvrir la mission') : f.cible === 'feuillet' ? 'Clore le feuillet' : 'Clore la mission',
+        corps: <FicheFermer {...env} cible={f.cible} numero={f.numero} ouvrir={f.ouvrir} />,
+        action: 'fermer',
+      }
+    case 'etat-permanente':
+      return { surtitre: 'Missions permanentes', titre: f.statut === 'ouverte' ? 'Rouvrir la mission' : f.statut === 'en pause' ? 'Mettre en pause' : 'Clore la mission', corps: <FicheEtatPermanente {...env} id={f.id} statut={f.statut} />, action: 'permanente' }
+    case 'alleger':
+      return { surtitre: 'Les missions en cours', titre: 'Alléger l’amont', corps: <FicheAlleger {...env} numero={f.numero} />, action: 'feuillet' }
   }
 }
