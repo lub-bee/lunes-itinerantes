@@ -36,6 +36,30 @@
  *                                                                              `discord` updated.
  *    With `paie: true` (v3n, the pay) the answer also carries the pay's tabs (ONGLETS_PAIE: reglagesPaie,
  *    factures, evenements, ecrituresEvenement, clotures). Without it, exactly what v3m answered.
+ *    With `rangs: true` (v3p, ranks and permissions from the sheet) the answer also carries `roles` (the « Rôles »
+ *    tab: { role, id }, a rank's label and its Discord role ID, edited by hand), `permissions` (the Grimoire's rows
+ *    of the shared « Permissions » tab: { outil, geste, cle, cases: { <rank column header>: <cell> } }, rows of any
+ *    other « Outil » never sent) and `permissionsEntete` (the tab's row 1). Without it, exactly what v3n answered.
+ *    Only with `rangs: true`:
+ *      'membre'      also takes `membre.rangs` ([label]): the member's ranks (from their Discord roles) written in
+ *                    « Rôle », joined by « , » (empty when none), on the linked, the newly linked or the created row,
+ *                    and with an empty `nom` (the row holding `discord`); « Ami des Lunes » among them → 'friend' (the
+ *                    « Rôle » cell itself is not looked at); a Membres tab without « Rôle » no longer refuses a creation
+ *                    (the cell is just not written). Without `rangs: true`, exactly v3n's 'membre'.
+ *      'permissions' { droits: { rangs: [label], lignes: [{ cle, geste, valeurs: { <label>: true | false } }],
+ *                                semer?: true } }
+ *                                                                            → the Grimoire's rows of « Permissions »:
+ *                                                                              each row found by its « Clé » gets the
+ *                                                                              cells sent, a missing one is appended
+ *                                                                              (Outil « Grimoire »); every rank of
+ *                                                                              `rangs` without a column gets one at the
+ *                                                                              end of row 1; the tab is created (header
+ *                                                                              Outil | Geste | Clé | ranks) when missing.
+ *                                                                              Rows of another « Outil » and cells of
+ *                                                                              other columns are never written; no
+ *                                                                              column is renamed or moved. `semer`: only
+ *                                                                              when the tab holds no Grimoire row yet
+ *                                                                              (else nothing is written, seme: false)
  *
  *  - Writes (one writer at a time, LockService):
  *      'missive'     { missive: { numero, horodatage, titre, commanditaire, echeance, membre,
@@ -329,14 +353,36 @@ var ONGLETS_PAIE = {
 var AVEC_MISSIONS = false;
 var AVEC_PAIE = false;
 var AVEC_DISCORD = false;
+/** v3p: the Rôles tab and the Grimoire's rows of Permissions (`rangs: true`), and the new 'membre' / 'permissions'. */
+var AVEC_RANGS = false;
+
+/**
+ * RANKS AND PERMISSIONS (v3p) — read and sent only to a caller that asks for them (`rangs: true`).
+ * « Rôles »: one row per rank, its label and the ID of the Discord role that carries it; written by hand only
+ * (type the ID as text: a leading apostrophe). « Permissions »: shared with the Table (Conseil.gs): one row per
+ * gesture, « Outil » (Grimoire / Conseil) | « Geste » | « Clé » | one checkbox column per rank (header = the rank's
+ * label in Rôles). The Grimoire reads and writes only its own rows (Outil « Grimoire »).
+ */
+var ONGLET_ROLES = {
+  nom: 'Rôles',
+  lecture: true,
+  colonnes: [['Rôle', 'role', ['Rang']], ['ID du rôle Discord', 'id', ['ID Discord', 'ID du rôle', 'Discord ID', 'ID']]],
+};
+var ONGLET_PERMISSIONS = 'Permissions';
+var COLONNES_PERMISSIONS = [['Outil', 'outil'], ['Geste', 'geste'], ['Clé', 'cle', ['Cle', 'Code']]];
+var OUTIL = 'Grimoire';
+/** The tab's keys that only a `rangs: true` caller receives. */
+var ONGLETS_RANGS = { roles: true, permissions: true, permissionsEntete: true };
 
 /** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
 function pourAppelant(onglets) {
-  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD) || !onglets) return onglets;
+  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD && AVEC_RANGS) || !onglets) return onglets;
   var res = {};
   Object.keys(onglets).forEach(function (k) {
     if (ONGLETS_MISSIONS[k] && !AVEC_MISSIONS) return;
     if (ONGLETS_PAIE[k] && !AVEC_PAIE) return;
+    // The ranks and permissions (v3p) only to who asks `rangs: true`.
+    if (ONGLETS_RANGS[k] && !AVEC_RANGS) return;
     // The members' Discord ID and pseudo (v3n) only to who asks `discord: true`: the rows otherwise exactly as before.
     if (k === 'membres' && !AVEC_DISCORD && onglets[k]) {
       res[k] = onglets[k].map(function (m) { return { nom: m.nom, role: m.role }; });
@@ -380,6 +426,7 @@ function doPost(e) {
   AVEC_MISSIONS = Boolean(corps.missions);
   AVEC_PAIE = Boolean(corps.paie);
   AVEC_DISCORD = Boolean(corps.discord);
+  AVEC_RANGS = corps.rangs === true;
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
@@ -399,7 +446,8 @@ function doPost(e) {
   if (action === 'commande') return sceller(corps.commande);
 
   var ecrire = ECRITURES[action];
-  if (!ecrire) return repondre({ ok: false, erreur: 'unknown action ' + action });
+  // 'permissions' (v3p) exists only for a caller that asks `rangs: true`: any other gets v3n's answer.
+  if (!ecrire || (action === 'permissions' && !AVEC_RANGS)) return repondre({ ok: false, erreur: 'unknown action ' + action });
   return avecVerrou(function () { return ecrire(corps, action); }, true);
 }
 
@@ -459,7 +507,41 @@ function toutLire() {
   Object.keys(ONGLETS_MISSIONS).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_MISSIONS[cle]); });
   // The pay's tabs (v3n), the same way (sent only with `paie: true`).
   Object.keys(ONGLETS_PAIE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_PAIE[cle]); });
+  // The ranks and the Grimoire's permissions (v3p), last (sent only with `rangs: true`).
+  res.roles = lireOnglet(ONGLET_ROLES);
+  var perms = lirePermissions();
+  res.permissions = perms.lignes;
+  res.permissionsEntete = perms.entete;
   return res;
+}
+
+/**
+ * The Permissions tab (v3p): row 1 as written (`entete`, trailing blanks cut) and the Grimoire's rows only
+ * (`lignes`: { outil, geste, cle, cases: { header: cell } }, every column but Outil / Geste / Clé). Rows of any
+ * other « Outil » (the Table's) and blank rows are skipped. A missing tab reads as { entete: [], lignes: [] }.
+ */
+function lirePermissions() {
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ONGLET_PERMISSIONS);
+  if (!feuille || feuille.getLastRow() < 1) return { entete: [], lignes: [] };
+  var valeurs = feuille.getDataRange().getValues();
+  var entete = valeurs[0].map(function (v) { return String(v).trim(); });
+  while (entete.length && !entete[entete.length - 1]) entete.pop();
+  var fixes = indexColonnes(entete, { colonnes: COLONNES_PERMISSIONS });
+  var pris = [fixes.outil, fixes.geste, fixes.cle];
+  var lignes = [];
+  for (var r = 1; r < valeurs.length; r++) {
+    var ligne = valeurs[r];
+    var champ = function (k) { return fixes[k] >= 0 ? String(ligne[fixes[k]]).trim() : ''; };
+    if (cleEntete(champ('outil')) !== cleEntete(OUTIL)) continue;
+    if (!champ('geste') && !champ('cle')) continue;
+    var objet = { outil: champ('outil'), geste: champ('geste'), cle: champ('cle'), cases: {} };
+    entete.forEach(function (h, i) {
+      if (!h || pris.indexOf(i) >= 0) return;
+      objet.cases[h] = ligne[i] === undefined ? '' : ligne[i];
+    });
+    lignes.push(objet);
+  }
+  return { entete: entete, lignes: lignes };
 }
 
 /** Rows of a tab as objects { field: value }; blank rows skipped; a missing tab reads as []. */
@@ -582,7 +664,7 @@ function nouvelleVersion() {
  * run `viderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3n';
+var CACHE = 'registre-v3p';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -1359,6 +1441,12 @@ ECRITURES.paie = function (corps) {
  * The « Discord ID » / « Pseudo Discord » headers are added at the end of row 1 when missing.
  */
 ECRITURES.membre = function (corps) {
+  // v3p: a `rangs: true` caller writes the member's ranks in « Rôle »; any other caller gets v3n's action, unchanged.
+  return AVEC_RANGS ? membreAvecRangs(corps) : membreV3n(corps);
+};
+
+/** v3n's 'membre', exactly (callers without `rangs: true`: production, Essai). */
+function membreV3n(corps) {
   var m = corps.membre;
   var id = String((m && m.discord) || '').replace(/\D/g, '');
   if (!m || !id) return { ok: false, erreur: 'no seal' };
@@ -1423,6 +1511,221 @@ ECRITURES.membre = function (corps) {
   }
   // No `maj`: the tabs are read again (a first seal is rare).
   return { ok: true, nom: nom, cree: cree };
+}
+
+/** The ranks' cell: the labels sent, trimmed, without duplicates, joined by « , ». */
+function texteRangs(rangs) {
+  var vus = {};
+  return (rangs || []).map(function (x) { return String(x).trim().slice(0, 60); }).filter(function (x) {
+    var k = cleEntete(x);
+    if (!k || vus[k]) return false;
+    vus[k] = true;
+    return true;
+  }).join(', ');
+}
+
+/**
+ * v3p's 'membre' (`rangs: true`): v3n's linking rules, plus the member's ranks (`membre.rangs`, labels of the Rôles
+ * tab matched to their Discord roles by the grimoire) written in « Rôle » — on the row holding the seal (empty
+ * `nom`), on the row linked, on the row created. A rank « Ami des Lunes » → 'friend' (the cell is not looked at:
+ * it only mirrors the last seal). No « Rôle » column: nothing written there, a creation is not refused. Without
+ * `membre.rangs` (an array) the « Rôle » cell is left as it is.
+ */
+function membreAvecRangs(corps) {
+  var m = corps.membre;
+  var id = String((m && m.discord) || '').replace(/\D/g, '');
+  if (!m || !id) return { ok: false, erreur: 'no seal' };
+  var avecRangs = Object.prototype.toString.call(m.rangs) === '[object Array]';
+  var rangs = avecRangs ? texteRangs(m.rangs) : '';
+  if (avecRangs && m.rangs.some(function (x) { return /^ami(e|s)?deslunes$/.test(cleEntete(x)); })) return { ok: false, erreur: 'friend' };
+  var def = ONGLETS.membres;
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  if (!feuille || feuille.getLastRow() < 1) return { ok: false, erreur: 'no members tab' };
+  var tout = feuille.getDataRange().getValues();
+  var idx = indexColonnes(tout[0], def);
+  if (idx.nom < 0) return { ok: false, erreur: 'no members tab' };
+  var ajouterEntete = function (titre) {
+    var premiere = feuille.getRange(1, 1, 1, Math.max(feuille.getLastColumn(), 1)).getValues()[0];
+    var fin = premiere.length;
+    while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
+    feuille.getRange(1, fin + 1).setValue(titre).setFontWeight('bold');
+    return fin;
+  };
+  var cellule = function (l, champ) { return idx[champ] >= 0 ? l[idx[champ]] : ''; };
+  var pseudo = String(m.pseudo || '').slice(0, 80);
+  var parId = -1;
+  var parNom = -1;
+  for (var r = 1; r < tout.length; r++) {
+    if (String(cellule(tout[r], 'discord')).replace(/\D/g, '') === id) parId = r;
+    if (m.nom && parNom < 0 && cleEntete(cellule(tout[r], 'nom')) === cleEntete(m.nom)) parNom = r;
+  }
+  var ecrire = function (r, champ, valeur) {
+    if (idx[champ] < 0) idx[champ] = ajouterEntete(champ === 'discord' ? 'Discord ID' : 'Pseudo Discord');
+    feuille.getRange(r + 1, idx[champ] + 1).setValue(valeur);
+  };
+  // « Rôle » is never added: a sheet without it simply does not get the ranks.
+  var ecrireRangs = function (r) {
+    if (avecRangs && idx.role >= 0 && String(cellule(tout[r], 'role')) !== rangs) feuille.getRange(r + 1, idx.role + 1).setValue(rangs);
+  };
+  var nom;
+  var cree = false;
+  if (!m.nom) {
+    // The pseudo and the ranks of the row already holding this seal.
+    if (parId < 0) return { ok: false, erreur: 'unknown member' };
+    nom = String(cellule(tout[parId], 'nom'));
+    if (String(cellule(tout[parId], 'pseudo')) !== pseudo) ecrire(parId, 'pseudo', pseudo);
+    ecrireRangs(parId);
+  } else if (parId >= 0 && parId !== parNom) {
+    return { ok: false, erreur: 'seal taken' };
+  } else if (parNom >= 0) {
+    var actuel = String(cellule(tout[parNom], 'discord')).replace(/\D/g, '');
+    if (actuel && actuel !== id) return { ok: false, erreur: 'other seal' };
+    nom = String(cellule(tout[parNom], 'nom'));
+    if (!actuel) ecrire(parNom, 'discord', "'" + id);
+    ecrire(parNom, 'pseudo', pseudo);
+    ecrireRangs(parNom);
+  } else {
+    if (!m.creer) return { ok: false, erreur: 'unknown member' };
+    nom = String(m.nom).slice(0, 80);
+    if (idx.discord < 0) idx.discord = ajouterEntete('Discord ID');
+    if (idx.pseudo < 0) idx.pseudo = ajouterEntete('Pseudo Discord');
+    var largeur = Math.max(idx.nom, idx.role, idx.discord, idx.pseudo) + 1;
+    var ligne = [];
+    for (var c = 0; c < largeur; c++) ligne.push('');
+    ligne[idx.nom] = nom;
+    if (idx.role >= 0) ligne[idx.role] = rangs;
+    ligne[idx.discord] = "'" + id;
+    ligne[idx.pseudo] = pseudo;
+    feuille.getRange(feuille.getLastRow() + 1, 1, 1, largeur).setValues([ligne]);
+    cree = true;
+  }
+  // No `maj`: the tabs are read again (a seal is rare).
+  return { ok: true, nom: nom, cree: cree, rangs: rangs };
+}
+
+/**
+ * v3p (`rangs: true` only): the Grimoire's rows of the shared Permissions tab, from the secret page (the grimoire's
+ * server allows only its testers; the script sees the shared token only) or the first seed. Only Grimoire rows
+ * and row 1 are written: a row of another « Outil » is never touched, nor a column renamed or moved.
+ *  - the tab missing or empty: created with the header Outil | Geste | Clé | one column per rank of `rangs`;
+ *  - a rank of `rangs` without a column: its header appended at the end of row 1;
+ *  - each line: its Grimoire row (found by « Clé ») gets the cells of `valeurs` (by header), others kept;
+ *    a line without a row is appended (Outil « Grimoire », Geste, Clé, its cells);
+ *  - `semer`: only when the tab holds no Grimoire row at all (else nothing is written: seme false).
+ */
+ECRITURES.permissions = function (corps) {
+  var d = corps.droits;
+  if (!d || !d.lignes || !d.lignes.length) return { ok: false, erreur: 'empty permissions' };
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  var feuille = classeur.getSheetByName(ONGLET_PERMISSIONS);
+  var cree = false;
+  if (!feuille) {
+    feuille = classeur.insertSheet(ONGLET_PERMISSIONS);
+    cree = true;
+  }
+  var rangs = [];
+  (d.rangs || []).forEach(function (x) {
+    var t = String(x).trim().slice(0, 60);
+    if (t && !rangs.some(function (y) { return cleEntete(y) === cleEntete(t); })) rangs.push(t);
+  });
+  var tout = feuille.getLastRow() > 0 ? feuille.getDataRange().getValues() : [];
+  var entete = tout.length ? tout[0].map(function (v) { return String(v).trim(); }) : [];
+  while (entete.length && !entete[entete.length - 1]) entete.pop();
+  // Header: written whole on an empty tab; else only missing columns appended at its end.
+  var ajout = [];
+  if (!entete.length) {
+    ajout = ['Outil', 'Geste', 'Clé'].concat(rangs);
+  } else {
+    var fixes0 = indexColonnes(entete, { colonnes: COLONNES_PERMISSIONS });
+    COLONNES_PERMISSIONS.forEach(function (col) { if (fixes0[col[1]] < 0) ajout.push(col[0]); });
+    var noms = entete.map(cleEntete);
+    rangs.forEach(function (x) { if (noms.indexOf(cleEntete(x)) < 0) ajout.push(x); });
+  }
+  var fixes = indexColonnes(entete.concat(ajout), { colonnes: COLONNES_PERMISSIONS });
+  // The Grimoire's rows (0-based row index in `tout`) by key.
+  var parCle = {};
+  var nGrimoire = 0;
+  for (var r = 1; r < tout.length; r++) {
+    if (cleEntete(tout[r][fixes.outil]) !== cleEntete(OUTIL)) continue;
+    nGrimoire++;
+    var k0 = cleEntete(tout[r][fixes.cle]);
+    if (k0 && parCle[k0] === undefined) parCle[k0] = r;
+  }
+  if (d.semer && nGrimoire > 0) return { ok: true, seme: false, lignes: 0, ajoutees: 0, colonnes: [], cree: false };
+  if (ajout.length) {
+    feuille.getRange(1, entete.length + 1, 1, ajout.length).setValues([ajout]).setFontWeight('bold');
+    if (!entete.length) feuille.setFrozenRows(1);
+  }
+  entete = entete.concat(ajout);
+  var largeur = entete.length;
+  var nomsEntete = entete.map(cleEntete);
+  var pris = [fixes.outil, fixes.geste, fixes.cle];
+  var colonneDe = function (h) {
+    var i = nomsEntete.indexOf(cleEntete(h));
+    return i >= 0 && pris.indexOf(i) < 0 ? i : -1;
+  };
+  var modifiees = {};
+  var nouvelles = [];
+  d.lignes.forEach(function (l) {
+    var k = cleEntete(l.cle);
+    if (!k) return;
+    var v = l.valeurs || {};
+    var r = parCle[k];
+    var ligne;
+    if (r === undefined) {
+      ligne = [];
+      for (var c = 0; c < largeur; c++) ligne.push('');
+      ligne[fixes.outil] = OUTIL;
+      ligne[fixes.geste] = String(l.geste || '').slice(0, 120);
+      ligne[fixes.cle] = String(l.cle).slice(0, 60);
+      Object.keys(v).forEach(function (h) { var i = colonneDe(h); if (i >= 0) ligne[i] = v[h] === true; });
+      // The row's other rank cells: unchecked boxes, not blanks.
+      for (var j = 0; j < largeur; j++) if (pris.indexOf(j) < 0 && ligne[j] === '') ligne[j] = false;
+      nouvelles.push(ligne);
+      parCle[k] = -1;
+      return;
+    }
+    if (r < 0) return;
+    ligne = tout[r].slice(0, largeur);
+    while (ligne.length < largeur) ligne.push('');
+    Object.keys(v).forEach(function (h) { var i = colonneDe(h); if (i >= 0) ligne[i] = v[h] === true; });
+    for (var j2 = 0; j2 < largeur; j2++) if (pris.indexOf(j2) < 0 && ligne[j2] === '') ligne[j2] = false;
+    tout[r] = ligne;
+    modifiees[r] = true;
+  });
+  // Rank cells: the columns other than Outil / Geste / Clé, in contiguous runs (for the checkboxes).
+  var plages = [];
+  for (var c2 = 0; c2 < largeur; c2++) {
+    if (pris.indexOf(c2) >= 0) continue;
+    if (plages.length && plages[plages.length - 1][1] === c2) plages[plages.length - 1][1] = c2 + 1;
+    else plages.push([c2, c2 + 1]);
+  }
+  var cocher = function (ligne1, n) {
+    plages.forEach(function (pl) {
+      try {
+        feuille.getRange(ligne1, pl[0] + 1, n, pl[1] - pl[0]).insertCheckboxes();
+      } catch (err) {
+        // Plain TRUE / FALSE cells: the grimoire reads them the same way.
+      }
+    });
+  };
+  // Existing Grimoire rows: rewritten by runs of consecutive rows (each run holds Grimoire rows only).
+  var rangees = Object.keys(modifiees).map(Number).sort(function (a, b) { return a - b; });
+  for (var i0 = 0; i0 < rangees.length; ) {
+    var i1 = i0;
+    while (i1 + 1 < rangees.length && rangees[i1 + 1] === rangees[i1] + 1) i1++;
+    var bloc = rangees.slice(i0, i1 + 1).map(function (x) { return tout[x]; });
+    feuille.getRange(rangees[i0] + 1, 1, bloc.length, largeur).setValues(bloc);
+    cocher(rangees[i0] + 1, bloc.length);
+    i0 = i1 + 1;
+  }
+  // New rows: appended one by one (appendRow: the Table may append its own rows at the same time).
+  nouvelles.forEach(function (ligne) {
+    feuille.appendRow(ligne);
+    cocher(feuille.getLastRow(), 1);
+  });
+  // No `maj`: the tabs are read again (a rare write).
+  return { ok: true, seme: Boolean(d.semer), lignes: rangees.length, ajoutees: nouvelles.length, colonnes: ajout, cree: cree };
 };
 
 ECRITURES.clotureSemaine = function (corps) {

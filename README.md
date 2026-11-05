@@ -24,8 +24,7 @@ The whole site sits behind "the seal", checked by `middleware.ts` (`lib/sceau.ts
 | `DISCORD_CLIENT_ID` | Discord application's client ID. |
 | `DISCORD_CLIENT_SECRET` | Discord application's client secret. |
 | `DISCORD_GUILD_ID` | ID of the caravan's Discord server. |
-| `DISCORD_ROLE_IDS` | Comma-separated role IDs that open the grimoire (any one is enough). |
-| `DISCORD_ROLE_PATRIARCHE` | Optional — role ID marking a Patriarch (carried in the session, unused for now). |
+| `TESTEURS_DISCORD_IDS` | Optional — comma-separated Discord user IDs of the testers: every permission, and the secret page `/permissions` (never from the sheet). |
 | `SCEAU_MOT_DE_PASSE_COMMUN` | Optional — `1` keeps the shared password alongside Discord. |
 | `CATALOGUE_CSV_URL` | Optional — published CSV of the price sheet (see below). |
 | `COMMANDES_SCRIPT_URL` | Optional — URL of the Apps Script web app: sealed orders, missives, recipes, members (see *Order mode* and *Missives*). |
@@ -38,9 +37,12 @@ A password session lasts 30 days. Local dev: copy `.env.example` to `.env.local`
 
 How it works: OAuth2 authorization code, scopes `identify guilds.members.read`, no bot. Back from
 Discord (`/api/discord/retour`), the server reads the visitor's membership of `DISCORD_GUILD_ID`
-(`GET /users/@me/guilds/{guild}/member`) and lets them in only if they hold one of `DISCORD_ROLE_IDS`.
+(`GET /users/@me/guilds/{guild}/member`) and lets them in only if their ranks may « Entrer dans le grimoire »
+(lot 1b: their Discord roles mapped by the sheet's **Rôles** tab, the `entrer` row of **Permissions**; see
+*Permissions*), or if they are a tester. The tabs unreadable (script down for more than ten minutes, older
+script): nobody else enters (« Le registre des rangs reste fermé… »).
 The session cookie (signed with `CARAVANE_SECRET`) holds the Discord id, the display name (server
-nickname, else Discord display name, else username), the Patriarch flag and a 24 h expiry. When it
+nickname, else Discord display name, else username), the Discord role IDs and a 24 h expiry. When it
 expires, a returning visitor is sent back through Discord with `prompt=none`, which comes straight back
 if they still hold the role (seamless) and refuses them in character if the role was taken away.
 Closing the grimoire (iron latch, or the key on mobile) forgets the session.
@@ -56,8 +58,11 @@ Pseudo Discord). « Membre » is not a rank: such rows sit « Sans rang » until
 everything again under its lock (action `membre`). A seal already linked is not offered a typed name, and no
 seal ever reaches a row holding an ID by its nickname. Password sessions sign an existing name as before and
 never link nor create. With an older script (no Discord columns read) everything behaves as before (the
-nickname rule). The access role can be a single Discord role (`DISCORD_ROLE_IDS` = its ID).
-`DISCORD_ROLE_PATRIARCHE` only feeds the rights (`lib/droits.ts`).
+nickname rule). Lot 1b (v3p): at each seal and at each link the script writes the member's ranks in the
+Membres **Rôle** column (their ranks other than « Membre », else « Membre »; joined by « , »); nobody edits it by
+hand. It only serves the listings of other members (ranks page, the pay's Patriarchs, the Table); a signed-in
+member's own rights come from their Discord roles. « Ami des Lunes » (a Discord role mapped in Rôles) never links
+nor signs.
 
 On the order sheet the seller is the session's name (fixed; `/api/commande` reads it from the cookie,
 never from the page). Password sessions are « Un marchand de la caravane » and type the seller's name; once that name is
@@ -80,15 +85,13 @@ refused or failed, tampered request.
    opened on, so it must be listed exactly.
 4. In Discord: *User Settings → Advanced → Developer Mode* ON. Then right-click the caravan's server
    icon → **Copy Server ID** (= `DISCORD_GUILD_ID`); *Server Settings → Roles* → right-click each role
-   that may enter → **Copy Role ID** (= `DISCORD_ROLE_IDS`, comma-separated), and the Patriarchs' role
-   if wanted (= `DISCORD_ROLE_PATRIARCHE`).
+   of the caravan → **Copy Role ID**, into the sheet's **Rôles** tab (one row per rank, the ID typed as text
+   with a leading apostrophe; « Membre » first: without it nobody enters).
 5. On Vercel (choose the environments when asked):
    ```
    vercel env add DISCORD_CLIENT_ID
    vercel env add DISCORD_CLIENT_SECRET
    vercel env add DISCORD_GUILD_ID
-   vercel env add DISCORD_ROLE_IDS          # e.g. 112233445566778899,998877665544332211
-   vercel env add DISCORD_ROLE_PATRIARCHE   # optional
    vercel env add SCEAU_MOT_DE_PASSE_COMMUN # optional: 1 = keep the shared password during the transition
    ```
    then redeploy. `CARAVANE_SECRET` must be set (it already is for the password).
@@ -263,7 +266,7 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   (`C-YYMMDD-XXXXX`, JST day) and forwards it to the Apps Script with `COMMANDES_JETON`. The script
   URL and token never reach the browser. Without them, sealing answers an in-character error.
 - Code: `components/Commande.tsx` (scroll, sheet, mobile roll, state), `lib/commande.ts` (maths shared
-  with the route), `app/api/commande/route.ts`, `scripts/apps-script/commandes.gs`; styles in the
+  with the route), `app/api/commande/route.ts`, `scripts/apps-script/grimoire.gs`; styles in the
   *Order mode* section of `app/globals.css`.
 
 ### Rows written in the sheet
@@ -281,14 +284,14 @@ vendu* are then its share. An older script, which does not know that column, sti
 *Prix réel vendu*. *Total mini / Total idéal / Prix réel vendu / Statut* are per line (qty × floor, qty × ceiling, line
 total, line status: `à perte`, `honnête`, `excellente affaire`, `négocié`); *Total commande* repeats
 the order total on each of its rows. To match another layout, edit only the `COLONNES` array at the
-top of `commandes.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
+top of `grimoire.gs` (header + value per column); the payload also carries `articleEn`, `prixMini`,
 `prixIdeal`, `sousPlancher` and the order-level `totalMini`, `totalIdeal`, `statut`.
 
 ### Setting up the orders sheet
 
 1. Make a copy of the sheet that should receive the orders (or a new sheet).
 2. In it: *Extensions → Apps Script*. Replace the editor's content with
-   `scripts/apps-script/commandes.gs`, save.
+   `scripts/apps-script/grimoire.gs`, save.
 3. *Project Settings (gear) → Script properties → Add property*: `JETON` = a long random value
    (`openssl rand -hex 24`). Keep it for step 7.
 4. Optional: run the `essai` function once from the editor (it asks for the sheet permission and
@@ -330,7 +333,7 @@ Lunes » is not a member at all: no signing, not listed, no share.
 ## Missives, the chest and the workshop (v3)
 
 Everything lives in the same Google Sheet as the orders, read and written through the same Apps Script
-(`scripts/apps-script/commandes.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
+(`scripts/apps-script/grimoire.gs`, same `COMMANDES_SCRIPT_URL` / `COMMANDES_JETON`). Without them the
 pages say the registre is not linked yet, there is no ex-libris, and the price ledger behaves exactly as
 in v2. When the sheet cannot be read, the pages say so in character, with « renvoyer le coursier ».
 
@@ -409,10 +412,20 @@ missive pages, order sheet) forgets it. Every write re-checks the name against t
 whose server nickname is on the list arrives pre-signed. An unrecognized typed seller still works for
 orders as in v2.
 
-Permissions: `lib/droits.ts` has one rule per action (`ROLES_REQUIS`), all open for now. To restrict an
-action, list the roles allowed (e.g. `recette: ['maitreartisan', 'patriarche']`); roles come from an
-optional **Rôle** column of the Membres tab and from the Discord Patriarch role (the server always
-checks; for the page to hide a restricted action, `/api/marchand` must then look the roles up too).
+Permissions (Missions v2, lots 1 and 1b; script v3p, contract `contrat-sheet-unique.md` § 5): the **Rôles** tab
+(Rôle | ID du rôle Discord, edited by hand, IDs typed as text) maps each rank to its Discord role; a member's
+ranks are those whose role their seal holds. The **Permissions** tab is shared with the Table: Outil | Geste |
+Clé | one checkbox column per rank label. The grimoire reads and writes only its rows (Outil « Grimoire »), never
+renames or moves a column, and appends a missing rank column at the end of row 1 when it writes. Unchecked, a
+missing row or a missing column = no. « Membre » is the prerequisite: without it, no gesture and no entry; with
+it, the union of the boxes of all one's ranks. Entry is the gesture `entrer`, checked at the Discord seal.
+`lib/droits.ts` keeps the defaults, which only seed the Grimoire's rows once (when the tab holds none and Rôles
+maps « Membre »: at the next seal, or from the secret page); a gesture added later arrives unchecked. It maps
+each action to its gesture (`GESTE_DE`) and checks it; the server checks every write and the Trésor's reads, the
+page hides what a member may not do (`/api/marchand` answers `droits`). A failed read grants nothing (the last
+good read is kept ten minutes for an outage); testers (`TESTEURS_DISCORD_IDS`) hold every gesture and the secret
+page `/permissions` (anyone else gets a sealed page, 403), where the Grimoire's rows are edited. Password
+sessions hold no rank. The Livre du Trésor and the points open only with the « tresor » gesture.
 
 ### The rules
 
@@ -443,7 +456,7 @@ checks; for the page to hide a restricted action, `/api/marchand` must then look
 
 Headers are found by name (case, accents and punctuation ignored), in any order; older names are still
 read (below); a missing column is added at the end of row 1 on the first write. The mapping of every tab
-is `ONGLETS` at the top of `commandes.gs`.
+is `ONGLETS` at the top of `grimoire.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
@@ -484,8 +497,8 @@ refused by the script itself (`already closed`), under the lock.
 | `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
 | `livre` (v3l) | `{ livre: { fr, valeur } }` | `Livre` (« Ombre » / empty) on the article's Catalogues row (column added at the end of row 1 if missing) and on every Recettes row of the product. From v3l, `vente` and `recette` also write `livre` when sent `livre: 'Ombre'`; cache key `registre-v3l` |
 | `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
+| `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `grimoire.gs`; cache key `registre-v3p` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
-| `membre` (v3n) | `{ membre: { nom, discord, pseudo, creer } }` | A Discord seal's link, under the lock: `Discord ID` and `Pseudo Discord` written on the row named `nom` (refused `other seal` if it holds another ID, `seal taken` if the ID is already on another row, `friend` on an « Ami des Lunes » row, `unknown member` when absent and `creer` is not set); with `creer: true` a row is appended (`Nom`, `Rôle` « Membre », `Discord ID`, `Pseudo Discord`); `nom: ''` only refreshes the pseudo of the row holding `discord`. The headers are added at the end of row 1 when missing; the Membres' Discord columns are sent only to a caller asking `discord: true`. Answer `nom` (the sheet's spelling). The grimoire sends only this action; v3n's other tabs (missions, pay) are not read by this branch. An older script answers `unknown action`: the ex-libris refuses the name in character, nothing written |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
 Writes take `LockService`'s script lock and touch each tab in one `getValues`/`setValues`. The
@@ -552,7 +565,7 @@ that server's copy.
    `Nom` · `Ressource,Nom EN,Origine,Prix courant,Bonne affaire,Note` (a tab already imported with
    `Catégorie`/`Valeur` keeps working) · `Produit,Ingrédient,Quantité,Rendement,Artisan,Note`.
    The **Missives** and **Mouvements** tabs may stay empty (or absent): the script writes their headers.
-2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/commandes.gs`, save.
+2. *Extensions → Apps Script*: replace the whole editor content with the new `scripts/apps-script/grimoire.gs`, save.
 3. *Deploy → Manage deployments →* the existing web app → ✏️ edit → *Version: **New version*** → Deploy.
    The `/exec` URL stays the same, so nothing changes on Vercel. (A *New deployment* would make a new URL.)
 4. Optional: run `essai` once from the editor (creates the missing tabs' headers and logs the row counts).
@@ -561,7 +574,7 @@ that server's copy.
 
 ### Testing locally
 
-A mock of the web app that runs the real `commandes.gs` against an in-memory sheet (fake
+A mock of the web app that runs the real `grimoire.gs` against an in-memory sheet (fake
 `SpreadsheetApp`, `LockService`, `ContentService`, `PropertiesService`) lives outside the repo
 (`/Volumes/PERSO/dev/_atelier/caravane/v3/mock-script.js`, `MOCK_DELAI` = ms per call). Run it, then start
 the grimoire with `COMMANDES_SCRIPT_URL=http://localhost:3931/exec COMMANDES_JETON=jeton-essai`.
@@ -571,6 +584,102 @@ Code: `lib/missives.ts` (types, needs, stock, contributions, split, material cos
 `app/api/registre`, `app/api/identite`, `components/Registre.tsx` (page state, writes shown at once),
 `components/ExLibris.tsx`, `components/Missives.tsx` (pages), `components/Fiche.tsx` (slip, recipe tree,
 forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
+
+## Missions (prototype, branch `missions`)
+
+A demand for merchandise is cut into small missions put out to the caravan (an internal call for
+tenders); a member takes one, gives it back or completes it, and a completed mission credits its points
+to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane/economie/`). Code:
+`lib/missions.ts` (pure logic, shared by the page's preview and the server), `app/api/missions/route.ts`,
+`components/Missions.tsx`; the permission rules are in `lib/droits.ts` (`demande`, `prendre`, `rendre`,
+`accomplir`, `ponderation`: all open for now).
+
+- **Livre des Missions** (its own ribbon): « L’appel aux missions » (open missions, filtered by type,
+  identical ones shown once « ×N »; the member's missions « en cours » with *rendre* / *accomplie*),
+  « Mes points » (total and history), then the Patriarch's table — « Les demandes du Patriarche » (a
+  demand with its live preview, the demands with their progress), « Les points de la caravane » (every
+  member), « La pondération des efforts » (classes, resources, settings). Everyone may use every page.
+- **Translation of a demand** (`traduire`): the article's recipe (« recette d'usage », else variant 1;
+  the day book's recipes first) is expanded down to raw resources. An ingredient that has a recipe is an
+  intermediate product (class *Transformation*) unless the pondération puts it in another class (then it
+  is harvested or bought like a raw resource). Needs are summed over the whole tree before whole crafts
+  are counted. Missions: one harvest series per raw resource (lot = ⌊effort budget ÷ weight⌋, the total
+  split into parts of at most one lot, round parts when lots are large), one transformation series per
+  intermediate (whole crafts), crafting missions of the final product (*objects per crafting mission*).
+  A resource with no weight (« à fixer ») is sized with the fallback weight and its missions say so.
+- **Points**: *part ressources* (75 %) of the floor price × quantity, split over the harvests and
+  transformations pro rata to their effort (quantity × weight); *part fabrication* (5 %) over the crafting
+  missions pro rata to their objects. Whole points, sums exact. Credited when the mission is completed
+  (a row in the Points tab).
+- **Two mission types** (2026-10-28): *récolte* and *fabrication*; crafting an intermediate (Cuir from Peaux)
+  is a fabrication too, still paid from the resources' share by effort (the final product's crafts share the
+  crafting part). A sheet row typed « Transformation » reads as fabrication.
+- **Lots per mission**: « lot » rows of the Pondération tab (`Genre` lot, `Nom` the item, the number in
+  `Poids`) set how many units one mission holds (Blé par 40, Bière par 20); the demand's note can change it
+  line by line before sealing. A lot set by hand cuts full packs, the rest last (250 by 40 → 40 ×6 + 10).
+- Every form (the demand, the settings, the rarity levels, one item's rarity / origin / lot) is a note laid over
+  the left page; the pages only show.
+- **Rarity levels** (2026-10-30): a level is edited as a quantity per mission (Abondant 120, Commun 60, Peu
+  commun 40, Rare 30, Très rare 15, Exceptionnel 8; « Fabrication intermédiaire » 60); the weight per unit
+  stays internal (effort budget ÷ quantity). A resource's **origin** (Ferme, Cueillette, Chasse, Créature,
+  Mine, Achat…) is a tag, display and filter only. The first layout (C1…C7 with weights) is read into the
+  levels without losing the tab's edits, and written in the new layout (« Par mission », « Origine »
+  columns, v3n) at the next engraving.
+- **Quantité de référence** (2026-10-30): one number per item, what one gathers in a solid session; by
+  default its rarity level's, a per-item value overrides it (« Par mission » of its ressource row). Weight =
+  effort budget ÷ reference. The « lot par mission » and the « don minimum » (rows `lot` and `don`) override
+  their defaults (reference, reference × « multiple minimum pour un don ») without touching the weight.
+- **Standing missions** (« missions permanentes », v3n, tab `Missions permanentes`): a fixed quantity and
+  points per take (default: what that quantity earns in the usual recipes using it — the average over those
+  recipes of 75 % × floor ÷ yield × the item's share of the recipe's effort ÷ its quantity per craft, × the
+  quantity; a final product: 5 % × floor × quantity), an optional weekly ceiling (takes running or confirmed
+  in the week), open / en pause / close. A take is an ordinary mission (« N° demande » = P-…); given up, it is
+  dropped (« abandonnée »).
+- **Free donations** (v3n): declared as handed over (« DON »), confirmed by another member like a loot; the
+  confirmation writes a `dépôt` row of Mouvements. Points at the missions' rate per unit, only from the
+  item's donation minimum (below: 0 points, said before declaring); optional big-donation bonus (settings).
+  No per-item stock ceiling exists yet, so none is checked.
+- **Confirmation by a receiver** (2026-10-30, v3n): the holder marks the loot « remise »; another member
+  confirms it (« accomplie », points credited then, in the week of the confirmation, with who confirmed) or
+  refuses it (back « en cours », with a word). A mission « remise » no longer counts against the limit.
+  « Rendre » is shown as « renoncer ».
+- **Lifecycle**: ouverte → en cours (who, when; at most *max en cours* per member, checked by the server
+  and again by the script under its lock) → accomplie, or rendue (open again; the « Journal » cell keeps
+  each gesture).
+
+Sheet tabs (written by the Apps Script **v3m**, created hidden when missing, editable by hand):
+`Pondération` (`Genre` classe/ressource, `Code`, `Nom`, `Poids`, `Note`), `Réglages missions`
+(`Réglage`, `Valeur`, `Note`), `Demandes`, `Missions`, `Points`. An empty Pondération tab reads as the
+defaults of `lib/missions.ts`; the first demand seeds it. The grimoire asks for these tabs with
+`missions: true`; without it the script answers exactly as v3l did, so the production site (v3.3) is
+unaffected. With an older script the missions' pages show the defaults and every write is refused in
+character.
+
+## The Livre du Trésor: the pay (prototype, branch `missions`)
+
+The economy proposal's option B (`_atelier/caravane/economie/proposition-economie.html`): the sheet is the
+whole accounting. Code: `lib/paie.ts` (pure), `app/api/paie/route.ts`, `components/Tresor.tsx`; rules in
+`lib/droits.ts` (`reglagesPaie`, `facture`, `evenement`, `ecriture`, `clotureSemaine`, `paiement`, all open).
+
+- **Points of a sale** (the Commandes tab, day book only — the Livre d'ombre's sales are left out): trésorerie
+  10 % of the real price, vendeur 10 % of the floor + 90 % of what is above it (under the floor the shortfall
+  comes off the seller's share, never below 0). The resources' (75 %) and crafting (5 %) shares are paid by
+  the missions, credited at completion; the part of the week's sales that no mission of the week paid
+  (Σ 80 % × floor − mission points, when positive) goes to the trésorerie. A line without a known floor
+  (outside the catalogue, « à négocier ») takes its own price as floor.
+- **The week** (JST, first day a setting): sales − invoices (those not linked to an event, the weekly rent
+  unless a « loyer » invoice is written, a deficit carried from the week before) = remainder; the Patriarchs
+  take 15 % in equal parts (the settings' list, else the members whose role is Patriarche); the rest is split
+  in whole septims pro rata of the week's points, the trésorerie included. A negative remainder pays nobody
+  and is carried to the next week. **Closing** freezes the week in the Clôtures tab; each pay line is then
+  « à payer » until marked « payé » (who, when).
+- **Events**: their own ledger (entries, expenses — invoices linked to the event count here —, lots given
+  from the chest, written as `livraison` rows of Mouvements when asked, participants with a compensation,
+  payable like the pay). Their balance goes to the trésorerie, not into the week's pot.
+- **Settings** (Réglages paie tab): every share, the Patriarchs' list, the week's first day, the rent, the
+  default compensation. The missions read their 75 % / 5 % from here.
+- Tabs (Apps Script **v3n**, hidden, created on first write, sent only with `paie: true`): `Réglages paie`,
+  `Factures`, `Événements`, `Écritures événements`, `Clôtures`. Without the flag, every answer is v3m's.
 
 ## The Livre d'ombre (shadow book)
 

@@ -20,6 +20,8 @@ import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Co
 import { useRegistre } from './Registre'
 import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
+import { useMissions } from './Missions'
+import { useTresor } from './Tresor'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 import { Annule, blocsTexte, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
 import { PAGE_DEVISE, PARTIE_OMBRE, pagesOmbre, TEXTES as OMBRE_TEXTES } from '@/lib/ombre'
@@ -88,10 +90,21 @@ const COURT_MAX = 18
 /** A recipe matches a query by its French or English name, or its craft. */
 const recetteCorrespond = (r: Recette, requete: string) => nomsCorrespondent([r.produit, r.en, metierDe(r.artisan).nom], requete)
 
+/** The pages that open with the Livre du Trésor: its own, and the points' (Mes points, Points de la caravane). */
+const pageDuTresor = (p: Page) => p.partie === 'tresor' || p.type === 'points' || (p.type === 'patriarche' && p.vue === 'points')
+
 export default function Grimoire({ livre: livreServeur, tablePatriarches }: { livre: Livre; tablePatriarches?: string }) {
-  const { parties, icones } = livreServeur
+  const { icones } = livreServeur
   const articles = useMemo(() => livreServeur.pages.flatMap((p) => (p.type === 'chapitre' ? (p as PageChapitre).articles : [])), [livreServeur])
   const registre = useRegistre(articles)
+  // The Livre du Trésor and the points' pages open only to who may (lib/droits.ts « tresor »; the server
+  // refuses their data to anyone else).
+  const tresorOuvert = registre.marchand?.droits?.tresor === true
+  const parties = useMemo(() => (tresorOuvert ? livreServeur.parties : livreServeur.parties.filter((p) => p.id !== 'tresor')), [livreServeur.parties, tresorOuvert])
+  // The missions (prototype): their data and the state their pages share.
+  const missions = useMissions(registre.marchand?.identite ?? null)
+  // The pay (prototype): the Livre du Trésor's data and the week shown (read only when it opens).
+  const tresor = useTresor(registre.marchand?.identite ?? null, tresorOuvert)
 
   // The ex-libris first (when the registre is linked), and one page per missive after the list of
   // missives: open ones (oldest first), then closed ones.
@@ -103,7 +116,7 @@ export default function Grimoire({ livre: livreServeur, tablePatriarches }: { li
   const [ombre, setOmbre] = useState<EtatOmbre>('jour')
   const [septims, setSeptims] = useState(false)
   const [ombreJoue, setOmbreJoue] = useState(false)
-  const livreJour = useMemo((): Livre => {
+  const livreBrut = useMemo((): Livre => {
     const etats = registre.calcul?.etats ?? []
     const vues: PageMissive[] = [...etats.filter((e) => !estClose(e.missive)), ...etats.filter((e) => estClose(e.missive))].map((e) => ({
       type: 'missive',
@@ -167,6 +180,10 @@ export default function Grimoire({ livre: livreServeur, tablePatriarches }: { li
       pages: [...exLibris, ...p.slice(0, apresRecettes), ...metiers, ...p.slice(apresRecettes, apresMissives), ...vues, ...p.slice(apresMissives)],
     }
   }, [livreServeur, registre.calcul, registre.donnees, relie, divinite])
+  const livreJour = useMemo(
+    (): Livre => (tresorOuvert ? livreBrut : { ...livreBrut, parties, pages: livreBrut.pages.filter((p) => !pageDuTresor(p)) }),
+    [livreBrut, tresorOuvert, parties],
+  )
   // The shadow book: its goods (the published copy's and the sheet's « Ombre » rows), its recipes, its teachings.
   const livre = useMemo((): Livre => {
     if (ombre === 'jour') return livreJour
@@ -802,7 +819,7 @@ export default function Grimoire({ livre: livreServeur, tablePatriarches }: { li
     ficheApres.current = null
   }, [destinationFiche])
 
-  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, ouvrir: setFiche, allerA: setVersId }), [registre])
+  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, m: missions, t: tresor, ouvrir: setFiche, allerA: setVersId }), [registre, missions, tresor])
 
   const refermer = async () => {
     await fetch('/api/sceau', { method: 'DELETE' })

@@ -3515,9 +3515,389 @@ strong.a-verser { font-weight: 400; }
   .sortie-ombres { position: relative; top: auto; left: auto; display: flex; justify-content: center; margin: 0 0 8px; }
 }
 
+/* ═══════════════════════════ The book of Missions (prototype, components/Missions.tsx) ═══════════════════════════ */
+
+.missions-droite > .mes-missions:first-child > .titre-section:first-child, .missions-droite > .titre-section:first-child, .points-droite > .titre-section:first-child, .demandes-droite > .titre-section:first-child, .ponderation-droite > .titre-section:first-child { margin-top: 2px; }
+.missions-inactif {
+  margin: 10px 0;
+  padding: 7px 10px;
+  border: 1px dashed rgba(138, 75, 18, 0.55);
+  background: rgba(255, 248, 228, 0.3);
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--encre-douce);
+  text-align: left;
+}
+.a-fixer { font-style: italic; color: var(--encre-rouge); }
+.compte-missions { font-family: var(--f-texte); font-style: italic; font-size: 0.8em; letter-spacing: 0; color: var(--encre-pale); }
+
+/* One mission: its glyph, what to do, what it pays, the gestures. */
+.missions-liste { list-style: none; margin: 0; padding: 0; text-align: left; }
+.mission {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas: 'glyphe texte cote';
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 2px 4px;
+  border-bottom: 1px solid rgba(110, 80, 45, 0.14);
+}
+.mission .glyphe-mission { grid-area: glyphe; }
+.mission-texte { grid-area: texte; display: flex; flex-direction: column; min-width: 0; }
+.mission-intitule { font-size: 17px; line-height: 1.2; }
+.mission-meta { font-size: 13.5px; font-style: italic; color: var(--encre-pale); }
+.mission-cote { grid-area: cote; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.mission-fois { font-family: var(--f-capitales); font-size: 14px; color: #8a4b12; }
+.mission-points { grid-area: cote; font-family: var(--f-capitales); font-weight: 400; font-size: 15px; letter-spacing: 0.03em; color: #2f5b3a; white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
+.mission-gestes { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 2px 14px; }
+.mission-gestes:empty { display: none; }
+.mission.en-attente { opacity: 0.6; }
+.mission.en-attente .mission-intitule { color: var(--encre-douce); }
+.mission.tenue { background: linear-gradient(90deg, rgba(201, 162, 78, 0.16), transparent 75%); }
+.mission.apercu { padding: 3px 2px; }
+.mission.apercu .mission-intitule { font-size: 16px; }
+.glyphe-mission { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(120, 60, 30, 0.35); color: rgba(52, 30, 12, 0.85); background: radial-gradient(circle, rgba(255, 248, 228, 0.5) 30%, transparent 72%); }
+.glyphe-mission .icone { width: 18px; height: 18px; }
+.glyphe-recolte { color: #2f5b3a; }
+.glyphe-fabrication { color: var(--encre-rouge); }
+.lien-encre:disabled { opacity: 0.45; cursor: not-allowed; border-bottom-color: transparent; }
+.lien-encre.actif { color: var(--encre-rouge); border-bottom: 1.5px solid var(--encre-rouge); }
+
+.filtre-missions { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin: 12px 0 4px; }
+.missions-ailleurs em { font-size: 15px; color: var(--encre-douce); }
+
+/* My points. */
+.points-total { margin: 14px auto 4px; text-align: center; }
+.points-total .points-nom { display: block; font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.08em; color: var(--encre-pale); }
+.points-total strong { display: block; font-family: var(--f-gothique); font-weight: 400; font-size: 64px; line-height: 1; color: #8a4b12; text-shadow: 0 1px 0 rgba(255, 248, 228, 0.6); }
+.points-total > span:not(.points-nom) { font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.1em; color: var(--encre-douce); }
+.points-detail { margin: 8px 0 0; font-style: italic; color: var(--encre-douce); line-height: 1.4; }
+.historique-points li { flex-wrap: wrap; }
+.historique-points li.en-attente { opacity: 0.6; }
+.historique-quand { flex-basis: 100%; font-family: var(--f-capitales); font-size: 12.5px; color: var(--encre-pale); }
+.historique-raison { min-width: 0; }
+.historique-points strong { color: #2f5b3a; font-family: var(--f-capitales); font-size: 15px; white-space: nowrap; }
+
+/* The Patriarch's demands. */
+.demande-form { text-align: left; }
+.demande-form .titre-section { margin-top: 8px; }
+.demande-form .fiche-champ input, .ponderation-form .fiche-champ input { width: 100%; }
+.demande-resume p { margin: 3px 0; }
+.apercu-total { margin: 4px 0 8px; text-align: right; font-family: var(--f-capitales); color: var(--encre-douce); }
+.apercu-total strong { font-weight: 400; color: #2f5b3a; }
+.liste-demandes { list-style: none; margin: 0; padding: 0; text-align: left; }
+.demande { display: flex; flex-direction: column; gap: 1px; padding: 6px 2px 7px; border-bottom: 1px solid rgba(110, 80, 45, 0.15); }
+.demande-titre { font-family: var(--f-capitales); font-size: 17px; color: var(--encre); }
+.demande-meta { font-size: 13.5px; font-style: italic; color: var(--encre-pale); }
+.demande-avance { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 14px; color: var(--encre-douce); }
+
+/* Every member's points. */
+.tableau-points { text-align: left; }
+.tableau-points-entete, .tableau-points-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 70px 82px 92px; column-gap: 8px; align-items: baseline; }
+.tableau-points-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.tableau-points-entete span:not(:first-child), .tableau-points-ligne > :not(:first-child) { text-align: right; }
+.tableau-points-ligne { padding: 4px 2px; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 16px; font-variant-numeric: tabular-nums lining-nums; }
+.tableau-points-ligne > span:first-child { font-family: var(--f-capitales); }
+.tableau-points-ligne strong { font-weight: 400; color: #2f5b3a; font-size: 17px; }
+
+/* The missions' pages show only: they never show a scrollbar (the wheel and the finger still scroll). */
+.page-missions .defile, .page-points .defile, .page-patriarche .defile, .page-tresor .defile { scrollbar-width: none; }
+.page-missions .defile::-webkit-scrollbar, .page-points .defile::-webkit-scrollbar, .page-patriarche .defile::-webkit-scrollbar, .page-tresor .defile::-webkit-scrollbar { display: none; }
+
+/* The pondération, as shown (every change is made on a note). */
+.ponderation-form { text-align: left; }
+.reglage .fiche-aide { font-size: 12.5px; }
+.reglages-missions li { font-size: 15.5px; }
+.ponderation-action { margin: 4px 0 0; text-align: right; }
+.classes-ponderation { text-align: left; }
+.classes-entete, .classes-ligne { display: grid; grid-template-columns: 34px minmax(0, 1fr) 70px 78px; column-gap: 8px; align-items: baseline; }
+.classes-entete, .ponderation-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.classes-ligne { padding: 3px 0; border-bottom: 1px solid rgba(110, 80, 45, 0.1); font-size: 15.5px; }
+.classes-ligne > :nth-child(n + 3), .classes-entete span:nth-child(n + 3) { text-align: right; }
+.classe-code { font-family: var(--f-capitales); color: #8a4b12; }
+.classe-lot { font-size: 14px; font-style: italic; color: var(--encre-pale); }
+.classes-fiche input {
+  min-width: 0; width: 100%; padding: 1px 3px; border: 0; border-bottom: 1px solid rgba(90, 64, 41, 0.45); border-radius: 0;
+  background: transparent; color: var(--encre); font: inherit; font-size: 16px; outline: none;
+}
+.classes-fiche input:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.3); }
+.ponderation-entete, .ressource-ponderee { display: grid; grid-template-columns: minmax(0, 1fr) 64px 76px 76px; column-gap: 8px; align-items: baseline; }
+.ponderation-entete { margin-top: 14px; }
+.ponderation-entete span:nth-child(n + 2) { text-align: right; }
+.groupe-ressources { margin-top: 8px; text-align: left; }
+.groupe-ressources .fiche-sous-titre { margin-bottom: 2px; }
+.a-fixer-groupe .fiche-sous-titre { color: var(--encre-rouge); border-bottom-color: rgba(142, 31, 20, 0.35); }
+.ressource-ponderee {
+  width: 100%; padding: 2px 0; border: 0; border-bottom: 1px dotted rgba(110, 80, 45, 0.2); background: none;
+  font: inherit; font-size: 15.5px; color: var(--encre); text-align: left; cursor: pointer;
+}
+.ressource-ponderee > :nth-child(n + 2) { text-align: right; font-size: 14px; color: var(--encre-douce); }
+.ressource-ponderee:not(:disabled):hover, .ressource-ponderee:focus-visible { outline: none; background: rgba(201, 162, 78, 0.16); }
+.ressource-ponderee:not(:disabled):hover .ressource-nom { color: var(--encre-rouge); }
+.ressource-ponderee:disabled { cursor: default; }
+.ressource-nom { min-width: 0; overflow-wrap: anywhere; }
+.ressource-lot.fixe { color: #8a4b12; font-family: var(--f-capitales); }
+
+/* The demand's note: one line per item, its lot per mission, the missions it makes. */
+.lignes-demande { list-style: none; margin: 2px 0 6px; padding: 0; }
+.ligne-demande {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas: 'glyphe nom lot' 'glyphe decoupe decoupe';
+  align-items: center;
+  column-gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(110, 80, 45, 0.14);
+}
+.ligne-demande .glyphe-mission { grid-area: glyphe; align-self: start; margin-top: 2px; }
+.ligne-demande-nom { grid-area: nom; display: flex; flex-direction: column; min-width: 0; }
+.ligne-demande-lot { grid-area: lot; display: flex; flex-direction: column; align-items: flex-end; }
+.ligne-demande-lot > span { font-family: var(--f-capitales); font-size: 11.5px; letter-spacing: 0.05em; color: var(--encre-rouge); }
+.ligne-demande-lot input {
+  width: 64px; padding: 0 3px; border: 0; border-bottom: 1.5px solid rgba(90, 64, 41, 0.45); background: transparent;
+  font: inherit; font-size: 17px; text-align: right; color: var(--encre); outline: none; font-variant-numeric: tabular-nums lining-nums;
+}
+.ligne-demande-lot input:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.3); }
+.ligne-demande-lot em { font-size: 11.5px; color: var(--encre-pale); white-space: nowrap; }
+.ligne-demande-lot em .lien-encre { font-size: 11px; padding: 0 1px; }
+.ligne-demande-decoupe { grid-area: decoupe; display: flex; flex-wrap: wrap; gap: 0 14px; font-size: 14px; font-style: italic; color: var(--encre-douce); }
+.ligne-demande-decoupe strong { font-family: var(--f-capitales); font-style: normal; font-weight: 400; color: #2f5b3a; }
+.ligne-demande .mission-intitule { font-size: 16px; }
+
+@media (max-width: 860px) {
+  .mission { grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 8px; }
+  .mission-intitule { font-size: 16px; }
+  .points-total strong { font-size: 52px; }
+  .demande-avance { grid-template-columns: 80px minmax(0, 1fr); }
+  .tableau-points-entete, .tableau-points-ligne { grid-template-columns: minmax(0, 1fr) 56px 64px 76px; column-gap: 5px; font-size: 14.5px; }
+  .tableau-points-entete { font-size: 11.5px; }
+  .classes-entete, .classes-ligne { grid-template-columns: 30px minmax(0, 1fr) 56px 62px; column-gap: 6px; }
+  .ponderation-entete, .ressource-ponderee { grid-template-columns: minmax(0, 1fr) 46px 62px 64px; column-gap: 5px; }
+}
+
+/* ═══════════════════════════ The Livre du Trésor (prototype, components/Tresor.tsx) ═══════════════════════════ */
+
+.paie-droite > .titre-section:first-child, .factures-droite > .titre-section:first-child, .evenements-droite > .titre-section:first-child, .clotures-droite > .titre-section:first-child { margin-top: 2px; }
+.navigation-semaine { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 14px; margin: 10px 0 2px; }
+.navigation-semaine strong { font-family: var(--f-capitales); font-weight: 400; font-size: 16px; color: var(--encre); }
+.compte-semaine li { font-size: 16px; }
+.compte-semaine li.total { border-top: 1px solid rgba(110, 80, 45, 0.35); font-family: var(--f-capitales); }
+.compte-semaine li.deficit { color: var(--encre-rouge); }
+.tableau-paie { text-align: left; }
+.tableau-paie-entete, .tableau-paie-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 62px 90px 128px; column-gap: 8px; align-items: baseline; }
+.tableau-paie-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.tableau-paie-entete span:nth-child(n + 2), .tableau-paie-ligne > :nth-child(4n + 2), .tableau-paie-ligne > :nth-child(4n + 3), .tableau-paie-ligne > :nth-child(4n + 4) { text-align: right; }
+.tableau-paie-ligne { padding: 4px 2px; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 15.5px; font-variant-numeric: tabular-nums lining-nums; row-gap: 2px; }
+.tableau-paie-ligne strong { font-weight: 400; color: #2f5b3a; }
+.tableau-paie-ligne.tresorerie { background: linear-gradient(90deg, rgba(31, 90, 86, 0.1), transparent 75%); }
+.paie-membre { display: flex; flex-direction: column; min-width: 0; font-family: var(--f-capitales); }
+.paie-membre b { font-weight: 400; color: var(--encre-pale); }
+.paie-membre em { font-family: var(--f-texte); font-size: 12.5px; color: var(--encre-pale); }
+.paie-patriarche { font-family: var(--f-texte); font-style: italic; font-size: 14px; color: var(--encre-douce); padding-left: 14px; }
+.statut-paie { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 2px 8px; font-size: 13.5px; }
+.statut-paie em { color: var(--encre-pale); }
+.statut-paie .lien-encre { font-size: 12px; }
+.ligne-tresor {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; width: 100%;
+  padding: 5px 2px; border: 0; border-bottom: 1px solid rgba(110, 80, 45, 0.15); background: none; font: inherit; font-size: 16.5px;
+  color: var(--encre); text-align: left; cursor: pointer;
+}
+.ligne-tresor > span { display: flex; flex-direction: column; min-width: 0; }
+.ligne-tresor em { font-size: 13.5px; color: var(--encre-pale); }
+.ligne-tresor strong { font-weight: 400; font-family: var(--f-capitales); color: #2f5b3a; white-space: nowrap; }
+.ligne-tresor strong.negatif, .ecritures-evenement .negatif { color: var(--encre-rouge); }
+.ligne-tresor:not(:disabled):hover, .ligne-tresor:focus-visible { outline: none; background: rgba(201, 162, 78, 0.16); }
+.ligne-tresor:disabled { cursor: default; }
+.facture-auto { font-size: 13px; color: var(--encre-pale); }
+.ecritures-evenement li { flex-wrap: wrap; font-size: 15.5px; }
+.ecritures-evenement li em { font-size: 12.5px; color: var(--encre-pale); }
+.ecritures-evenement li.total { border-top: 1px solid rgba(110, 80, 45, 0.35); font-family: var(--f-capitales); }
+.ecritures-evenement .statut-paie { flex-basis: 100%; }
+.choix-genre { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.fiche-coche { display: flex; align-items: baseline; gap: 6px; font-size: 14px; font-style: italic; color: var(--encre-douce); }
+@media (max-width: 860px) {
+  .tableau-paie-entete, .tableau-paie-ligne { grid-template-columns: minmax(0, 1fr) 48px 74px; column-gap: 5px; font-size: 14.5px; }
+  .tableau-paie-entete span:nth-child(4) { display: none; }
+  .tableau-paie-ligne > :nth-child(4n + 4) { grid-column: 1 / -1; }
+}
+
+/* Loot handed over, waiting for a confirmation (v3n). */
+.mission.remise { background: linear-gradient(90deg, rgba(47, 91, 58, 0.12), transparent 75%); }
+.mission-gestes .tampon.petit { margin-left: 0; }
+
+/* The pondération as rarity levels and origins (2026-10-30). */
+.ponderation-droite .ressource-ponderee, .ponderation-droite .ressource-ponderee:not(:disabled) { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.6fr); }
+.ressource-desc { text-align: right; font-size: 14px; color: var(--encre-douce); }
+.ressource-desc b { font-weight: 400; font-family: var(--f-capitales); color: var(--encre); }
+.ressource-desc b.fixe { color: #8a4b12; }
+.ressource-desc em { font-size: 12.5px; color: var(--encre-pale); }
+.niveaux-rarete li { font-size: 16px; }
+.classes-fiche .niveau-ligne { grid-template-columns: minmax(0, 1fr) 70px 80px; }
+
+/* Standing missions and free donations (v3n). */
+.mission.permanente { background: linear-gradient(90deg, rgba(31, 90, 86, 0.1), transparent 75%); }
+.mission.permanente .toujours { font-family: var(--f-capitales); font-style: normal; font-size: 12px; letter-spacing: 0.05em; color: #1f5a56; }
+.mission.permanente.fermee { opacity: 0.6; }
+
 /* A Discord seal's first signature: the question before a row is appended to the registre (2026-11-02). */
 .ex-libris-confirmer { margin: 10px auto 0; max-width: 420px; padding: 8px 12px; border: 1px dashed rgba(110, 80, 45, 0.5); background: rgba(255, 250, 235, 0.35); text-align: center; }
 .ex-libris-confirmer p { margin: 2px 0; }
 .ex-libris-confirmer > p:first-child { font-family: var(--f-capitales); color: var(--encre); }
 .ex-libris-confirmer-note { font-size: 14px; font-style: italic; color: var(--encre-douce); }
 .ex-libris-confirmer-gestes { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-top: 6px; }
+
+/* ═══════════════════════════ The secret page of the permissions (/permissions, testers only) ═══════════════════════════ */
+
+.perm { position: relative; z-index: 1; width: min(1180px, 100%); margin: 0 auto; padding: 16px 16px 40px; color: var(--encre); }
+.perm-retour { margin: 0 0 12px; font-family: var(--f-capitales); letter-spacing: 0.06em; }
+.perm-retour a { color: var(--or-pale); text-decoration: none; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.perm-retour a:hover { color: #fff0bf; }
+.perm-feuille {
+  position: relative;
+  padding: 34px 34px 30px;
+  background-color: var(--parchemin);
+  background-image: var(--taches), var(--grain);
+  box-shadow: inset 0 0 50px rgba(130, 80, 25, 0.28), 0 16px 34px rgba(0, 0, 0, 0.6);
+  border-radius: 2px;
+}
+.perm-feuille::before { content: ''; position: absolute; inset: 12px; border: 1px solid rgba(120, 60, 30, 0.32); outline: 1px solid rgba(120, 60, 30, 0.16); outline-offset: 3px; pointer-events: none; }
+.perm-tete { text-align: center; margin-bottom: 14px; }
+.perm-surtitre { font-family: var(--f-capitales); letter-spacing: 0.14em; font-size: 13px; color: var(--encre-rouge); text-transform: uppercase; }
+.perm-tete h1 { font-family: var(--f-gothique); font-weight: 400; font-size: 46px; line-height: 1.05; margin: 6px 0 2px; color: var(--encre); }
+.perm-sous-titre { font-style: italic; color: var(--encre-pale); font-size: 16px; }
+.perm-intro { font-size: 16px; line-height: 1.45; color: var(--encre-douce); max-width: 820px; margin: 0 auto 12px; }
+.perm-etat { font-style: italic; font-size: 14.5px; color: var(--encre-pale); max-width: 820px; margin: 0 auto 14px; }
+.perm-ferme { text-align: center; font-style: italic; color: var(--encre-douce); padding: 30px 0; }
+
+/* The table scrolls inside its frame if it must (never the page); the gestures' column stays in view. */
+.perm-cadre { position: relative; overflow-x: auto; overscroll-behavior-x: contain; margin: 0 auto; max-width: 100%; border-top: 2px solid rgba(120, 60, 30, 0.45); border-bottom: 2px solid rgba(120, 60, 30, 0.45); }
+.perm-table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.perm-table th, .perm-table td { border-bottom: 1px solid rgba(120, 60, 30, 0.18); }
+.perm-geste-tete { text-align: left; vertical-align: bottom; font-family: var(--f-capitales); font-weight: 400; letter-spacing: 0.06em; color: var(--encre-pale); padding: 6px 8px; }
+.perm-role { vertical-align: bottom; font-family: var(--f-capitales); font-weight: 400; font-size: 13.5px; letter-spacing: 0.03em; color: var(--encre-douce); padding: 8px 2px 6px; width: 44px; }
+.perm-role span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; max-height: 150px; overflow: hidden; text-overflow: ellipsis; }
+.perm-tous { background: rgba(142, 31, 20, 0.06); }
+.perm-role.perm-tous { color: var(--encre-rouge); }
+.perm-groupe th { text-align: left; font-family: var(--f-capitales); font-weight: 400; letter-spacing: 0.1em; color: var(--encre-rouge); padding: 14px 8px 4px; font-size: 14px; background: none; }
+.perm-geste { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 400; padding: 6px 8px; line-height: 1.25; background-color: var(--parchemin); min-width: 240px; }
+.perm-note { color: var(--encre-pale); font-size: 13.5px; }
+.perm-depart { display: inline-block; margin-left: 6px; font-family: var(--f-capitales); font-size: 11px; letter-spacing: 0.08em; color: var(--encre-pale); border: 1px solid rgba(120, 60, 30, 0.3); border-radius: 2px; padding: 0 4px; vertical-align: 1px; }
+.perm-table td { text-align: center; padding: 4px 2px; }
+.perm-table input[type='checkbox'] { width: 19px; height: 19px; margin: 0; accent-color: #7a2a14; color-scheme: light; cursor: pointer; }
+.perm-table input[type='checkbox']:disabled { cursor: not-allowed; opacity: 0.45; }
+.perm-change { background: var(--surligne); }
+.perm-fige { opacity: 0.8; }
+.perm-absente { position: relative; }
+.perm-absente::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--encre-rouge); opacity: 0.7; }
+.perm-alerte { color: var(--encre-rouge); font-style: normal; }
+
+.perm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 18px 0 6px; }
+.perm-bouton { border: 1px solid rgba(120, 50, 20, 0.6); border-radius: 3px; background: #7a2a14; color: #f7e7c2; font-family: var(--f-capitales); letter-spacing: 0.08em; font-size: 15px; padding: 7px 16px; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25); }
+.perm-bouton:hover:not(:disabled) { background: #8e3418; }
+.perm-bouton:disabled { opacity: 0.45; cursor: default; }
+.perm-lien { border: none; background: none; padding: 0; color: var(--encre-rouge); font-family: var(--f-texte); font-style: italic; font-size: 15px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.perm-lien:disabled { opacity: 0.5; cursor: default; }
+.perm-confirmer { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 14px; border: 1px solid rgba(142, 31, 20, 0.45); background: rgba(142, 31, 20, 0.07); border-radius: 2px; }
+.perm-confirmer p { flex: 1 1 100%; margin: 0; font-size: 15.5px; color: var(--encre); }
+.perm-message { flex: 1 1 100%; margin: 4px 0 0; font-style: italic; color: #2f5b3a; }
+.perm-message.erreur { color: var(--encre-rouge); }
+
+.perm-roles { margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(120, 60, 30, 0.3); font-size: 15px; color: var(--encre-douce); }
+.perm-roles h2 { font-family: var(--f-capitales); font-weight: 400; letter-spacing: 0.08em; font-size: 18px; color: var(--encre); margin: 0 0 6px; }
+.perm-roles ul { margin: 6px 0; padding-left: 20px; columns: 2 260px; }
+.perm-roles code { font-size: 13px; }
+.perm-moi { font-style: italic; }
+
+@media (max-width: 640px) {
+  .perm { padding: 10px 8px 28px; }
+  .perm-feuille { padding: 22px 12px 20px; }
+  .perm-feuille::before { inset: 6px; }
+  .perm-tete h1 { font-size: 32px; }
+  .perm-intro { font-size: 15px; }
+  .perm-table { font-size: 13.5px; }
+  .perm-geste { min-width: 0; width: 128px; max-width: 128px; padding: 5px 4px 5px 2px; }
+  .perm-note { display: none; }
+  .perm-role { width: 26px; font-size: 12px; padding: 6px 0 4px; }
+  .perm-role span { max-height: 118px; }
+  .perm-table td { padding: 3px 0; }
+  .perm-table input[type='checkbox'] { width: 17px; height: 17px; }
+}
+
+/* ═══════════════════════════ « En la qualité de… » (lot 1c, testers only) ═══════════════════════════ */
+
+/* While a tester views the book as chosen ranks: a wax-red ribbon over every page, the way back always at hand. */
+.qualite-bandeau {
+  position: fixed;
+  z-index: 80;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 14px;
+  padding: 5px 16px 6px;
+  background: linear-gradient(180deg, #8e2a16, #6e1d0e);
+  border-bottom: 1px solid rgba(236, 211, 147, 0.55);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+  color: #f7e7c2;
+  font-family: var(--f-texte);
+  font-size: 15px;
+  line-height: 1.3;
+  text-align: center;
+}
+body:has(.qualite-bandeau) { padding-top: var(--h-bandeau, 34px); }
+body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-height: calc(100dvh - var(--h-bandeau, 34px)); }
+.qualite-texte strong { font-family: var(--f-capitales); font-weight: 400; letter-spacing: 0.04em; color: #fff0bf; }
+.qualite-mention { font-family: var(--f-capitales); letter-spacing: 0.1em; font-size: 12.5px; color: var(--or-pale); text-transform: uppercase; }
+.qualite-refus { color: #f3c9a8; }
+.qualite-gestes { display: inline-flex; align-items: center; gap: 12px; }
+.qualite-changer { color: var(--or-pale); font-style: italic; font-size: 14px; text-underline-offset: 3px; }
+.qualite-reprendre {
+  border: 1px solid rgba(236, 211, 147, 0.7);
+  border-radius: 3px;
+  background: rgba(20, 10, 5, 0.35);
+  color: #fff0bf;
+  font-family: var(--f-capitales);
+  letter-spacing: 0.06em;
+  font-size: 13.5px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.qualite-reprendre:hover:not(:disabled) { background: rgba(20, 10, 5, 0.6); }
+.qualite-reprendre:disabled { opacity: 0.6; cursor: default; }
+
+/* The tester's own seal, on the grimoire: a small fleur-de-lis in a corner, toward the choice. */
+.qualite-sceau {
+  position: fixed;
+  z-index: 40;
+  left: 10px;
+  bottom: 10px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #a83a1e, #6e1d0e 70%);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  color: var(--or-pale);
+  font-size: 15px;
+  text-decoration: none;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+}
+.qualite-sceau:hover, .qualite-sceau:focus-visible { opacity: 1; outline: none; }
+@media (max-width: 760px) { .qualite-sceau { bottom: auto; top: 8px; left: 8px; width: 22px; height: 22px; font-size: 13px; } }
+
+/* The choice, on the secret page. */
+.qualite-choix { margin-top: 30px; padding-top: 18px; border-top: 2px solid rgba(120, 60, 30, 0.45); scroll-margin-top: 50px; }
+.qualite-choix h2 { font-family: var(--f-gothique); font-weight: 400; font-size: 32px; margin: 0 0 6px; color: var(--encre); }
+.qualite-aide { font-size: 15.5px; line-height: 1.45; color: var(--encre-douce); max-width: 820px; margin: 0 0 10px; }
+.qualite-actuel { margin: 0 0 10px; color: var(--encre-rouge); }
+.qualite-rangs { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 6px 0 4px; }
+.qualite-rang { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 8px; border: 1px solid rgba(120, 60, 30, 0.32); border-radius: 2px; background: rgba(255, 250, 235, 0.35); cursor: pointer; font-size: 15.5px; }
+.qualite-rang input { width: 18px; height: 18px; margin: 0; accent-color: #7a2a14; color-scheme: light; cursor: pointer; }
+.qualite-membre { border-color: rgba(142, 31, 20, 0.55); background: rgba(142, 31, 20, 0.06); }
+.qualite-aucun span { font-style: italic; color: var(--encre-douce); }
+.qualite-avertir { margin: 6px 0 0; font-style: italic; font-size: 14.5px; color: var(--encre-rouge); }

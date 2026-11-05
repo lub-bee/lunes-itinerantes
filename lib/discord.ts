@@ -9,12 +9,6 @@ export const urlAutorisation = () => process.env.DISCORD_AUTHORIZE_URL || 'https
 /** Callback URL, derived from the request origin (works on every Vercel domain and locally). */
 export const urlRetour = (origine: string) => `${origine}/api/discord/retour`
 
-export const rolesAdmis = () =>
-  (process.env.DISCORD_ROLE_IDS ?? '')
-    .split(',')
-    .map((r) => r.trim())
-    .filter(Boolean)
-
 export type MembreGuilde = {
   nick?: string | null
   roles: string[]

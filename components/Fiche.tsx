@@ -33,6 +33,11 @@ import {
 import type { EtatRegistre } from './Registre'
 import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre, type Fiche } from './Missives'
 import { Action, En, Icone, Septims } from './Ornements'
+import { contenuMission } from './Missions'
+import { contenuTresor } from './Tresor'
+import type { Action as ActionDroit, Geste } from '@/lib/droits'
+
+type Droit = ActionDroit | Geste
 
 /*
  * A loose slip laid on the left page (on the whole screen on mobile): a recipe's tree, or the form
@@ -252,7 +257,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
         surtitre: f.nouvelle ? 'Ajouter une variante' : f.nom ? 'Corriger la recette' : 'Consigner une recette',
         titre: f.nom || 'Nouvelle recette',
         corps: (
-          <Signe env={env} action="recette">
+          <Signe env={env} action={f.nom && (env.reg.r.donnees?.recettes ?? []).some((r) => cle(r.produit) === cle(f.nom)) ? 'recetteCorriger' : 'recette'}>
             <FormRecette nom={f.nom} variante={f.variante} nouvelle={f.nouvelle} artisanPropose={f.artisan} ombre={f.ombre} env={env} />
           </Signe>
         ),
@@ -302,6 +307,23 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       return { surtitre: 'Journal du coffre', titre: TITRES_MOUVEMENT[f.lignes[0]?.type] ?? 'Écriture', corps: <DetailMouvement lignes={f.lignes} env={env} /> }
     case 'abandonner':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Abandonner la missive', corps: <Signe env={env} action="cloture"><FormCloture env={env} numero={f.numero} livrer={false} /></Signe> }
+    case 'facture':
+    case 'evenement':
+    case 'reglages-paie':
+    case 'cloture-semaine': {
+      const c = contenuTresor(f, { reg: env.reg, icones: env.icones, fermer: env.fermer })
+      return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
+    }
+    case 'demande':
+    case 'reglages-missions':
+    case 'classes-missions':
+    case 'refus-mission':
+    case 'permanente':
+    case 'don':
+    case 'matiere-mission': {
+      const c = contenuMission(f, { reg: env.reg, articles: env.articles, chapitres: env.chapitres, icones: env.icones, fermer: env.fermer })
+      return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
+    }
   }
 }
 
@@ -414,7 +436,7 @@ function DetailMouvement({ lignes, env }: { lignes: Mouvement[]; env: Env }) {
 }
 
 /** Forms need a signed member allowed to take the action. */
-function Signe({ env, action, children }: { env: Env; action: ActionRegistre; children: ReactNode }) {
+function Signe({ env, action, children }: { env: Env; action: Droit; children: ReactNode }) {
   const m = env.reg.r.marchand
   if (!m?.identite) {
     return (
@@ -484,7 +506,7 @@ function Message({ m }: { m: { ok: boolean; texte: string } | null }) {
  * The slip's seal button; while the registre writes, a scribe's quill runs along a line of fresh
  * ink (« Le scribe consigne… »), then a wax seal is stamped (« Consigné. »). Transforms and opacity only.
  */
-function Sceller({ etat = 'repos', children, icones, confirmer, disabled }: { etat?: Etat; children: ReactNode; icones: Record<string, string>; confirmer?: boolean; disabled?: boolean }) {
+export function Sceller({ etat = 'repos', children, icones, confirmer, disabled }: { etat?: Etat; children: ReactNode; icones: Record<string, string>; confirmer?: boolean; disabled?: boolean }) {
   if (etat !== 'repos') {
     return (
       <div className={`scribe ${etat}`} role="status">
@@ -720,7 +742,7 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
       {/* Every action of the note in one block at its foot: the recipe's first, then the material's, then
           the catalogue's, taking out last. */}
       <div className="fiche-actions">
-        {droits?.recette !== false && recette && (
+        {droits?.recetteCorriger !== false && recette && (
           <Action icone="corriger" onClick={() => env.changer({ genre: 'edition-recette', nom: recette.produit, variante: recette.variante })}>
             corriger{plusieurs ? ` la recette ${recette.variante}` : ' la recette'}
           </Action>
@@ -738,7 +760,7 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
             en faire la recette d&apos;usage
           </Action>
         )}
-        {droits?.recette !== false && (
+        {(vs.length ? droits?.recetteCorriger : droits?.recette) !== false && (
           <Action icone="consigner" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
             {vs.length ? 'ajouter une variante' : 'consigner la recette'}
           </Action>

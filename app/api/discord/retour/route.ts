@@ -12,10 +12,17 @@ import {
   verifier,
   type Membre,
 } from '@/lib/sceau'
-import { echangerCode, lireMembre, nomAffiche, rolesAdmis } from '@/lib/discord'
+import { echangerCode, lireMembre, nomAffiche } from '@/lib/discord'
+import { AMI, peut, rangsDuSceau, rangsEcrits } from '@/lib/droits'
+import { estTesteur } from '@/lib/testeurs'
+import { ecrireRegistre, lireRegistreFrais, lireRegistreOuSecours, registreRelie, semerSiBesoin } from '@/lib/registre'
 
-// Discord sends the visitor back here. Access only for a member of DISCORD_GUILD_ID holding one of
-// DISCORD_ROLE_IDS. Refusals land on the lock page with ?refus=membre|rang|discord|ruse.
+// Discord sends the visitor back here. Access (lot 1b) only for a member of DISCORD_GUILD_ID whose ranks — their
+// Discord roles mapped by the sheet's « Rôles » tab — may « Entrer dans le grimoire » (lib/droits.ts: « Membre »
+// first, then a checked box on the `entrer` row), or for a tester (TESTEURS_DISCORD_IDS, even when the sheet cannot
+// be read). The tabs unreadable (script down, older script): nobody else enters. At each seal, the member's linked
+// Membres row gets their ranks in « Rôle » and their display name in « Pseudo Discord » (when they changed).
+// Refusals land on the lock page with ?refus=membre|rang|registre|discord|ruse.
 
 export const dynamic = 'force-dynamic'
 
@@ -57,16 +64,40 @@ export async function GET(req: NextRequest) {
     const m = await lireMembre(jeton)
     if (m === 'absent') return refuser('membre', true)
     if (!m || !m.user?.id) return refuser('discord')
-    const admis = rolesAdmis()
-    if (!m.roles?.some((r) => admis.includes(r))) return refuser('rang', true)
+    const id = m.user.id
+    const nom = nomAffiche(m).slice(0, 80)
+    // Every role ID of the member (the sheet's « Rôles » tab says which ones are ranks, lib/droits.ts).
+    const roles = (m.roles ?? []).filter((r) => /^\d+$/.test(r)).slice(0, 60)
+    const testeur = estTesteur(id)
 
-    const patriarcheId = process.env.DISCORD_ROLE_PATRIARCHE?.trim()
-    const membre: Membre = {
-      id: m.user.id,
-      nom: nomAffiche(m).slice(0, 80),
-      patriarche: Boolean(patriarcheId && m.roles.includes(patriarcheId)),
-      exp: Date.now() + DUREE_MEMBRE * 1000,
+    // The ranks and the `entrer` row, from the sheet: the shared copy first; before refusing (or seeding), a fresh
+    // read, as the copy may be 45 s behind a hand edit. A short outage: the last good read of this instance.
+    type Lu = Awaited<ReturnType<typeof lireRegistreOuSecours>>
+    const admis = (l: Lu | null) => Boolean(l?.droits.lu && peut('entrer', { roles: rangsDuSceau(roles, l.droits).map((r) => r.cle), testeur: false }, l.droits))
+    let lu: Lu | null = null
+    if (registreRelie()) {
+      try {
+        lu = await lireRegistreOuSecours()
+        if (!admis(lu) || !lu.droits.semees) lu = await lireRegistreFrais().catch(() => lu)
+      } catch (e) {
+        console.error('[discord] registre unreachable at the seal', e)
+      }
     }
+    if (lu) lu = await semerSiBesoin(lu).catch((e) => (console.error('[discord] seeding the permissions failed', e), lu))
+    const rangs = lu?.droits.lu ? rangsDuSceau(roles, lu.droits) : []
+    if (!testeur) {
+      if (!lu?.droits.lu) return refuser('registre')
+      if (!admis(lu)) return refuser('rang', true)
+    }
+
+    // « Rôle » follows the seal's ranks, « Pseudo Discord » the display name (a linked row only; best effort).
+    const ligne = lu?.droits.lu && lu.sceauxLus ? lu.membres.find((x) => x.discord === id) : undefined
+    const ecrits = rangsEcrits(rangs)
+    if (ligne && !rangs.some((r) => r.cle === AMI) && (ligne.role !== ecrits.join(', ') || ligne.pseudo !== nom)) {
+      await ecrireRegistre('membre', { membre: { nom: '', discord: id, pseudo: nom, rangs: ecrits } }).catch((e) => console.error('[discord] ranks not written', e))
+    }
+
+    const membre: Membre = { id, nom, roles, exp: Date.now() + DUREE_MEMBRE * 1000 }
     // A silent renewal goes straight back to the page asked for; a fresh entry plays the lock's opening.
     const rep = vers(attendu.silencieux ? attendu.retour : '/sceau?ouvert=1')
     rep.cookies.set(COOKIE_MEMBRE, await signer('membre', membre), options(DUREE_SCEAU))

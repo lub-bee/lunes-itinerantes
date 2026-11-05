@@ -570,6 +570,24 @@ export type Onglets = {
   catalogue?: Record<string, unknown>[]
   /** The Commandes tab (sealed orders; from a v3h script on). */
   commandes?: Record<string, unknown>[]
+  /** The missions' tabs (lib/missions.ts), from a v3m script asked with `missions: true`. */
+  ponderation?: Record<string, unknown>[]
+  reglagesMissions?: Record<string, unknown>[]
+  demandes?: Record<string, unknown>[]
+  missions?: Record<string, unknown>[]
+  points?: Record<string, unknown>[]
+  /** Standing missions (v3n, with the missions' tabs). */
+  permanentes?: Record<string, unknown>[]
+  /** The Rôles tab and the Grimoire's rows of Permissions with its row 1 (lib/droits.ts), from a v3p script asked with `rangs: true`. */
+  roles?: Record<string, unknown>[]
+  permissions?: Record<string, unknown>[]
+  permissionsEntete?: unknown[]
+  /** The pay's tabs (lib/paie.ts), from a v3n script asked with `paie: true`. */
+  reglagesPaie?: Record<string, unknown>[]
+  factures?: Record<string, unknown>[]
+  evenements?: Record<string, unknown>[]
+  ecrituresEvenement?: Record<string, unknown>[]
+  clotures?: Record<string, unknown>[]
 }
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */

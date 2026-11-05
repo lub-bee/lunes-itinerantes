@@ -5,8 +5,9 @@
 
 import type { NextResponse } from 'next/server'
 import { cle } from './missives'
-import { lireSession, signer, verifier } from './sceau'
-import type { Role } from './droits'
+import { lireSession, signer, verifier, type Session } from './sceau'
+import { AMI, rangsDuSceau, type RoleDiscord, type Role, type TablePermissions } from './droits'
+import { estTesteur } from './testeurs'
 
 export const COOKIE_NOM = 'caravane_nom'
 const DUREE_NOM = 60 * 60 * 24 * 400
@@ -17,7 +18,24 @@ type Membre = { nom: string; role: string; discord?: string; pseudo?: string }
 
 export const REFUS_SCEAU = 'Ce nom porte déjà le sceau d’un autre marchand.'
 
-export type Identite = { nom: string; roles: Role[]; source: 'discord' | 'signature' }
+/**
+ * `roles`: the keys of the ranks of the seal (lib/droits.ts: the Discord roles mapped by the Rôles tab, never the
+ * Membres « Rôle » cell; none for a password session); `testeur`: a Discord seal listed in TESTEURS_DISCORD_IDS.
+ */
+export type Identite = { nom: string; roles: Role[]; source: 'discord' | 'signature'; testeur: boolean }
+
+
+/** The real tester: a Discord seal whose user ID is listed (never a password session), even while « en qualité ». */
+export const testeurReel = (s: Session) => s.valide && s.genre === 'discord' && estTesteur(s.membre.id)
+
+/**
+ * A valid session's tester flag, as the rights see it: the real tester, unless they are viewing the book « en la
+ * qualité de » some ranks (lot 1c, lib/sceau.ts `qualite`): then suspended everywhere.
+ */
+export const testeurDe = (s: Session) => testeurReel(s) && !(s.valide && s.genre === 'discord' && s.qualite)
+
+/** What the registre gives identite(): the members, whether seals are linked by ID (v3n), the ranks and permissions (v3p). */
+type Lu = { membres: Membre[]; sceauxLus?: boolean; droits: TablePermissions }
 
 export function trouverMembre(nom: string, membres: Membre[]): Membre | null {
   const k = cle(nom)
@@ -37,10 +55,26 @@ export const libreDe = (m: Membre, id: string) => !m.discord || m.discord === id
 
 export const REFUS_AMI = 'Un ami des Lunes ne signe pas le registre de la caravane.'
 
-export const rolesDe = (m: Membre, patriarche = false): Role[] => {
-  const roles = m.role.split(/[,;/]/).map(cle).filter(Boolean)
-  if (patriarche && !roles.includes('patriarche')) roles.push('patriarche')
-  return roles
+/** The ranks of the seal itself: its Discord roles mapped by the Rôles tab (what « Rôle » is written with). */
+export const rangsReels = (s: Session, table: TablePermissions) => rangsDuSceau(s.valide && s.genre === 'discord' ? s.membre.roles : null, table)
+
+/** The Rôles rows of these rank keys, in the tab's order (one per key). */
+export function rangsDesCles(cles: Role[], table: TablePermissions): RoleDiscord[] {
+  const res: RoleDiscord[] = []
+  for (const r of table.roles) if (cles.includes(r.cle) && !res.some((x) => x.cle === r.cle)) res.push(r)
+  return res
+}
+
+/**
+ * The ranks of a session, as its rights see them: its seal's (a password session has none), or, for a tester
+ * viewing « en la qualité de » (lot 1c), the chosen ones.
+ */
+export const rangsDe = (s: Session, table: TablePermissions) =>
+  s.valide && s.genre === 'discord' && s.qualite ? rangsDesCles(s.qualite.rangs, table) : rangsReels(s, table)
+
+/** The ranks' keys and tester flag under this session (lib/droits.ts). */
+export function qualitesDe(s: Session, table: TablePermissions) {
+  return { roles: rangsDe(s, table).map((r) => r.cle), testeur: testeurDe(s) }
 }
 
 /** The name in the signed cookie, as validated when it was set (not re-checked against the list). */
@@ -64,23 +98,27 @@ export async function identiteSignee(biscuits: Biscuits): Promise<string | null>
  * `sceaux`: the script reads the Membres' Discord IDs (v3n): a Discord seal is then its linked row only
  * (linked at the ex-libris), never a nickname. With an older script: the nickname, then the typed name.
  */
-export async function identite(biscuits: Biscuits, membres: Membre[], sceaux = false): Promise<Identite | null> {
+export async function identite(biscuits: Biscuits, lu: Lu): Promise<Identite | null> {
+  const { membres, sceauxLus: sceaux = false, droits } = lu
   const s = await lireSession(biscuits)
   if (!s.valide) return null
+  const de = (m: Membre, source: Identite['source']): Identite => ({ nom: m.nom, source, ...qualitesDe(s, droits) })
+  // A tester viewing as « Ami des Lunes » (lot 1c): such a seal never links nor signs, so it holds no name.
+  if (s.genre === 'discord' && s.qualite && rangsDe(s, droits).some((r) => r.cle === AMI)) return null
   if (s.genre === 'discord') {
     // 1. By the Discord user ID; 2. by the server nickname, only onto a row without an ID (the
     // transition while the column is filled): a row that has an ID is never reached by nickname.
     const parId = trouverParDiscord(s.membre.id, membres)
-    if (parId) return { nom: parId.nom, roles: rolesDe(parId, s.membre.patriarche), source: 'discord' }
+    if (parId) return de(parId, 'discord')
     if (sceaux) return null
     const m = trouverMembre(s.membre.nom, membres.filter((x) => !x.discord))
-    if (m) return { nom: m.nom, roles: rolesDe(m, s.membre.patriarche), source: 'discord' }
+    if (m) return de(m, 'discord')
   }
   const signe = await nomSigne(biscuits)
   const m = signe ? trouverMembre(signe, membres) : null
   // 3. A typed name, under the same rule: never a row that carries another seal's ID.
   if (m && s.genre === 'discord' && !libreDe(m, s.membre.id)) return null
-  return m ? { nom: m.nom, roles: rolesDe(m), source: 'signature' } : null
+  return m ? de(m, 'signature') : null
 }
 
 export async function poserNom(rep: NextResponse, nom: string | null) {

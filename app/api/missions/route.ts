@@ -1,0 +1,381 @@
+import { NextResponse, type NextRequest } from 'next/server'
+import { identite, type Identite } from '@/lib/identite'
+import { peut } from '@/lib/droits'
+import { chargerArticles } from '@/lib/livre'
+import { cle } from '@/lib/missives'
+import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
+import { bornes, semaineDe } from '@/lib/paie'
+import {
+  ACTIONS_MISSION,
+  peser,
+  pointsDon,
+  pointsParPrise,
+  prisesDeLaSemaine,
+  poidsRepli,
+  enCoursDe,
+  PONDERATION_DEFAUT,
+  ponderationEnLignes,
+  raisonPoints,
+  recetteDe,
+  REGLAGES,
+  REGLAGES_DEFAUT,
+  TEXTES,
+  traduire,
+  VERBES,
+  type ActionMission,
+  type Classe,
+  type Assignation,
+  type LotMission,
+  type DonneesMissions,
+  type Ponderation,
+  type Reglages,
+} from '@/lib/missions'
+
+// The missions (prototype). GET: what the missions' pages need. POST { action, ... }: one write, in the
+// name of the member who signed (lib/identite.ts), after the permission hook (lib/droits.ts). Every number
+// of a demand (missions, quantities, points) is computed here again from the registre: the page's preview
+// is never trusted. Until the sheet's script knows the missions (v3m), every write is refused in character.
+
+export const dynamic = 'force-dynamic'
+
+type Lu = Awaited<ReturnType<typeof lireRegistre>>
+
+const refus = (message: string, status = 400) => NextResponse.json({ ok: false, message }, { status })
+
+function vide(relie: boolean): DonneesMissions {
+  return { relie, actif: false, ponderation: PONDERATION_DEFAUT, demandes: [], missions: [], points: [], permanentes: [], prises: {}, moi: null, version: 0 }
+}
+
+function vue(lu: Lu, qui: Identite | null): DonneesMissions {
+  const m = lu.missions
+  // Points are internal (Missions v2): the ledger goes only to who opens the Trésor (lib/droits.ts « tresor »).
+  const points = peut('tresor', qui, lu.droits) ? m.points : []
+  const b = bornes(semaineDe(Date.now(), lu.paie.reglages.jour))
+  return {
+    relie: true,
+    actif: m.actif,
+    ponderation: m.ponderation,
+    demandes: m.demandes,
+    missions: m.missions,
+    points,
+    permanentes: m.permanentes,
+    prises: prisesDeLaSemaine(m.missions, b.debut, b.fin),
+    moi: qui?.nom ?? null,
+    version: lu.version,
+  }
+}
+
+export async function GET(req: NextRequest) {
+  if (!registreRelie()) return NextResponse.json({ ok: true, donnees: vide(false) })
+  try {
+    const lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
+    return NextResponse.json({ ok: true, donnees: vue(lu, await identite(req.cookies, lu)) })
+  } catch (e) {
+    console.error('[missions] read failed', e)
+    return refus("Le registre des missions reste fermé pour l'heure : le coursier n'a pas pu l'ouvrir.", 502)
+  }
+}
+
+/* ───────────────────────── Reading what the page sends ───────────────────────── */
+
+class Refus extends Error {}
+const non = (message: string): never => {
+  throw new Refus(message)
+}
+const mot = (v: unknown, max: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
+
+function entier(v: unknown, min: number, max: number, quoi: string): number {
+  const n = Number(String(v ?? '').replace(',', '.'))
+  if (!Number.isInteger(n) || n < min || n > max) non(`${quoi} : un nombre entier, de ${min} à ${max}, est attendu.`)
+  return n
+}
+
+
+function numero(prefixe: string): string {
+  const jour = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: '2-digit', month: '2-digit', day: '2-digit' })
+    .format(new Date())
+    .replace(/-/g, '')
+  const hasard = Array.from(crypto.getRandomValues(new Uint8Array(3)), (o) => o.toString(36).padStart(2, '0')).join('').toUpperCase()
+  return `${prefixe}-${jour}-${hasard.slice(0, 4)}`
+}
+
+/** Missions in one demand, at most (one write; the sheet takes one row per mission). */
+const MAX_MISSIONS = 300
+
+/** The pondération the page sends, checked (classes with a code, resources in a known class). */
+function ponderationLue(b: Record<string, unknown>): Ponderation {
+  const brut = (b.ponderation ?? {}) as { classes?: unknown; ressources?: unknown; lots?: unknown; donsMin?: unknown; reglages?: unknown }
+  if (!Array.isArray(brut.classes) || !Array.isArray(brut.ressources)) non('La pondération est illisible : rien n’a été gravé.')
+  const classes: Classe[] = []
+  for (const c of (brut.classes as Record<string, unknown>[]).slice(0, 40)) {
+    const code = mot(c?.code, 12)
+    if (!code) continue
+    if (classes.some((x) => cle(x.code) === cle(code))) non(`La classe ${code} est inscrite deux fois.`)
+    const q = c?.quantite === null || c?.quantite === undefined || String(c.quantite).trim() === '' ? null : entier(c.quantite, 1, 100000, `Quantité par mission du niveau ${code}`)
+    classes.push({ code, nom: mot(c?.nom, 60) || code, quantite: q, note: mot(c?.note, 120) })
+  }
+  if (!classes.length) non('Une pondération sans niveau de rareté ne se grave pas.')
+  const ressources: Assignation[] = []
+  for (const r of (brut.ressources as Record<string, unknown>[]).slice(0, 600)) {
+    const nom = mot(r?.nom, 120)
+    const classe = mot(r?.classe, 12)
+    const origine = mot(r?.origine, 60)
+    // A resource is kept when it has a level or an origin (« à fixer » with its origin is a row too).
+    if (!nom || (!classe && !origine && !r?.reference)) continue
+    if (classe && !classes.some((c) => cle(c.code) === cle(classe))) non(`${nom} est rangé dans un niveau inconnu (${classe}).`)
+    if (ressources.some((x) => cle(x.nom) === cle(nom))) continue
+    const reference = r?.reference === null || r?.reference === undefined || String(r.reference).trim() === '' ? null : entier(r.reference, 1, 100000, `Quantité de référence de ${nom}`)
+    ressources.push({ nom, classe: classe ? classes.find((c) => cle(c.code) === cle(classe))!.code : '', origine, reference, note: mot(r?.note, 120) })
+  }
+  const lots: LotMission[] = []
+  for (const l of (Array.isArray(brut.lots) ? (brut.lots as Record<string, unknown>[]) : []).slice(0, 600)) {
+    const nom = mot(l?.nom, 120)
+    if (!nom || lots.some((x) => cle(x.nom) === cle(nom))) continue
+    lots.push({ nom, lot: entier(l?.lot, 1, 100000, `Lot par mission de ${nom}`) })
+  }
+  const donsMin: LotMission[] = []
+  for (const l of (Array.isArray(brut.donsMin) ? (brut.donsMin as Record<string, unknown>[]) : []).slice(0, 600)) {
+    const nom = mot(l?.nom, 120)
+    if (!nom || donsMin.some((x) => cle(x.nom) === cle(nom))) continue
+    donsMin.push({ nom, lot: entier(l?.lot, 1, 1000000, `Don minimum de ${nom}`) })
+  }
+  const reglagesBruts = (brut.reglages ?? {}) as Record<string, unknown>
+  const reglages = { ...REGLAGES_DEFAUT } as Reglages
+  for (const def of REGLAGES) {
+    const n = Number(String(reglagesBruts[def.cle] ?? def.defaut).replace(',', '.'))
+    if (!Number.isFinite(n) || n < def.min || n > def.max) non(`${def.libelle} : de ${def.min} à ${def.max}.`)
+    reglages[def.cle] = Math.round(n)
+  }
+  return { classes, ressources, lots, donsMin, reglages, source: 'registre' }
+}
+
+/** An item's name as the registre spells it (raw material, recipe product or ingredient, day-book merchandise). */
+function nomConnu(lu: Lu, articles: { fr: string; ombre?: boolean }[], nom: string): string {
+  const connus = new Map<string, string>()
+  const ajouter = (n: string) => n && !connus.has(cle(n)) && connus.set(cle(n), n)
+  lu.ressources.forEach((r) => ajouter(r.nom))
+  lu.recettes.filter((r) => !r.ombre).forEach((r) => (ajouter(r.produit), r.ingredients.forEach((i) => ajouter(i.nom))))
+  articles.forEach((a) => !a.ombre && ajouter(a.fr))
+  return connus.get(cle(nom)) ?? non(`Khajiit ne connaît nulle ressource ni marchandise nommée « ${nom} ».`)
+}
+
+/* ───────────────────────── Writes ───────────────────────── */
+
+type Ecriture = { action: string; charge: Record<string, unknown>; message: string; numero?: string }
+
+async function preparer(action: ActionMission, b: Record<string, unknown>, lu: Lu, qui: Identite): Promise<Ecriture> {
+  const m = lu.missions
+  const quand = new Date().toISOString()
+  const mission = () => {
+    const x = m.missions.find((y) => y.numero === mot(b.numero, 40))
+    if (!x) non('Cette mission est introuvable dans le registre.')
+    return x!
+  }
+
+  switch (action) {
+    case 'demande': {
+      // A merchandise of the day book (the published catalogue, and the sheet's rows that win over it) with a recipe.
+      const nom = mot(b.article, 120) || non('Choisis la marchandise demandée.')
+      const publies = (await chargerArticles()).filter((a) => !a.ombre)
+      const feuille = lu.catalogue.filter((a) => !a.ombre)
+      const article = feuille.find((a) => cle(a.fr) === cle(nom)) ?? publies.find((a) => cle(a.fr) === cle(nom))
+      if (!article || lu.catalogue.some((a) => a.ombre && cle(a.fr) === cle(nom))) non(`« ${nom} » n’est pas une marchandise du livre de jour.`)
+      if (!recetteDe(lu.recettes, article!.fr)) non(TEXTES.sansRecette(article!.fr))
+      const quantite = entier(b.quantite, 1, 100000, 'La quantité')
+      // The units per mission chosen on the demand's note, line by line (key `cleLigne`).
+      const lots: Record<string, number> = {}
+      for (const [k, v] of Object.entries((b.lots && typeof b.lots === 'object' ? b.lots : {}) as Record<string, unknown>).slice(0, 200)) lots[mot(k, 160)] = entier(v, 1, 100000, 'Une quantité par mission')
+      const t = traduire({ fr: article!.fr, min: article!.min }, quantite, lu.recettes, m.ponderation, lots)
+      if (!t.ok) non(t.erreur)
+      if (!t.ok) throw new Error('unreachable')
+      if (t.missions.length > MAX_MISSIONS) non(`Cette demande ferait ${t.missions.length} missions : c’est trop pour un seul feuillet (${MAX_MISSIONS} au plus). Demande moins à la fois.`)
+      const n = numero('D')
+      const missions = t.missions.map((x, i) => ({
+        numero: `${n}-${String(i + 1).padStart(2, '0')}`,
+        type: x.type,
+        objet: x.objet,
+        quantite: x.quantite,
+        poids: x.poids ?? '',
+        effort: Math.round(x.effort * 100) / 100,
+        points: x.points,
+        note: (x.type === 'récolte' || x.intermediaire) && x.poids === null ? TEXTES.aFixer : '',
+      }))
+      return {
+        action,
+        charge: {
+          demande: {
+            numero: n,
+            horodatage: quand,
+            membre: qui.nom,
+            article: t.article,
+            quantite,
+            plancher: t.plancher,
+            pointsRessources: t.pointsRessources,
+            pointsFabrication: t.pointsFabrication,
+            note: mot(b.note, 200),
+            missions,
+          },
+          // A first demand seeds the Pondération tab with what it was computed with (the defaults), so the
+          // tab can be edited by hand at once; the script writes it only if the tab is still empty.
+          ...(m.ponderation.source === 'defaut' ? { ponderation: ponderationEnLignes(m.ponderation) } : {}),
+        },
+        message: `La demande de ${quantite} ${t.article} est scellée (n° ${n}) : ${missions.length} mission${missions.length > 1 ? 's' : ''} ${missions.length > 1 ? 'sont lancées' : 'est lancée'} à la caravane.`,
+        numero: n,
+      }
+    }
+
+    case 'prendre': {
+      const x = mission()
+      if (x.statut !== 'ouverte') non(TEXTES.prise)
+      const max = m.ponderation.reglages.maxEnCours
+      if (enCoursDe(m.missions, qui.nom).length >= max) non(TEXTES.limite(max))
+      return { action: 'mission', charge: { mission: { numero: x.numero, geste: 'prendre', membre: qui.nom, quand, max } }, message: `Mission prise : ${x.objet}. Que la route soit bonne.` }
+    }
+
+    case 'rendre': {
+      // « Renoncer »: the mission goes back to the call.
+      const x = mission()
+      if (x.statut !== 'en cours' || cle(x.prisPar) !== cle(qui.nom)) non(TEXTES.pasLaTienne)
+      return { action: 'mission', charge: { mission: { numero: x.numero, geste: 'rendre', membre: qui.nom, quand } }, message: 'Tu renonces à la mission : elle retourne à l’appel de la caravane.' }
+    }
+
+    case 'remettre': {
+      // The loot handed over: it waits for another member's confirmation (a v3n script).
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const x = mission()
+      if (x.statut !== 'en cours' || cle(x.prisPar) !== cle(qui.nom)) non(TEXTES.pasLaTienne)
+      return { action: 'mission', charge: { mission: { numero: x.numero, geste: 'remettre', membre: qui.nom, quand } }, message: `Butin remis : ${x.objet}. Qu’une autre patte le confirme, et les ${x.points} points tomberont.` }
+    }
+
+    case 'confirmer':
+    case 'refuser': {
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const x = mission()
+      if (x.statut !== 'remise') non(TEXTES.pasRemise)
+      if (cle(x.prisPar) === cle(qui.nom)) non(TEXTES.soiMeme)
+      const note = mot(b.note, 120)
+      return action === 'confirmer'
+        ? {
+            action: 'mission',
+            charge: { mission: { numero: x.numero, geste: 'confirmer', membre: qui.nom, quand, raison: raisonPoints(x) } },
+            message: `Butin reçu : ${x.points} point${x.points > 1 ? 's' : ''} au crédit de ${x.prisPar}.`,
+          }
+        : { action: 'mission', charge: { mission: { numero: x.numero, geste: 'refuser', membre: qui.nom, quand, note } }, message: `Butin refusé : la mission retourne entre les pattes de ${x.prisPar}.` }
+    }
+
+    case 'permanente': {
+      // A standing mission opened or changed (v3n): objet, quantity and points per take, weekly ceiling, state.
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const id = mot(b.id, 40)
+      const avant = id ? (m.permanentes.find((x) => x.id === id) ?? non('Cette mission permanente est introuvable.')) : null
+      const articles = [...(await chargerArticles()), ...lu.catalogue]
+      const objet = nomConnu(lu, articles, mot(b.objet, 120) || non('Quelle ressource, ou quel ouvrage ?'))
+      const recette = recetteDe(lu.recettes, objet)
+      const type = recette ? 'fabrication' : 'récolte'
+      const fini = Boolean(recette) && articles.some((a) => !a.ombre && cle(a.fr) === cle(objet)) && !lu.recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(objet)))
+      const quantite = entier(b.quantite, 1, 100000, 'La quantité par prise')
+      const points = b.points === '' || b.points === undefined || b.points === null ? pointsParPrise(objet, quantite, lu.recettes, articles, m.ponderation, fini) : entier(b.points, 0, 1000000, 'Les points par prise')
+      const plafond = b.plafond === '' || b.plafond === undefined || b.plafond === null ? '' : entier(b.plafond, 1, 1000, 'Le plafond par semaine')
+      const statut = (['ouverte', 'en pause', 'close'] as const).find((x) => x === b.statut) ?? 'ouverte'
+      const w = peser(m.ponderation).poidsDe(objet, Boolean(recette))
+      const ligne = { id: id || numero('P'), type, objet, quantite, points, poids: w ?? '', plafond, statut, par: avant?.par ?? qui.nom, date: avant?.date ?? quand, note: mot(b.note, 200) }
+      return { action: 'paie', charge: { paie: { onglet: 'permanentes', lignes: [ligne] } }, message: `Mission permanente ${id ? 'corrigée' : 'ouverte'} : ${VERBES[type]} ${quantite} ${objet}, ${points} points la prise.` }
+    }
+
+    case 'prendrePermanente': {
+      // A take: an ordinary mission « en cours » for the taker (within his limit and the weekly ceiling).
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const x = m.permanentes.find((y) => y.id === mot(b.id, 40)) ?? non('Cette mission permanente est introuvable.')
+      if (x.statut !== 'ouverte') non('Cette mission permanente est fermée pour l’heure.')
+      const sem = bornes(semaineDe(Date.now(), lu.paie.reglages.jour))
+      if (x.plafond && (prisesDeLaSemaine(m.missions, sem.debut, sem.fin)[x.id] ?? 0) >= x.plafond) non('Cette mission permanente a son compte pour la semaine : elle rouvre la semaine prochaine.')
+      const max = m.ponderation.reglages.maxEnCours
+      if (enCoursDe(m.missions, qui.nom).length >= max) non(TEXTES.limite(max))
+      const w = x.poids ?? (x.type === 'récolte' ? poidsRepli(m.ponderation.reglages) : null)
+      return {
+        action: 'mission',
+        charge: { mission: { geste: 'instancier', numero: numero(x.id), demande: x.id, type: x.type, objet: x.objet, quantite: x.quantite, poids: x.poids ?? '', effort: w ? x.quantite * w : '', points: x.points, membre: qui.nom, quand, max, note: 'mission permanente' } },
+        message: `Mission prise : ${VERBES[x.type]} ${x.quantite} ${x.objet}. Elle reste ouverte aux autres.`,
+      }
+    }
+
+    case 'don': {
+      // A free donation (v3n): declared handed over, confirmed by another member; points only from its minimum.
+      if (!lu.paie.actif) non(TEXTES.refusV3n)
+      const articles = [...(await chargerArticles()), ...lu.catalogue]
+      const objet = nomConnu(lu, articles, mot(b.objet, 120) || non('Que donnes-tu ?'))
+      const quantite = entier(b.quantite, 1, 1000000, 'La quantité')
+      const recette = recetteDe(lu.recettes, objet)
+      const type = recette ? 'fabrication' : 'récolte'
+      const fini = Boolean(recette) && articles.some((a) => !a.ombre && cle(a.fr) === cle(objet)) && !lu.recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(objet)))
+      const d = pointsDon(objet, quantite, lu.recettes, articles, m.ponderation, fini)
+      const w = peser(m.ponderation).poidsDe(objet, Boolean(recette))
+      return {
+        action: 'mission',
+        charge: {
+          mission: { geste: 'instancier', statut: 'remise', numero: numero('DON'), demande: 'DON', type, objet, quantite, poids: w ?? '', effort: w ? quantite * w : '', points: d.points, membre: qui.nom, quand, note: mot(b.note, 120) || 'don libre' },
+        },
+        message: d.points
+          ? `Don déclaré : ${quantite} ${objet}. Qu’une autre patte le reçoive, et les ${d.points} points tomberont.`
+          : `Don déclaré : ${quantite} ${objet}, sous le minimum de ${d.minimum} : il sera reçu au coffre, sans point.`,
+      }
+    }
+
+    case 'ponderation': {
+      const p = ponderationLue(b)
+      return { action, charge: { ponderation: ponderationEnLignes(p) }, message: `La pondération est gravée au registre : ${p.classes.length} classes, ${p.ressources.length} ressources rangées.` }
+    }
+  }
+}
+
+/** The script's refusals, in character. */
+function refusScript(s: string): string {
+  if (s.includes('unknown action')) return TEXTES.refus
+  if (s.includes('mission taken')) return TEXTES.prise
+  if (s.includes('too many missions')) return 'Tes pattes sont pleines : accomplis ou rends une mission avant d’en prendre une autre.'
+  if (s.includes('not held')) return TEXTES.pasLaTienne
+  if (s.includes('not handed over')) return TEXTES.pasRemise
+  if (s.includes('own mission')) return TEXTES.soiMeme
+  if (s.includes('unknown gesture')) return TEXTES.refusV3n
+  if (s.includes('unknown mission')) return 'Cette mission est introuvable dans le registre.'
+  return "Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard."
+}
+
+export async function POST(req: NextRequest) {
+  if (!registreRelie()) return refus("Le registre des missions n'est pas encore relié au grimoire.", 503)
+  const b = ((await req.json().catch(() => null)) ?? {}) as Record<string, unknown>
+  const action = b.action as ActionMission
+  if (!ACTIONS_MISSION.includes(action)) return refus('Khajiit ne comprend pas ce que tu demandes au registre.')
+
+  const t0 = performance.now()
+  let lu: Lu
+  try {
+    lu = await lireRegistre(Number(b.vu) || 0)
+  } catch (e) {
+    console.error('[missions] read failed', e)
+    return refus("Le registre reste fermé pour l'heure : rien n'a été consigné.", 502)
+  }
+  const qui = await identite(req.cookies, lu)
+  if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
+  if (!peut(action, qui, lu.droits)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
+  // The sheet's script does not know the missions yet (before v3m): refused in character, nothing sent.
+  if (!lu.missions.actif) return refus(TEXTES.refus, 409)
+
+  let e: Ecriture
+  try {
+    e = await preparer(action, b, lu, qui)
+  } catch (err) {
+    if (err instanceof Refus) return refus(err.message)
+    throw err
+  }
+  const t1 = performance.now()
+  let ecrit: Awaited<ReturnType<typeof ecrireRegistre>>
+  try {
+    ecrit = await ecrireRegistre(e.action, e.charge)
+  } catch (err) {
+    console.error(`[missions] ${action} refused by the script`, err)
+    return refus(refusScript(String(err)), 502)
+  }
+  console.log(`[missions] ${action}: read ${(t1 - t0).toFixed(0)} ms, write ${(performance.now() - t1).toFixed(0)} ms, tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
+  return NextResponse.json({ ok: true, message: e.message, numero: e.numero, donnees: ecrit.lu ? vue(ecrit.lu, qui) : null })
+}

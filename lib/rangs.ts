@@ -1,6 +1,6 @@
 // Ranks of the caravan, as the « Caravane » page draws them: order (level), names, colours and, later,
 // an engraved icon per rank (a game-icons.net name in `icone`; until then a coloured seal). A member's
-// rank is read from the « Rôle » column of the Membres tab: the rank's name (or one of its `alias`),
+// rank is read from the « Rôle » column of the Membres tab (written at each Discord seal, lot 1b): the rank's name (or one of its `alias`),
 // case, accents and punctuation ignored. Anyone else is « Sans rang ».
 
 import { cle } from './missives'
@@ -52,15 +52,20 @@ export const estImage = (icone?: string) => Boolean(icone && icone.startsWith('/
 
 export const ICONES_RANGS = RANGS.flatMap((r) => (r.icone && !estImage(r.icone) ? [r.icone] : []))
 
-/** The rank written in a « Rôle » cell (several roles may be separated by commas), or null. */
+/**
+ * The rank written in a « Rôle » cell, or null (« Sans rang »: « Membre » alone, or nothing). Since lot 1b the cell is
+ * written at each Discord seal with all the member's ranks joined by « , » (the Rôles tab's order): the highest one
+ * (lowest `niveau`) is kept.
+ */
 export function rangDe(role: string): Rang | null {
+  let res: Rang | null = null
   for (const morceau of String(role ?? '').split(/[,;/]/)) {
     const k = cle(morceau)
     if (!k) continue
     const r = RANGS.find((x) => cle(x.nom) === k || (x.alias ?? []).some((a) => cle(a) === k))
-    if (r) return r
+    if (r && (!res || r.niveau < res.niveau)) res = r
   }
-  return null
+  return res
 }
 
 /** What signed readers receive: member names grouped by rank key (and « sans-rang »). */
