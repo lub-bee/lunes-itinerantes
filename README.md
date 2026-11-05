@@ -252,6 +252,10 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   its « total idéal » (Σ qty × ceiling; cents, the sum exact); the status stamp compares that total with
   Total plancher and Total plafond. Sealed, each line's *Prix réel vendu* is its share (its status from that share) and the
   **Prix global** column holds the agreed total (empty for an ordinary order).
+- **« pris au coffre »** (lot 2, S10; only when the script holds the Livre de l'Intendance, v3r): a box under each catalogue
+  line, unticked by default (orders are mostly filled from the members' own goods). Ticked, the sealed order also writes one
+  Intendance row per such line (« vente », « en attente », in pieces), and the Intendance confirms the exit in Sorties (only
+  then a `livraison` row leaves the chest). The order stands even if that second call fails (the answer says so).
 - Footer: Total plancher (Σ qty × floor), Total plafond (Σ qty × ceiling), **Total** (Σ lines) and a status
   stamp: *À perte* (< mini), *Marché honnête*, *Excellente affaire* (≥ idéal). An *à négocier* line
   counts its own price as mini and idéal, so it never tips the status.
@@ -315,7 +319,9 @@ chapters), **Livre des Recettes** (id `atelier`: « Sommaire des recettes », on
 after a gap, the missives' tabs in blue-grey: the list, one tab per missive in progress, « Le coffre »; closed missives
 are opened from the list. A part may hang from another's ribbon with `ruban` in `lib/livre.ts`; surtitles, colours and
 the table of contents keep each part's own; page ids, hence links, are unchanged. Past 12 tabs they tighten.),
-**Trésor** (to its roles) and **Caravane** (the roster still to be written, then the memo pages). When the sheet is linked (see
+**Intendance** (lot 2, to who may « Ouvrir le livre de l’Intendance »: Le coffre, Réception, Sorties, Écrire une mission,
+Pondération), **Trésor** (to its roles; the caravan's points live here) and **Caravane** (the roster still to be written, then the
+memo pages). When the sheet is linked (see
 below), an **ex-libris** is the page before the title page: the book opens on it for a reader not yet
 signed, and turning back from the title spread always reaches it; folios still start at the title page.
 
@@ -351,7 +357,7 @@ in v2. When the sheet cannot be read, the pages say so in character, with « ren
   gesture (who, when, what); touching it pins a note with its details on the right page. Then the contributors (« a apporté
   X septims de valeur », « Y % du mérite », what each received once closed) and the ledger. A closed
   missive stays readable as it stood when it was closed.
-- **Le coffre**: the stock according to the ledger, « Relever le coffre », and every count: *Selon le
+- **Le coffre** (Livre de l'Intendance since lot 2, same page id `coffre`): the stock according to the ledger, a search bar, « Relever le coffre », and every count: *Selon le
   registre* (the stock the ledger computed just before the count), *Compté* (found in the chest),
   *Écart* (compté − selon le registre, red when not zero), with who and when. An item's first count
   has nothing to compare with: « premier compte ».
@@ -370,7 +376,8 @@ in v2. When the sheet cannot be read, the pages say so in character, with « ren
 
 Slips unroll from their top edge and roll back up on « Ranger », like the order sheet.
 
-Actions: « Relever le coffre », « Déposer au coffre », « Façonner », « Livrer la missive » (success: the
+Actions: « Relever le coffre », « Déposer au coffre », « Écrire ses missions » (lot 2: a sheet of missions linked to the
+missive; « Façonner » moved to the Intendance's Sorties), « Livrer la missive » (success: the
 requested goods still owed leave the chest, the reward is entered and split, the missive is closed
 *livrée*), « Abandonner la missive » (closed *inachevée*, reason and reward optional — a reward, if any,
 is split the same way), and the recipe and material forms. Each opens a pinned slip; it goes when the
@@ -422,7 +429,9 @@ renames or moves a column, and appends a missing rank column at the end of row 1
 missing row or a missing column = no. « Membre » is the prerequisite: without it, no gesture and no entry; with
 it, the union of the boxes of all one's ranks. Entry is the gesture `entrer`, checked at the Discord seal.
 `lib/droits.ts` keeps the defaults, which only seed the Grimoire's rows once (when the tab holds none and Rôles
-maps « Membre »: at the next seal, or from the secret page); a gesture added later arrives unchecked. It maps
+maps « Membre »: at the next seal, or from the secret page); a gesture added later arrives unchecked, except those
+marked `semee` (lot 2: « Consigner une sortie du coffre », `sortie`): when their row is missing, the next seal writes it once
+with its defaults, after a fresh read of the sheet (then the sheet alone decides). It maps
 each action to its gesture (`GESTE_DE`) and checks it; the server checks every write and the Trésor's reads, the
 page hides what a member may not do (`/api/marchand` answers `droits`). A failed read grants nothing (the last
 good read is kept ten minutes for an outage); testers (`TESTEURS_DISCORD_IDS`) hold every gesture and the secret
@@ -499,6 +508,7 @@ refused by the script itself (`already closed`), under the lock.
 | `versement` (v3i) | `{ versement: { numero, versee, montant, par, quand } }` | The caravan's share of a sealed order handed over to its coffer (or taken back): `Part versée` (oui), `Versée le`, `Versée par`, `Montant versé` (optional: the Patriarchs set the amount) on every row of the order; the orders' own columns are made sure first, these are added after them. Cache key `registre-v3i` |
 | `livre` (v3l) | `{ livre: { fr, valeur } }` | `Livre` (« Ombre » / empty) on the article's Catalogues row (column added at the end of row 1 if missing) and on every Recettes row of the product. From v3l, `vente` and `recette` also write `livre` when sent `livre: 'Ombre'`; cache key `registre-v3l` |
 | `deplacer` (v3k) | `{ deplacement: { fr, chapitre } }` | An article's `Chapitre` cell in Catalogues (e.g. out of a hidden chapter); cache key `registre-v3k` |
+| `intendance` (v3r, only with `intendance: true`) | `{ coffre: { lignes, maj: [{ id, si, champs }], mouvements, points, reserver: [{ nom, role }] } }` | The Livre de l'Intendance: Intendance rows appended or updated (each update checked first: its « Statut » one of `si`, else nothing is written, 'already answered'), Mouvements rows (`dépôt` / `livraison` only), Points rows, and a Membres row (Nom, Rôle) for each name to reserve that no row holds. `lire` with the flag also sends `intendance` (the tab) and the Demandes' `titre` / `missive`; `demande` then also writes them, and a top-level `missive` first (a sheet written as a missive). Without the flag, v3q's answers and sheet writes byte for byte. Cache key `registre-v3r` |
 | `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `grimoire.gs`; cache key `registre-v3p` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
@@ -587,75 +597,60 @@ Code: `lib/missives.ts` (types, needs, stock, contributions, split, material cos
 `components/ExLibris.tsx`, `components/Missives.tsx` (pages), `components/Fiche.tsx` (slip, recipe tree,
 forms, the scribe); styles in the *Missives* sections of `app/globals.css`.
 
-## Missions (prototype, branch `missions`)
+## Missions (Missions v2, lot 2, branch `missions`)
 
-A demand for merchandise is cut into small missions put out to the caravan (an internal call for
-tenders); a member takes one, gives it back or completes it, and a completed mission credits its points
-to them. The economy behind it is the proposal of 2026-10-28 (`_atelier/caravane/economie/`). Code:
-`lib/missions.ts` (pure logic, shared by the page's preview and the server), `app/api/missions/route.ts`,
-`components/Missions.tsx`; the permission rules are in `lib/droits.ts` (`demande`, `prendre`, `rendre`,
-`accomplir`, `ponderation`: all open for now).
+A mission is an internal need (« 300 Minerai de fer »), open to everyone: **nobody takes a mission first**. Members gather or
+craft in game, then hand the goods to someone allowed (an aide de camp, a Patriarch…) or leave them in the « coffre des
+petites lunes »; the hand-over is settled then, and a filled mission is **never closed** (late or extra deliveries count, at
+full points). A member never needs to open the grimoire: whoever receives writes their name. Code: `lib/missions.ts` (pure:
+the tree of needs, points), `lib/intendance.ts` (the Intendance's rows and what a mission received), `app/api/missions/route.ts`,
+`components/Missions.tsx`, `components/Intendance.tsx`, `components/MissionsCommun.tsx`; gestures in `lib/droits.ts`.
 
-- **Livre des Missions** (the « Missions » ribbon, shared with the missives since 2026-11-05): « L’appel aux missions » (open missions, filtered by type,
-  identical ones shown once « ×N »; the member's missions « en cours » with *rendre* / *accomplie*),
-  « Mes points » (total and history), then the Patriarch's table — « Les demandes du Patriarche » (a
-  demand with its live preview, the demands with their progress), « Les points de la caravane » (every
-  member), « La pondération des efforts » (classes, resources, settings). Everyone may use every page.
-- **Translation of a demand** (`traduire`): the article's recipe (« recette d'usage », else variant 1;
-  the day book's recipes first) is expanded down to raw resources. An ingredient that has a recipe is an
-  intermediate product (class *Transformation*) unless the pondération puts it in another class (then it
-  is harvested or bought like a raw resource). Needs are summed over the whole tree before whole crafts
-  are counted. Missions: one harvest series per raw resource (lot = ⌊effort budget ÷ weight⌋, the total
-  split into parts of at most one lot, round parts when lots are large), one transformation series per
-  intermediate (whole crafts), crafting missions of the final product (*objects per crafting mission*).
-  A resource with no weight (« à fixer ») is sized with the fallback weight and its missions say so.
-- **Points**: *part ressources* (75 %) of the floor price × quantity, split over the harvests and
-  transformations pro rata to their effort (quantity × weight); *part fabrication* (5 %) over the crafting
-  missions pro rata to their objects. Whole points, sums exact. Credited when the mission is completed
-  (a row in the Points tab).
-- **Two mission types** (2026-10-28): *récolte* and *fabrication*; crafting an intermediate (Cuir from Peaux)
-  is a fabrication too, still paid from the resources' share by effort (the final product's crafts share the
-  crafting part). A sheet row typed « Transformation » reads as fabrication.
-- **Lots per mission**: « lot » rows of the Pondération tab (`Genre` lot, `Nom` the item, the number in
-  `Poids`) set how many units one mission holds (Blé par 40, Bière par 20); the demand's note can change it
-  line by line before sealing. A lot set by hand cuts full packs, the rest last (250 by 40 → 40 ×6 + 10).
-- Every form (the demand, the settings, the rarity levels, one item's rarity / origin / lot) is a note laid over
-  the left page; the pages only show.
-- **Rarity levels** (2026-10-30): a level is edited as a quantity per mission (Abondant 120, Commun 60, Peu
-  commun 40, Rare 30, Très rare 15, Exceptionnel 8; « Fabrication intermédiaire » 60); the weight per unit
-  stays internal (effort budget ÷ quantity). A resource's **origin** (Ferme, Cueillette, Chasse, Créature,
-  Mine, Achat…) is a tag, display and filter only. The first layout (C1…C7 with weights) is read into the
-  levels without losing the tab's edits, and written in the new layout (« Par mission », « Origine »
-  columns, v3n) at the next engraving.
-- **Quantité de référence** (2026-10-30): one number per item, what one gathers in a solid session; by
-  default its rarity level's, a per-item value overrides it (« Par mission » of its ressource row). Weight =
-  effort budget ÷ reference. The « lot par mission » and the « don minimum » (rows `lot` and `don`) override
-  their defaults (reference, reference × « multiple minimum pour un don ») without touching the weight.
-- **Standing missions** (« missions permanentes », v3n, tab `Missions permanentes`): a fixed quantity and
-  points per take (default: what that quantity earns in the usual recipes using it — the average over those
-  recipes of 75 % × floor ÷ yield × the item's share of the recipe's effort ÷ its quantity per craft, × the
-  quantity; a final product: 5 % × floor × quantity), an optional weekly ceiling (takes running or confirmed
-  in the week), open / en pause / close. A take is an ordinary mission (« N° demande » = P-…); given up, it is
-  dropped (« abandonnée »).
-- **Free donations** (v3n): declared as handed over (« DON »), confirmed by another member like a loot; the
-  confirmation writes a `dépôt` row of Mouvements. Points at the missions' rate per unit, only from the
-  item's donation minimum (below: 0 points, said before declaring); optional big-donation bonus (settings).
-  No per-item stock ceiling exists yet, so none is checked.
-- **Confirmation by a receiver** (2026-10-30, v3n): the holder marks the loot « remise »; another member
-  confirms it (« accomplie », points credited then, in the week of the confirmation, with who confirmed) or
-  refuses it (back « en cours », with a word). A mission « remise » no longer counts against the limit.
-  « Rendre » is shown as « renoncer ».
-- **Lifecycle**: ouverte → en cours (who, when; at most *max en cours* per member, checked by the server
-  and again by the script under its lock) → accomplie, or rendue (open again; the « Journal » cell keeps
-  each gesture).
+- **Livre des Missions** (the « Missions » ribbon, shared with the missives): « L’appel aux missions » lists, in the missives'
+  interface, the missives in progress (each with its sponsor's wax seal and the missions it spawned, or « écrire ses missions »),
+  the caravan's own sheets, the standing missions, then the filled sheets (« on y livre encore »); each mission shows what it
+  received over what it asks (ink gauge), what it lacks, what waits for a confirmation, « j’en ai remis » (members) and
+  « consigner » (who may record). A search bar filters by title, sponsor or item. « Mon carnet »: the member's own hand-overs
+  (en attente, reçu by whom, pas reçu) and their private progress (« 60 sur 100 », kept in that browser only, never sent).
+  One page per sheet (id `demande-<numéro>`, no side tab, opened from the call or the search): « Ce qu’il faut réunir »
+  (Requis · Reçu · Manque), who brought something (names, never points), the journal of hand-overs.
+- **Writing missions** (Intendance → « Écrire une mission », also on the call and on a missive's page): an item and a
+  quantity; an item with a recipe is translated into its tree (`proposer`: the raw materials to harvest, the intermediates and
+  final crafts), any other item is one harvest. Each line shows what the tree needs, what the chest holds and what to ask
+  (unticked by default when the chest already has enough); the writer unticks, raises or lowers, then « Publier »: one
+  Missions row per kept line. A line's points are its share of the merchandise's floor (75 % / 5 %, the pay's settings), pro
+  rata of the quantity kept. « C’est une missive » (v3r): the missive (client, deadline) and its sheet in one call.
+- **Points are internal**: only who opens the Trésor sees them (its « Les points de la caravane » page, and beside each mission).
+  A hand-over earns its mission's rate per unit (`points ÷ quantité`), late or beyond the quantity alike; a gift without a
+  mission earns the free-donation rate from its minimum (`pointsDon`); an anonymous gift and an « Ami des Lunes » earn nothing.
+- **Standing missions** (`Missions permanentes`): always open; their « quantité de référence » and points set the rate of each
+  hand-over. Their weekly ceiling and the « takes » of the prototype are gone.
+- **Hand-overs made the prototype's way** (a mission « remise » before lot 2) are still answered (« À confirmer »).
 
-Sheet tabs (written by the Apps Script **v3m**, created hidden when missing, editable by hand):
-`Pondération` (`Genre` classe/ressource, `Code`, `Nom`, `Poids`, `Note`), `Réglages missions`
-(`Réglage`, `Valeur`, `Note`), `Demandes`, `Missions`, `Points`. An empty Pondération tab reads as the
-defaults of `lib/missions.ts`; the first demand seeds it. The grimoire asks for these tabs with
-`missions: true`; without it the script answers exactly as v3l did, so the production site (v3.3) is
-unaffected. With an older script the missions' pages show the defaults and every write is refused in
-character.
+## The Livre de l'Intendance (Missions v2, lot 2)
+
+To who may « Ouvrir le livre de l’Intendance » (Patriarche, Argentier, Aide de camp by default); each write is checked on its
+own gesture: `remise` (record an entry, answer a declaration), `sortie` (new in lot 2: crafts, losses, a sale's exit), `ecrire`,
+`missionsMembre` (a member's declaration). Everything is one row of the hidden tab **Intendance** (script v3r):
+
+- **Réception**: « Consigner une remise » / « Consigner un don » / « Vider le coffre des petites lunes »: who (the register's names
+  suggested; a new name is reserved at once in Membres as a « Petite lune » without a Discord seal, S1: the recruit later signs the
+  ex-libris with it and finds everything recorded), or « don anonyme »; the lines (item, quantity, the mission it fills: the first
+  one of that item still lacking, or none). Received: `dépôt` rows in Mouvements (the chest's stock), the Points rows. What members
+  declared waits under « Déposé, à confirmer »: « Reçu 50 Bière de Ko’Rasha ? oui / non », line by line, never by the declarer;
+  two answers at once: the script keeps the first. « Chez les artisans »: « consigner le retour ».
+- **Sorties**: « Sortir pour façonner » (S6: an artisan, a recipe and a quantity; whole crafts; the materials leave the chest as
+  `livraison` rows, the goods are awaited; a partial return keeps the rest open; « clore » when it will not come), « Consigner une
+  sortie » (a loss, with its reason), « Ventes prises au coffre » (S10: oui, sorti / non, pas du coffre).
+- **Le coffre**, **Écrire une mission** (the sheets written and their progress, the standing missions) and **La pondération**.
+- Until the script is v3r, these pages are read and say in character that the registre is not ready; nothing is written.
+
+Sheet tabs (Apps Script, created hidden when missing, editable by hand): `Pondération`, `Réglages missions`, `Demandes` (v3r adds
+`Titre` and `N° missive`), `Missions`, `Points`, `Missions permanentes`, and **`Intendance`** (v3r: `N°`, `Date`, `Genre` remise /
+don / rentrée / façonnage / vente / perte, `Statut` en attente / reçue / refusée / en cours / close / sortie, `Membre`, `Objet`,
+`Quantité`, `N° mission`, `N° demande`, `N° missive`, `N° commande`, `N° lié`, `Coffre`, `Consignée par`, `Consignée le`, `Points`,
+`Note`). The grimoire asks for them with `missions: true` and `intendance: true`; without the flags the script answers exactly
+as before, so production and Essai are unaffected.
 
 ## The Livre du Trésor: the pay (prototype, branch `missions`)
 
