@@ -134,7 +134,71 @@
  *    so the grimoire needs no second call) or { ok: false, erreur }.
  *
  *  Every answer carries `ms`, the script's own execution time (Google's fixed overhead not included).
+ *
+ *  v3q (2026-11-05) — one Apps Script project, two files: this one and the Table's conseil.gs (shared contract,
+ *  § 2). Apps Script files share ONE global scope, so every name of the grimoire lives in the `Grimoire`
+ *  namespace below; the only globals left are `Grimoire`, the three entry points `doGet` / `doPost` / `onEdit`
+ *  (they exist once, here, and only route) and the functions run by hand from the editor (`grimoireEssai`,
+ *  `grimoireViderCache`, `grimoirePreparerMissions`, `grimoirePreparerPaie`). Routing: a request carrying
+ *  `outil=conseil` (URL parameter, or `"outil": "conseil"` at the top of the JSON body) goes to
+ *  `conseilDoGet(e)` / `conseilDoPost(e)` (`{ ok: false, erreur: 'conseil absent' }` when not defined), any
+ *  other to the grimoire, unchanged; `onEdit(e)` runs the grimoire's handler, then `conseilOnEdit(e)` if defined
+ *  (an error in one never stops the other). Every grimoire answer is exactly v3p's.
  */
+
+/* ───────────────────────── Entry points (shared with conseil.gs) ───────────────────────── */
+
+function doGet(e) {
+  if (Grimoire.versConseil(e, false)) {
+    return typeof conseilDoGet === 'function' ? conseilDoGet(e) : Grimoire.sansConseil();
+  }
+  return Grimoire.doGet(e);
+}
+
+function doPost(e) {
+  if (Grimoire.versConseil(e, true)) {
+    return typeof conseilDoPost === 'function' ? conseilDoPost(e) : Grimoire.sansConseil();
+  }
+  return Grimoire.doPost(e);
+}
+
+/** Simple trigger: the grimoire's handler, then the Table's; an error in one never stops the other. */
+function onEdit(e) {
+  var erreur = null;
+  try {
+    Grimoire.onEdit(e);
+  } catch (err) {
+    console.error('grimoire onEdit: ' + err);
+    erreur = err;
+  }
+  if (typeof conseilOnEdit === 'function') {
+    try {
+      conseilOnEdit(e);
+    } catch (err) {
+      console.error('conseil onEdit: ' + err);
+      erreur = erreur || err;
+    }
+  }
+  // Still reported as a failed run (Executions), once both have run.
+  if (erreur) throw erreur;
+}
+
+/* ───────────────────────── Run by hand from the editor ───────────────────────── */
+
+/** Check the tabs and headers (no web call needed). */
+function grimoireEssai() { Grimoire.essai(); }
+/** Drop the cached tabs (after importing a CSV, which may not count as an edit). */
+function grimoireViderCache() { Grimoire.viderCache(); }
+/** Create the missions' tabs (hidden) without waiting for a first demand. */
+function grimoirePreparerMissions() { Grimoire.preparerMissions(); }
+/** Create the pay's tabs (hidden) without waiting for a first write (v3n). */
+function grimoirePreparerPaie() { Grimoire.preparerPaie(); }
+
+/* ───────────────────────── The grimoire (namespace) ───────────────────────── */
+
+// Everything below is local to this function (not re-indented, to keep the history readable): no name of it can
+// collide with conseil.gs. Only what the entry points and the editor functions above need is returned.
+var Grimoire = (function () {
 
 /** Name of the tab receiving the orders (created when missing). */
 var ONGLET = 'Commandes';
@@ -455,6 +519,28 @@ function doGet() {
   return repondre({ ok: true, message: 'Grimoire de la Caravane: POST only.' });
 }
 
+/** Whether a request is for the Table (conseil.gs): `outil=conseil` in the URL, or at the top of a JSON body. */
+function versConseil(e, avecCorps) {
+  if (!e) return false;
+  if (e.parameter && e.parameter.outil === 'conseil') return true;
+  if (!avecCorps || !e.postData || typeof e.postData.contents !== 'string') return false;
+  var texte = e.postData.contents;
+  // Most grimoire bodies never mention it: no second parse for them.
+  if (texte.indexOf('conseil') === -1) return false;
+  try {
+    var corps = JSON.parse(texte);
+    return Boolean(corps) && typeof corps === 'object' && corps.outil === 'conseil';
+  } catch (err) {
+    // Not JSON: the grimoire answers it (its own 'invalid JSON').
+    return false;
+  }
+}
+
+/** The answer to a request for the Table when conseil.gs defines no entry point for it. */
+function sansConseil() {
+  return ContentService.createTextOutput(JSON.stringify({ ok: false, erreur: 'conseil absent' })).setMimeType(ContentService.MimeType.JSON);
+}
+
 /* ───────────────────────── Orders (v2 behaviour, unchanged) ───────────────────────── */
 
 function sceller(c) {
@@ -661,10 +747,10 @@ function nouvelleVersion() {
  * Every tab, as JSON, kept in the script's cache (CacheService) so a read does not open the sheet.
  * Values are limited to 100 KB, so the JSON is cut in pieces. Kept 10 minutes at most; any write
  * replaces it, a hand edit (onEdit) drops it. After importing a CSV (which may not count as an edit),
- * run `viderCache` from the editor, or wait 10 minutes.
+ * run `grimoireViderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3p';
+var CACHE = 'registre-v3q';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -714,7 +800,7 @@ function viderCache() {
   CacheService.getScriptCache().remove(CACHE + '_n');
 }
 
-/** Simple trigger: a hand edit of the sheet drops the cached tabs and moves the version on. */
+/** The grimoire's part of the onEdit trigger: a hand edit of the sheet drops the cached tabs and moves the version on. */
 function onEdit() {
   viderCache();
   nouvelleVersion();
@@ -1786,7 +1872,7 @@ function ecrirePonderation(pd) {
   return { lignes: lignes, reglages: reglages };
 }
 
-/** Run once from the editor to create the pay's tabs (hidden) without waiting for a first write (v3n). */
+/** Run once from the editor (as `grimoirePreparerPaie`) to create the pay's tabs (hidden) without waiting for a first write (v3n). */
 function preparerPaie() {
   Object.keys(ONGLETS_PAIE).forEach(function (k) {
     var p = preparerMasque(ONGLETS_PAIE[k]);
@@ -1796,7 +1882,7 @@ function preparerPaie() {
   nouvelleVersion();
 }
 
-/** Run once from the editor to create the missions' tabs (hidden) without waiting for a first demand. */
+/** Run once from the editor (as `grimoirePreparerMissions`) to create the missions' tabs (hidden) without waiting for a first demand. */
 function preparerMissions() {
   Object.keys(ONGLETS_MISSIONS).forEach(function (k) {
     var p = preparerMasque(ONGLETS_MISSIONS[k]);
@@ -1814,7 +1900,7 @@ function repondre(objet) {
   return ContentService.createTextOutput(JSON.stringify(objet)).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** Run once from the editor to check the tabs and headers (no web call needed). */
+/** Run once from the editor (as `grimoireEssai`) to check the tabs and headers (no web call needed). */
 function essai() {
   var feuille = onglet();
   Logger.log('Tab "' + feuille.getName() + '" ready, ' + feuille.getLastRow() + ' row(s).');
@@ -1833,3 +1919,16 @@ function essai() {
   var l = toutLire();
   Logger.log(Object.keys(l).map(function (k) { return k + ': ' + l[k].length; }).join(', '));
 }
+
+return {
+  doGet: doGet,
+  doPost: doPost,
+  onEdit: onEdit,
+  versConseil: versConseil,
+  sansConseil: sansConseil,
+  essai: essai,
+  viderCache: viderCache,
+  preparerMissions: preparerMissions,
+  preparerPaie: preparerPaie,
+};
+})();
