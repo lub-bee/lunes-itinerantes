@@ -110,6 +110,8 @@ async function vue(lu: Lu, qui: string | null = null): Promise<DonneesRegistre> 
     // A script before v3h does not read the orders: null (the page says so in character).
     ventes: lu.ventes === null ? null : qui ? lu.ventes.filter((v) => cle(v.vendeur) === cle(qui)) : [],
     nbMembres: lu.membres.length,
+    // The Livre de l'Intendance is held by the script (v3r): the order sheet offers « pris au coffre ».
+    intendance: lu.intendance.actif,
     version: lu.version,
   }
 }

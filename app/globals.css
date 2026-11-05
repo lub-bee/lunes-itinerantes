@@ -3598,7 +3598,7 @@ strong.a-verser { font-weight: 400; }
 
 /* Every member's points. */
 .tableau-points { text-align: left; }
-.tableau-points-entete, .tableau-points-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 70px 82px 92px; column-gap: 8px; align-items: baseline; }
+.tableau-points-entete, .tableau-points-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 80px 82px; column-gap: 8px; align-items: baseline; }
 .tableau-points-entete { font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.05em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
 .tableau-points-entete span:not(:first-child), .tableau-points-ligne > :not(:first-child) { text-align: right; }
 .tableau-points-ligne { padding: 4px 2px; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 16px; font-variant-numeric: tabular-nums lining-nums; }
@@ -3606,8 +3606,8 @@ strong.a-verser { font-weight: 400; }
 .tableau-points-ligne strong { font-weight: 400; color: #2f5b3a; font-size: 17px; }
 
 /* The missions' pages show only: they never show a scrollbar (the wheel and the finger still scroll). */
-.page-missions .defile, .page-points .defile, .page-patriarche .defile, .page-tresor .defile { scrollbar-width: none; }
-.page-missions .defile::-webkit-scrollbar, .page-points .defile::-webkit-scrollbar, .page-patriarche .defile::-webkit-scrollbar, .page-tresor .defile::-webkit-scrollbar { display: none; }
+.page-missions .defile, .page-carnet .defile, .page-demande .defile, .page-intendance .defile, .page-patriarche .defile, .page-tresor .defile { scrollbar-width: none; }
+.page-missions .defile::-webkit-scrollbar, .page-carnet .defile::-webkit-scrollbar, .page-demande .defile::-webkit-scrollbar, .page-intendance .defile::-webkit-scrollbar, .page-patriarche .defile::-webkit-scrollbar, .page-tresor .defile::-webkit-scrollbar { display: none; }
 
 /* The pondération, as shown (every change is made on a note). */
 .ponderation-form { text-align: left; }
@@ -3674,10 +3674,140 @@ strong.a-verser { font-weight: 400; }
   .mission-intitule { font-size: 16px; }
   .points-total strong { font-size: 52px; }
   .demande-avance { grid-template-columns: 80px minmax(0, 1fr); }
-  .tableau-points-entete, .tableau-points-ligne { grid-template-columns: minmax(0, 1fr) 56px 64px 76px; column-gap: 5px; font-size: 14.5px; }
+  .tableau-points-entete, .tableau-points-ligne { grid-template-columns: minmax(0, 1fr) 64px 70px; column-gap: 5px; font-size: 14.5px; }
   .tableau-points-entete { font-size: 11.5px; }
   .classes-entete, .classes-ligne { grid-template-columns: 30px minmax(0, 1fr) 56px 62px; column-gap: 6px; }
   .ponderation-entete, .ressource-ponderee { grid-template-columns: minmax(0, 1fr) 46px 62px 64px; column-gap: 5px; }
+}
+
+/* ═══════════════════════════ Missions v2, lot 2: the call, the notebook, a sheet's page, the Intendance ═══════════════════════════
+   Plain colours, borders and transforms only: no filter, no animation (phones). */
+
+/* The call: missives (their seal) and sheets, each with its missions. */
+.liste-feuillets { list-style: none; margin: 0; padding: 0; text-align: left; }
+.liste-feuillets .liste-feuillets { margin: 2px 0 0 14px; }
+.feuillet { margin: 0 0 10px; }
+.feuillet-titre {
+  display: inline; padding: 0; border: 0; border-bottom: 1px dotted rgba(90, 64, 41, 0.45); background: none;
+  font-family: var(--f-capitales); font-size: 17px; color: var(--encre); text-align: left; cursor: pointer;
+}
+.feuillet-titre:hover, .feuillet-titre:focus-visible { outline: none; color: var(--encre-rouge); border-bottom-color: var(--encre-rouge); }
+.feuillet-lien { font-size: 13.5px; margin-right: 6px; }
+.feuillet-lien + .feuillet-meta { display: inline; }
+.feuillet-meta { display: block; font-size: 13.5px; font-style: italic; color: var(--encre-pale); margin-bottom: 2px; }
+.bloc-missive { margin: 0 0 14px; padding: 6px 8px 4px; border: 1px solid rgba(31, 58, 95, 0.28); background: linear-gradient(90deg, rgba(31, 58, 95, 0.07), transparent 80%); }
+.bloc-missive-tete { display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-areas: 'sceau titre' 'sceau meta'; column-gap: 8px; align-items: center; margin-bottom: 4px; }
+.bloc-missive-tete .sceau-missive { grid-area: sceau; }
+.bloc-missive-tete .feuillet-titre { grid-area: titre; justify-self: start; font-family: var(--f-gothique); font-size: 21px; color: #1f3a5f; }
+.bloc-missive-tete .feuillet-meta { grid-area: meta; margin: 0; }
+.bloc-missive > .vide-encre { margin: 2px 0 6px; }
+.sceau-missive {
+  display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #b8463a, #7c1d14 70%); color: #f6e4c2; box-shadow: inset 0 0 0 2px rgba(80, 12, 8, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  font-family: var(--f-gothique); font-size: 17px; line-height: 1; vertical-align: middle;
+}
+.feuillet-missive { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.feuillet-missive .sceau-missive { width: 26px; height: 26px; font-size: 15px; }
+.fiche-aide.feuillet-missive { justify-content: flex-start; font-size: 14px; }
+.mission-avance { display: grid; grid-template-columns: minmax(60px, 160px) auto; align-items: center; gap: 8px; font-size: 13.5px; color: var(--encre-douce); font-variant-numeric: tabular-nums lining-nums; }
+.mission-avance .jauge { height: 6px; }
+.mission-manque { font-family: var(--f-capitales); font-size: 14px; color: var(--encre-rouge); white-space: nowrap; }
+.mission-comblee { display: inline-flex; align-items: center; gap: 4px; font-family: var(--f-capitales); font-size: 13.5px; color: #2f5b3a; white-space: nowrap; }
+.mission-comblee .coche { width: 18px; height: 14px; }
+.mission.comblee .mission-intitule { color: var(--encre-douce); }
+.missions-comblees li .lien-encre { text-align: left; }
+.missions-missive li .lien-encre { text-align: left; font-size: 15.5px; }
+
+/* The notebook: one's hand-overs, one's private progress. */
+.remise-carnet .tampon.petit { margin-left: 0; }
+.remise-carnet.statut-refusee .mission-intitule { text-decoration: line-through; text-decoration-color: rgba(142, 31, 20, 0.5); }
+.tampon.refuse { color: var(--encre-rouge); border-color: rgba(142, 31, 20, 0.7); }
+.avancement { margin-top: 14px; }
+.avancement-ligne .jauge { max-width: 220px; margin-top: 3px; }
+.avancement-saisie { flex-direction: row; align-items: baseline; gap: 6px; }
+.avancement-saisie input {
+  width: 64px; padding: 0 3px; border: 0; border-bottom: 1.5px solid rgba(90, 64, 41, 0.45); background: transparent;
+  font: inherit; font-size: 17px; text-align: right; color: var(--encre); outline: none; font-variant-numeric: tabular-nums lining-nums;
+}
+.avancement-saisie input:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.3); }
+.avancement-saisie .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.suivre-mission { margin-top: 8px; text-align: left; }
+.suivre-mission select { max-width: 100%; }
+
+/* A sheet's page: the needs' table, its glyphs. */
+.demande-droite .besoins-mot .glyphe-mission { width: 22px; height: 22px; }
+.demande-droite .besoins-mot .glyphe-mission .icone { width: 14px; height: 14px; }
+.journal li .journal-ligne { display: grid; grid-template-columns: auto auto minmax(0, 1fr); column-gap: 8px; align-items: baseline; padding: 3px 2px; }
+.journal-attente .journal-quoi { color: var(--encre-pale); font-style: italic; }
+.journal-refus .journal-quoi { color: var(--encre-pale); text-decoration: line-through; }
+.registre-intendance li .journal-ligne { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'qui quand' 'quoi quoi'; }
+.registre-intendance .journal-qui { grid-area: qui; }
+.registre-intendance .journal-quand { grid-area: quand; text-align: right; }
+.registre-intendance li .journal-quoi { grid-area: quoi; white-space: normal; font-size: 14.5px; }
+
+/* Writing a sheet: the tree, ticked and adjusted before publishing. */
+.tri-missions { margin: 4px 0 6px; text-align: left; }
+.tri-entete, .tri-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 58px 58px 72px; column-gap: 6px; align-items: center; }
+.tri-entete { font-family: var(--f-capitales); font-size: 11.5px; letter-spacing: 0.04em; color: var(--encre-rouge); padding-bottom: 2px; border-bottom: 1px solid rgba(142, 31, 20, 0.25); }
+.tri-entete span:not(:first-child), .tri-ligne > span { text-align: right; }
+.tri-ligne { padding: 4px 0; border-bottom: 1px solid rgba(110, 80, 45, 0.12); font-size: 15.5px; font-variant-numeric: tabular-nums lining-nums; }
+.tri-nom { display: grid; grid-template-columns: 22px 24px minmax(0, 1fr); align-items: center; gap: 5px; min-width: 0; cursor: pointer; }
+.tri-nom input { width: 18px; height: 18px; margin: 0; accent-color: #8a4b12; }
+.tri-nom .glyphe-mission { width: 22px; height: 22px; }
+.tri-nom .glyphe-mission .icone { width: 14px; height: 14px; }
+.tri-nom em { font-size: 13px; }
+.tri-points { font-style: normal; font-family: var(--f-capitales); color: #2f5b3a; }
+.tri-ligne > input {
+  width: 100%; min-width: 0; padding: 0 3px; border: 0; border-bottom: 1.5px solid rgba(90, 64, 41, 0.45); background: transparent;
+  font: inherit; font-size: 16px; text-align: right; color: var(--encre); outline: none;
+}
+.tri-ligne > input:focus { border-color: var(--encre-rouge); background: rgba(255, 255, 255, 0.3); }
+.tri-ligne.retiree .tri-nom > span { color: var(--encre-pale); text-decoration: line-through; text-decoration-color: rgba(142, 31, 20, 0.45); }
+.tri-ligne.retiree > input { opacity: 0.4; }
+
+/* The notes: a tick box, a choice, the lines of a hand-over. */
+.fiche-coche { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px; font-size: 15.5px; line-height: 1.3; cursor: pointer; text-align: left; }
+.fiche-coche input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: #8a4b12; }
+.fiche-choix { margin: 8px 0 2px; padding: 0; border: 0; }
+.fiche-choix legend { padding: 0; font-family: var(--f-capitales); font-size: 13.5px; letter-spacing: 0.05em; color: var(--encre-rouge); }
+.intendance-form, .demande-form { text-align: left; }
+.intendance-form .fiche-champ input, .demande-form .fiche-champ input { width: 100%; }
+.intendance-form .champ-nom input { width: 100%; }
+.lignes-objets { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; }
+.ligne-objet {
+  display: grid; grid-template-columns: minmax(0, 1fr) 84px 22px; grid-template-areas: 'quoi combien rayer' 'pour pour pour' 'avis avis avis';
+  column-gap: 8px; row-gap: 2px; align-items: end; padding: 4px 0 6px; border-bottom: 1px solid rgba(110, 80, 45, 0.14);
+}
+.ligne-objet-quoi { grid-area: quoi; }
+.ligne-objet-combien { grid-area: combien; }
+.ligne-objet-pour { grid-area: pour; }
+.ligne-objet-pour select { width: 100%; max-width: 100%; }
+.ligne-objet-rayer { grid-area: rayer; align-self: center; }
+.ligne-objet-avis { grid-area: avis; }
+.ligne-objet-ajouter { align-self: flex-start; font-size: 14px; }
+.ligne-objet input[readonly] { color: var(--encre-douce); border-bottom-style: dotted; }
+
+/* The Intendance's lists: what waits for a yes / no, the artisans, the ledgers. */
+.intendance-droite > section:first-child > .titre-section:first-child, .intendance-droite > .titre-section:first-child, .carnet-droite > .titre-section:first-child, .demande-droite > .titre-section:first-child, .missions-droite > .titre-section:first-child, .missions-droite > section:first-child > .titre-section:first-child { margin-top: 2px; }
+.mission.a-repondre { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'texte cote'; background: linear-gradient(90deg, rgba(201, 162, 78, 0.14), transparent 80%); }
+.mission.a-repondre .glyphe-mission { display: none; }
+.mission.a-repondre .mission-gestes { gap: 2px 12px; }
+.en-attente-liste, .chez-artisans { margin-bottom: 8px; }
+
+/* The order sheet: « pris au coffre ». */
+.commande-coffre { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-family: var(--f-capitales); font-size: 11.5px; letter-spacing: 0.03em; color: var(--encre-pale); cursor: pointer; }
+.commande-coffre input { width: 14px; height: 14px; margin: 0; accent-color: #6b4f1d; }
+
+@media (max-width: 860px) {
+  .liste-feuillets .liste-feuillets { margin-left: 4px; }
+  .bloc-missive { padding: 6px 6px 4px; }
+  .mission-avance { grid-template-columns: minmax(50px, 120px) auto; }
+  .tri-entete, .tri-ligne { grid-template-columns: minmax(0, 1fr) 46px 46px 60px; column-gap: 4px; }
+  .tri-ligne { font-size: 14.5px; }
+  .ligne-objet { grid-template-columns: minmax(0, 1fr) 72px 22px; column-gap: 6px; }
+  .mission.a-repondre { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'texte' 'cote'; }
+  .mission.a-repondre .mission-cote { align-items: flex-start; }
+  .mission.a-repondre .mission-gestes { justify-content: flex-start; }
 }
 
 /* ═══════════════════════════ The Livre du Trésor (prototype, components/Tresor.tsx) ═══════════════════════════ */

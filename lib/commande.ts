@@ -19,6 +19,11 @@ export type LigneCommande = {
   piece?: boolean
   /** A line typed by hand, not in the catalogue: no floor, no ceiling. */
   horsCatalogue?: boolean
+  /**
+   * « pris au coffre » (Missions v2, S10): this line's goods were taken from the caravan's chest. Unticked by default
+   * (orders are mostly filled from the members' own goods); ticked, the Intendance confirms the exit (Sorties).
+   */
+  coffre?: boolean
 }
 
 /** « carquois » for arrows and bolts, else « lot ». */
@@ -65,6 +70,8 @@ export type CommandeEnvoyee = {
     /** 'piece': quantity and price by the piece of a lot (the server prorates the floor and ceiling). */
     unite?: 'piece' | 'lot'
     horsCatalogue?: boolean
+    /** « pris au coffre »: an exit of the chest to confirm (Livre de l'Intendance, Sorties). */
+    coffre?: boolean
   }[]
 }
 

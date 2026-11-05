@@ -12,7 +12,8 @@ import { revalidateTag, unstable_cache } from 'next/cache'
 import { lireOnglets, type Onglets } from './missives'
 import { lireMissions } from './missions'
 import { lirePaie } from './paie'
-import { lirePermissions, MEMBRE, semis } from './droits'
+import { lirePermissions, MEMBRE, semis, semisNouveaux } from './droits'
+import { lireIntendance } from './intendance'
 
 export const ETIQUETTE_REGISTRE = 'registre'
 /** Seconds a read of the sheet is reused. */
@@ -55,8 +56,10 @@ export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: n
 // `missions: true` asks a v3m script for the missions' tabs too (lib/missions.ts), `paie: true` a v3n script
 // for the pay's (lib/paie.ts), `discord: true` for the members' Discord ID (lib/identite.ts), `rangs: true` a
 // v3p script for the Rôles tab and the Grimoire's rows of Permissions (lib/droits.ts), and its 'membre' writing the
-// ranks in « Rôle »; an older script ignores them (then nothing is granted but to testers).
-const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true }
+// ranks in « Rôle »; `intendance: true` a v3r script for the Livre de l'Intendance (lib/intendance.ts) and the
+// Demandes' titles and missives; an older script ignores them (then nothing is granted but to testers, and the
+// Intendance's gestures are refused in character).
+const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true, intendance: true }
 
 async function lireScript(): Promise<Lecture> {
   const r = await appelerScript<ReponseLire>({ action: 'lire', ...DRAPEAUX })
@@ -64,7 +67,7 @@ async function lireScript(): Promise<Lecture> {
   return { onglets: r.onglets, version: r.version ?? 0 }
 }
 
-const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3p'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3r'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
@@ -134,7 +137,7 @@ function lu(l: Lecture) {
   const paie = lirePaie(l.onglets)
   const missions = lireMissions(l.onglets)
   if (paie.actif) missions.ponderation = { ...missions.ponderation, reglages: { ...missions.ponderation.reglages, partRessources: paie.reglages.ressources, partFabrication: paie.reglages.fabrication } }
-  return { ...lireOnglets(l.onglets), missions, paie, droits: lirePermissions(l.onglets), version: l.version }
+  return { ...lireOnglets(l.onglets), missions, paie, intendance: lireIntendance(l.onglets), droits: lirePermissions(l.onglets), version: l.version }
 }
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */
@@ -156,7 +159,18 @@ type Registre = Awaited<ReturnType<typeof lireRegistre>>
  */
 export async function semerSiBesoin(l: Registre): Promise<Registre> {
   const t = l.droits
-  if (!t.lu || t.semees || !t.roles.some((r) => r.cle === MEMBRE && r.id)) return l
+  if (!t.lu || !t.roles.some((r) => r.cle === MEMBRE && r.id)) return l
+  if (t.semees) {
+    // The gestures added later with their defaults (lib/droits.ts `semee`): their rows only, once.
+    if (!semisNouveaux(t).length) return l
+    // The shared copy may be up to 45 s old: the rows are checked again on a fresh read before anything is written.
+    const frais = await lireRegistreFrais()
+    const nouveaux = semisNouveaux(frais.droits)
+    if (!nouveaux.length) return frais
+    const r = await ecrireRegistre('permissions', { droits: { rangs: frais.droits.colonnes.map((c) => c.nom), lignes: nouveaux } })
+    console.log(`[permissions] new gestures seeded: ${nouveaux.map((x) => x.cle).join(', ')}`)
+    return r.lu ?? (await lireRegistre(r.version ?? 0))
+  }
   const r = await ecrireRegistre('permissions', { droits: { semer: true, rangs: t.colonnes.map((c) => c.nom), lignes: semis(t) } })
   console.log(`[permissions] seeded: ${(r as { seme?: boolean }).seme ? `${(r as { ajoutees?: number }).ajoutees ?? 0} rows` : 'already there'}`)
   return r.lu ?? (await lireRegistre(r.version ?? 0))

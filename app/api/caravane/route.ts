@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
   if (!registreRelie()) return NextResponse.json({ ok: false, message: "Le registre des membres n'est pas encore relié au grimoire." }, { status: 503 })
   let lu
   try {
-    lu = await lireRegistre()
+    // `v`: the newest version the reader has seen (a name just reserved at the Réception must be there).
+    lu = await lireRegistre(Number(req.nextUrl.searchParams.get('v')) || 0)
   } catch {
     return NextResponse.json({ ok: false, message: "Le registre des membres reste fermé pour l'heure." }, { status: 502 })
   }

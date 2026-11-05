@@ -23,7 +23,7 @@ import {
 } from '@/lib/paie'
 import { Action } from './Ornements'
 import { Geste, Signature, type CtxRegistre } from './Missives'
-import { ChampNombre, useScelle, type Reponse } from './Missions'
+import { ChampNombre, useScelle, type Reponse } from './MissionsCommun'
 import { Sceller } from './Fiche'
 import { ChampNoms, tousLesNoms, VIDE_NOMS, type ValeurNoms } from './ChampNom'
 import { nomsDeTexte, texteDeNoms } from '@/lib/noms'

@@ -15,6 +15,7 @@ import { artisanDe } from './metiers'
 import { estOmbre, ICONES_OMBRE } from './ombre'
 import { ICONES_MISSIONS } from './missions'
 import { ICONES_PAIE } from './paie'
+import { ICONES_INTENDANCE } from './intendance'
 import type { Article, Livre, Page, PageChapitre, PageNote, Partie } from './types'
 
 const CONTENU = path.join(process.cwd(), 'content')
@@ -29,6 +30,8 @@ export const PARTIES: Partie[] = [
   // missions' tabs first, then, set apart and in their own colour, the missives' (`ruban`: the part whose ribbon holds it).
   { id: 'missions', titre: 'Livre des Missions', court: 'Missions', couleur: '#8a4b12', icone: 'treasure-map' },
   { id: 'missives', titre: 'Livre des Missives', court: 'Missives', couleur: '#1f3a5f', icone: 'wax-seal', ruban: 'missions' },
+  // The Livre de l'Intendance (Missions v2, lot 2): the chest, what enters, what leaves, writing missions (to its roles).
+  { id: 'intendance', titre: 'Livre de l’Intendance', court: 'Intendance', couleur: '#6b4f1d', icone: 'cargo-crate' },
   // The pay (prototype, branch `missions`).
   { id: 'tresor', titre: 'Livre du Trésor', court: 'Trésor', couleur: '#1f5a56', icone: 'open-treasure-chest' },
   { id: 'caravane', titre: 'Livre de la Caravane', court: 'Caravane', couleur: '#5a2d6b', icone: 'lynx-head' },
@@ -217,27 +220,16 @@ export async function chargerLivre(): Promise<Livre> {
       type: 'atelier', vue: 'matieres', id: 'matieres', partie: 'atelier', titre: 'Matières premières', titreEn: 'Raw Materials', court: 'Matières', icone: 'wheat',
       intro: 'Ce que la caravane récolte, pille, façonne ou achète, sans jamais le revendre : le prix qu’on en paie d’ordinaire, et celui auquel on achète sans hésiter.',
     },
-    // The missions (prototype): the call for missions and the member's points, then the Patriarch's table.
+    // The missions (Missions v2): the call (missives and sheets, what is still needed), the member's notebook. The
+    // sheets' own pages (one per « demande », opened from the call) are added by the page from the registre.
     {
       type: 'missions', id: 'missions', partie: 'missions', titre: 'L’appel aux missions', titreEn: 'The Call for Missions', court: 'Missions', icone: 'hunting-horn',
-      intro: 'Ce dont la caravane a besoin, coupé en petites missions qu’on boucle en une courte veillée : une récolte, un tannage, une fournée. Prends-en une, rapporte le butin à un officier, et les points tombent dans ta bourse.',
+      intro: 'Ce dont la caravane a besoin. Nul ne prend une mission : chacun récolte ou façonne en jeu ce qu’il peut, puis le remet à une patte de l’Intendance, ou le dépose au coffre des petites lunes. Une mission comblée reste ouverte : ce qui arrive après compte tout autant.',
       citation: 'Mille pattes qui portent chacune un sac vont plus loin qu’un mammouth qui porte tout.',
     },
     {
-      type: 'points', id: 'mes-points', partie: 'missions', titre: 'Mes points', titreEn: 'My Points', court: 'Mes points', icone: 'laurel-crown',
-      intro: 'Chaque mission accomplie inscrit ses points à ton nom. À la clôture de la semaine, la caisse se partage au prorata des points : ce qui est écrit ici, c’est ta part du butin.',
-    },
-    {
-      type: 'patriarche', vue: 'demandes', id: 'demandes', partie: 'missions', titre: 'Les demandes du Patriarche', titreEn: 'Requests for Goods', court: 'Demandes', icone: 'throne-king',
-      intro: 'Demande une marchandise, et le grimoire la découpe en missions : les matières à récolter, ce qu’il faut tanner ou distiller, les fournées à façonner. Chaque mission dit d’avance ce qu’elle rapporte.',
-    },
-    {
-      type: 'patriarche', vue: 'points', id: 'points-caravane', partie: 'missions', titre: 'Les points de la caravane', titreEn: 'The Caravan’s Tally', court: 'Points', icone: 'podium',
-      intro: 'Les points de chaque membre, ce qu’il a accompli et ce qu’il tient encore entre ses pattes. La renommée viendra plus tard ; ici, on compte.',
-    },
-    {
-      type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'missions', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',
-      intro: 'Combien en ramasse-t-on en une courte veillée ? Cent vingt brins de blé, mais huit cœurs de daedra. Chaque ressource a sa rareté et son origine : la rareté taille les missions et partage les points des ressources selon l’effort.',
+      type: 'carnet', id: 'mon-carnet', partie: 'missions', titre: 'Mon carnet', titreEn: 'My Notebook', court: 'Mon carnet', icone: 'notebook',
+      intro: 'Ce que tu as remis ou déposé, et ce qu’on en a reçu. Tu peux aussi y noter où tu en es d’une mission (« 60 sur 100 ») : ces notes restent dans ton grimoire, nul autre ne les voit.',
     },
     // The missives (external orders) hang from the same ribbon, after the missions (2026-11-05: one ribbon).
     {
@@ -245,9 +237,26 @@ export async function chargerLivre(): Promise<Livre> {
       intro: 'Les commandes confiées à la caravane : ce qu’on nous demande, ce qu’il faut réunir, et qui a porté quoi. Chaque patte qui aide est inscrite ; chaque septim gagné est partagé.',
       citation: "Ce que le client désire, Khajiit le trouve. Ce que Khajiit ne trouve pas, le client ne le désirait pas vraiment.",
     },
+    // The Livre de l'Intendance (lot 2): the chest first, then what enters, what leaves, writing missions, the weights.
     {
-      type: 'coffre', id: 'coffre', partie: 'missives', titre: 'Le coffre des missives', titreEn: 'The Missive Chest', court: 'Le coffre', icone: 'open-chest',
-      intro: 'Tout ce qui entre dans le coffre des missives et tout ce qui en sort est écrit ici. Quand on compte le coffre, le registre dit ce qu’il attendait : un écart, et l’on enquête.',
+      type: 'coffre', id: 'coffre', partie: 'intendance', titre: 'Le coffre', titreEn: 'The Chest', court: 'Le coffre', icone: 'open-chest',
+      intro: 'Ce que tient le coffre de la caravane, selon le registre, et chaque fois qu’on l’a compté. Quand le coffre et le registre ne disent pas la même chose, quelqu’un a pris ou oublié de consigner : on enquête.',
+    },
+    {
+      type: 'intendance', vue: 'reception', id: 'reception', partie: 'intendance', titre: 'Réception', titreEn: 'Receiving', court: 'Réception', icone: 'entry-door',
+      intro: 'Tout ce qui entre : les remises pour les missions, les dons (même d’une recrue qui n’a pas encore signé), ce qui revient de chez les artisans. Ce qu’un membre a déposé au coffre des petites lunes attend ici qu’on réponde, ligne par ligne : reçu, ou pas.',
+    },
+    {
+      type: 'intendance', vue: 'sorties', id: 'sorties', partie: 'intendance', titre: 'Sorties', titreEn: 'Outgoing', court: 'Sorties', icone: 'exit-door',
+      intro: 'Tout ce qui sort : les matières confiées à un artisan pour façonner, ce qu’une vente a pris au coffre, ce qui s’est perdu. Rien ne quitte le coffre sans être écrit ici.',
+    },
+    {
+      type: 'intendance', vue: 'ecrire', id: 'demandes', partie: 'intendance', titre: 'Écrire une mission', titreEn: 'Writing Missions', court: 'Écrire', icone: 'scroll-quill',
+      intro: 'Choisis ce qu’il faut réunir : le grimoire propose l’arbre des besoins, tu décoches ce que la caravane a déjà, tu ajustes les quantités, puis tu publies. Pour une commande venue du dehors, coche « c’est une missive ».',
+    },
+    {
+      type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'intendance', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',
+      intro: 'Combien en ramasse-t-on en une courte veillée ? Cent vingt brins de blé, mais huit cœurs de daedra. Chaque ressource a sa rareté et son origine : elles pèsent les points de chaque remise, en coulisse.',
     },
     // The pay (prototype): the Patriarchs' accounts, open to every member for now.
     {
@@ -270,6 +279,11 @@ export async function chargerLivre(): Promise<Livre> {
       type: 'tresor', vue: 'reglages', id: 'reglages-paie', partie: 'tresor', titre: 'Les réglages de la paie', titreEn: 'Pay Settings', court: 'Réglages', icone: 'cog',
       intro: 'La clé de partage d’une vente, la part des Patriarches, le loyer, le premier jour de la semaine. Rien n’est gravé dans la pierre : les Patriarches l’ajustent.',
     },
+    // The points are internal (Missions v2): only who opens the Trésor sees them, here.
+    {
+      type: 'patriarche', vue: 'points', id: 'points-caravane', partie: 'tresor', titre: 'Les points de la caravane', titreEn: 'The Caravan’s Tally', court: 'Points', icone: 'podium',
+      intro: 'Les points de chaque membre et ses remises. Ils ne se montrent qu’ici : un membre sait qu’il prend part à l’effort, jamais combien il pèse.',
+    },
     {
       type: 'caravane', id: 'caravane', partie: 'caravane', titre: 'La Caravane', titreEn: 'The Caravan', court: 'Caravane', icone: 'lynx-head',
       intro: 'Les membres de la Caravane des Lunes Itinérantes, et le rang que chacun tient sur la route. Touche un sceau pour lire les noms de ceux qui le portent.',
@@ -285,7 +299,7 @@ export async function chargerLivre(): Promise<Livre> {
   // say where an article is and offer to move it to a chapter of the book.
   const caches = articles.filter((a) => defs.some((d) => d.masque && d.id === a.chapitre))
 
-  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE, ...ICONES_MISSIONS, ...ICONES_PAIE]
+  const noms = [...PARTIES.map((p) => p.icone), ...pages.map((p) => p.icone), ICONE_COPIE, ...ICONES_COMMANDE, ...ICONES_MISSIVES, ...ICONES_METIERS, ...ICONES_RANGS, ...Object.values(ICONES_ACTIONS), ...ICONES_OMBRE, ...ICONES_MISSIONS, ...ICONES_PAIE, ...ICONES_INTENDANCE]
   // The shadow book's goods, whatever their chapter (shown only in the Livre d'ombre).
   const ombre = articles.filter((a) => a.ombre)
   return { parties: PARTIES, pages, caches, ombre, consigneLe: new Date().toISOString(), icones: icones(noms) }

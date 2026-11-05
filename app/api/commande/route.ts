@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
 import { nomSigne } from '@/lib/identite'
 import { chargerArticles } from '@/lib/livre'
-import { oublierRegistre } from '@/lib/registre'
+import { ecrireRegistre, lireRegistre, oublierRegistre } from '@/lib/registre'
 import { calculerLigne, centimes, poidsLigne, repartirGlobal, statut, totaux, uniteLigne, type CommandeEnvoyee } from '@/lib/commande'
 
 // Seals an order: validates it, recomputes every total from the catalogue, and hands it to the
@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
   // Floor and ceiling come from the catalogue when the article is still in it.
   const catalogue = new Map((await chargerArticles()).map((a) => [a.id, a]))
   const lignes = []
+  /** The lines « pris au coffre » (S10), in pieces: what the Intendance is asked to take out of the chest. */
+  const auCoffre: { objet: string; quantite: number }[] = []
   for (const b of brutes) {
     const quantite = Number(b?.quantite)
     const prixUnitaire = Number(b?.prixUnitaire)
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
     const min = horsCatalogue ? null : parPiece(connu ? connu.min : nombreOuNull(b.min))
     const max = horsCatalogue ? null : parPiece(connu ? connu.max : nombreOuNull(b.max))
     const nom = connu?.fr ?? article
+    if (b.coffre === true) auCoffre.push({ objet: nom, quantite: lot && !piece ? quantite * lot : quantite })
     lignes.push({
       article: nom,
       articleEn: connu?.en ?? (typeof b.articleEn === 'string' ? b.articleEn.slice(0, 160) : ''),
@@ -136,5 +139,26 @@ export async function POST(req: NextRequest) {
 
   // « Mes ventes » reads the orders from the registre: its cached copy is now too old.
   oublierRegistre()
-  return NextResponse.json({ ok: true, numero: commande.numero, total: commande.total })
+  const coffre = auCoffre.length ? await sortiesDuCoffre(commande.numero, vendeur, auCoffre) : null
+  return NextResponse.json({ ok: true, numero: commande.numero, total: commande.total, coffre })
+}
+
+/**
+ * The lines ticked « pris au coffre »: one Intendance row each, « en attente » until someone allowed confirms the exit
+ * (Sorties). A second script call, after the order is sealed (the order stands even if this one fails). Needs v3r.
+ */
+async function sortiesDuCoffre(numero: string, vendeur: string, lignes: { objet: string; quantite: number }[]): Promise<'ok' | 'pas-pret' | 'echec'> {
+  try {
+    const lu = await lireRegistre()
+    if (!lu.intendance.actif) return 'pas-pret'
+    const quand = new Date().toISOString()
+    const base = `I-${numero.slice(2)}`
+    await ecrireRegistre('intendance', {
+      coffre: { lignes: lignes.map((l, i) => ({ id: `${base}-${i + 1}`, date: quand, genre: 'vente', statut: 'en attente', membre: vendeur, objet: l.objet, quantite: l.quantite, commande: numero })) },
+    })
+    return 'ok'
+  } catch (e) {
+    console.error(`[commande] exits of ${numero} not written`, e)
+    return 'echec'
+  }
 }

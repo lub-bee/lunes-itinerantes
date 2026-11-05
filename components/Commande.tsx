@@ -207,20 +207,28 @@ export function useCommande(reg: EtatRegistre) {
         max: l.max,
         ...(l.lot ? { unite: l.piece ? ('piece' as const) : ('lot' as const) } : {}),
         ...(l.horsCatalogue ? { horsCatalogue: true } : {}),
+        // « pris au coffre » (S10): only when the registre holds the Livre de l'Intendance.
+        ...(l.coffre && reg.donnees?.intendance ? { coffre: true } : {}),
       })),
     }
     setEnvoi(true)
     setMessage(null)
     try {
       const rep = await fetch('/api/commande', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envoyee) })
-      const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string } | null
+      const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string; coffre?: 'ok' | 'pas-pret' | 'echec' | null } | null
       if (!rep.ok || !r?.ok) {
         setMessage({ genre: 'erreur', texte: r?.message ?? "Le coursier n'est pas revenu. Ta commande reste sur la table : réessaie." })
         return
       }
       setLignes([])
       setPrixGlobal('')
-      setMessage({ genre: 'ok', texte: `Marché conclu, l'encre sèche dans le registre.${r.numero ? ` (n° ${r.numero})` : ''}` })
+      const coffre =
+        r.coffre === 'ok'
+          ? ' Ce qui fut pris au coffre attend que l’Intendance en confirme la sortie.'
+          : r.coffre
+            ? ' Ce qui fut pris au coffre n’a pas pu être noté : préviens l’Intendance.'
+            : ''
+      setMessage({ genre: 'ok', texte: `Marché conclu, l'encre sèche dans le registre.${r.numero ? ` (n° ${r.numero})` : ''}${coffre}` })
       // The sale now shows in « Mes ventes ».
       reg.relire()
     } catch {
@@ -230,7 +238,10 @@ export function useCommande(reg: EtatRegistre) {
     }
   }, [vendeur, membre, prixGlobal, reg])
 
-  return { prixGlobal, setPrixGlobal, membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, parPiece, ajouterLibre, ouvrir, ranger, jeter, sceller }
+  /** The registre holds the Livre de l'Intendance: each line may say it was taken from the chest. */
+  const auCoffre = Boolean(reg.donnees?.intendance)
+
+  return { auCoffre, prixGlobal, setPrixGlobal, membre, discord: Boolean(info?.discord), avisNom, reconnaitre, oublierNom, lignes, ouverte, deployee, setDeployee, vendeur, setVendeur, message, envoi, pret, nouvelle, deroule, ajouter, regler, parPiece, ajouterLibre, ouvrir, ranger, jeter, sceller }
 }
 
 export type EtatCommande = ReturnType<typeof useCommande>
@@ -704,6 +715,12 @@ function LigneFeuille({ l, c, icones, nouvelle, part }: { l: LigneCommande; c: E
             </button>
           </span>
         ) : null}
+        {c.auCoffre && !l.horsCatalogue && (
+          <label className="commande-coffre" title="Cette marchandise sort du coffre de la caravane : l’Intendance confirmera la sortie">
+            <input type="checkbox" checked={Boolean(l.coffre)} disabled={l.rayee} onChange={(e) => c.regler(l.id, { coffre: e.target.checked })} />
+            <span>pris au coffre</span>
+          </label>
+        )}
       </div>
       <span className="commande-qte">
         <button type="button" aria-label="Un de moins" disabled={l.rayee || l.qte <= 1} onClick={() => fixerQte(l.qte - 1)}>

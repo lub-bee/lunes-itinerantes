@@ -126,6 +126,8 @@ export type DonneesRegistre = {
   /** The signed member's sealed orders, one per order (null: a script before v3h, which does not read them). */
   ventes?: Vente[] | null
   nbMembres: number
+  /** The script holds the Livre de l'Intendance (v3r): sales may say what they took from the chest. */
+  intendance?: boolean
   /** The registre's state number (see lib/registre.ts); 0 with an older script. */
   version: number
 }
@@ -588,6 +590,8 @@ export type Onglets = {
   evenements?: Record<string, unknown>[]
   ecrituresEvenement?: Record<string, unknown>[]
   clotures?: Record<string, unknown>[]
+  /** The Livre de l'Intendance (lib/intendance.ts), from a v3r script asked with `intendance: true`. */
+  intendance?: Record<string, unknown>[]
 }
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */

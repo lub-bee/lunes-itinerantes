@@ -24,5 +24,13 @@ export const ICONES_ACTIONS = {
   rendre: 'return-arrow',
   accomplir: 'check-mark',
   peser: 'weight-scale',
+  // The Livre de l'Intendance (lib/intendance.ts).
+  signaler: 'hand',
+  recu: 'check-mark',
+  suivre: 'notebook',
+  faconner: 'anvil-impact',
+  sortir: 'exit-door',
+  entree: 'entry-door',
+  sceau: 'wax-seal',
 } as const
 

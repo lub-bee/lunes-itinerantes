@@ -1,14 +1,16 @@
-// Missions (prototype, branch `missions`): a demand for merchandise is translated into small missions —
-// harvests of raw resources, crafts of the intermediate products and of the final product —
-// put out to the caravan as an internal call for tenders. A member takes a mission, gives it back or
-// completes it; completed, its points are credited to them (ledger « Points »).
+// Missions (Missions v2, lot 2): a mission is an internal need (« 300 Minerai de fer »), open to everyone; nobody
+// takes it first. It is settled when the goods are handed over to someone allowed (the Livre de l'Intendance,
+// lib/intendance.ts), who records who brought them; a filled mission is never closed (late deliveries still count, at
+// full points). Missions are written in sheets (a « demande »: one merchandise, its tree of needs sorted before
+// publishing), for the caravan itself or for a missive (an outside order).
 //
-// Pure logic, shared by the page (live preview of a demand) and /api/missions (which recomputes every
-// number: the page's are never trusted). The sheet's tabs (Pondération, Réglages missions, Demandes,
-// Missions, Points) are written by the Apps Script from v3m on; with an older script the tabs are not
-// read (`actif` false): the pages show the defaults and every write is refused in character.
+// Pure logic, shared by the page (live preview of a sheet) and /api/missions (which recomputes every number: the
+// page's are never trusted). The sheet's tabs (Pondération, Réglages missions, Demandes, Missions, Points) are written
+// by the Apps Script from v3m on; with an older script the tabs are not read (`actif` false): the pages show the
+// defaults and every write is refused in character.
 
 import { cle, Cycle, recetteUsage, repartir, type Onglets, type Recette } from './missives'
+import { etatMission, type LigneIntendance } from './intendance'
 
 /* ───────────────────────── Types ───────────────────────── */
 
@@ -78,6 +80,9 @@ export type Demande = {
   pointsFabrication: number
   statut: string
   note: string
+  /** The sheet's title and the missive it was written for (v3r; '' before). */
+  titre: string
+  missive: string
 }
 
 export type Mission = {
@@ -112,26 +117,33 @@ export type LignePoints = { horodatage: string; membre: string; points: number; 
  */
 export type Permanente = { id: string; type: TypeMission; objet: string; quantite: number; points: number; poids: number | null; plafond: number | null; statut: 'ouverte' | 'en pause' | 'close'; par: string; date: string; note: string }
 
-/** What the page receives. `moi`: the signed member (their missions and points). */
+/** What the page receives. `moi`: the signed member. Points (`points`, `intendance[].points`) only to who opens the Trésor. */
 export type DonneesMissions = {
   relie: boolean
   /** The sheet's script knows the missions (v3m): writes are possible. */
   actif: boolean
+  /** The sheet's script holds the Livre de l'Intendance (v3r): hand-overs, gifts, exits, missives' missions. */
+  intendanceActive: boolean
   ponderation: Ponderation
   demandes: Demande[]
   missions: Mission[]
   points: LignePoints[]
   permanentes: Permanente[]
-  /** Takes of each standing mission this week (taken, handed over or confirmed in it), for its weekly ceiling. */
-  prises: Record<string, number>
+  intendance: LigneIntendance[]
   moi: string | null
   version: number
 }
 
-/** Actions of the missions (each one goes through lib/droits.ts). */
-/** `rendre`: give a mission up (« renoncer »); `remettre`: hand its loot over; `confirmer` / `refuser`: another member's answer. */
-export type ActionMission = 'demande' | 'prendre' | 'rendre' | 'remettre' | 'confirmer' | 'refuser' | 'ponderation' | 'permanente' | 'prendrePermanente' | 'don'
-export const ACTIONS_MISSION: ActionMission[] = ['demande', 'prendre', 'rendre', 'remettre', 'confirmer', 'refuser', 'ponderation', 'permanente', 'prendrePermanente', 'don']
+/**
+ * Actions of the missions and of the Intendance (each one goes through lib/droits.ts):
+ * `demande` writes a mission sheet (sorted before publishing); `entree` records what someone allowed received
+ * (a hand-over, a gift, a return); `signaler` a member's own declaration (it waits); `recevoir` the yes / no to it;
+ * `faconnage` takes materials out to craft, `sortie` records a loss, `sortir` the yes / no to a sale's goods taken from
+ * the chest, `clore` closes a craft whose rest will not come back; `confirmer` / `refuser` answer a hand-over of the
+ * prototype's way (a mission « remise » before lot 2).
+ */
+export type ActionMission = 'demande' | 'entree' | 'signaler' | 'recevoir' | 'faconnage' | 'sortie' | 'sortir' | 'clore' | 'confirmer' | 'refuser' | 'ponderation' | 'permanente'
+export const ACTIONS_MISSION: ActionMission[] = ['demande', 'entree', 'signaler', 'recevoir', 'faconnage', 'sortie', 'sortir', 'clore', 'confirmer', 'refuser', 'ponderation', 'permanente']
 
 /* ───────────────────────── Defaults (missions/ponderation.md, 2026-10-28) ───────────────────────── */
 
@@ -230,19 +242,16 @@ export const TEXTES = {
     'Le scribe du registre ne connaît pas encore les missions. Les pages se lisent, l’aperçu se calcule, mais rien ne s’inscrit tant que le dernier script du grimoire (v3m) n’est pas recopié dans la feuille.',
   sansRecette: (nom: string) => `Nulle recette n’est consignée pour ${nom} : qu’un artisan l’écrive au Livre des Recettes avant d’en demander.`,
   aFixer: 'rareté à fixer',
-  limite: (max: number) => `Tes pattes sont pleines : ${max} missions en cours, pas une de plus. Remets-en une, ou renonces-y.`,
   /** The confirmation needs the v3n script. */
   refusV3n: 'Le scribe du registre ne sait pas encore qu’un butin se remet et se confirme : qu’on recopie le dernier script du grimoire (v3n) dans la feuille.',
   pasRemise: 'Ce butin n’a pas été remis : rien à confirmer.',
   soiMeme: 'Nul ne confirme son propre butin : qu’une autre patte le reçoive.',
-  prise: 'Une autre patte a saisi cette mission avant toi. Le désert est ainsi.',
-  pasLaTienne: 'Cette mission n’est pas entre tes pattes.',
 }
 
 export const VERBES: Record<TypeMission, string> = { récolte: 'Récolter', fabrication: 'Fabriquer' }
 export const ICONES_TYPES: Record<TypeMission, string> = { récolte: 'sickle', fabrication: 'anvil-impact' }
 /** game-icons.net glyphs of the missions (loaded with the book's other icons). */
-export const ICONES_MISSIONS = ['hunting-horn', 'laurel-crown', 'throne-king', 'podium', 'weight-scale', 'treasure-map', 'sickle', 'hammer-drop', 'anvil-impact', 'hand', 'return-arrow', 'check-mark']
+export const ICONES_MISSIONS = ['hunting-horn', 'laurel-crown', 'throne-king', 'podium', 'weight-scale', 'treasure-map', 'sickle', 'hammer-drop', 'anvil-impact', 'hand', 'return-arrow', 'check-mark', 'notebook', 'wax-seal']
 
 /* ───────────────────────── The pondération, as read ───────────────────────── */
 
@@ -590,6 +599,56 @@ export function traduire(article: { fr: string; min: number | null }, quantite: 
   return { ok: true, article: article.fr, quantite: Q, plancher, recette: racine, missions, pointsRessources, pointsFabrication, aFixer: [...aFixer], brut, lignes }
 }
 
+/* ───────────────────────── Writing a sheet: the tree sorted before publishing ───────────────────────── */
+
+/**
+ * One line of a sheet being written: an item and what the whole tree needs of it (`total`), with the points that
+ * whole need earns (`points`: the merchandise's floor shares, else the standing missions' rate for a harvest).
+ */
+export type LigneProposee = { cle: string; type: TypeMission; objet: string; total: number; points: number; poids: number | null; intermediaire: boolean; aFixer: boolean }
+
+export type Proposition =
+  | { ok: true; article: string; quantite: number; plancher: number | null; lignes: LigneProposee[]; recette: Recette | null; aFixer: string[] }
+  | { ok: false; erreur: string }
+
+type ArticlePoints = { fr: string; min: number | null; ombre?: boolean }
+
+/**
+ * What a sheet for `quantite` of `objet` proposes (Missions v2, the sort before publishing): an item with a recipe is
+ * translated into its tree (one line per item and type: the raw materials to harvest, the intermediates and the
+ * final crafts); an item without one is a single harvest. The creator then unticks what the caravan already has and
+ * raises or lowers each line; `pointsDeLigne` gives a line's points for the quantity kept.
+ */
+export function proposer(objet: ArticlePoints, quantite: number, recettes: Recette[], p: Ponderation, articles: ArticlePoints[]): Proposition {
+  const Q = Math.max(0, Math.round(quantite))
+  if (Q <= 0) return { ok: false, erreur: 'Une mission se fait pour une pièce au moins.' }
+  if (!recetteDe(recettes, objet.fr)) {
+    const poids = peser(p).poidsDe(objet.fr)
+    return {
+      ok: true,
+      article: objet.fr,
+      quantite: Q,
+      plancher: null,
+      recette: null,
+      aFixer: poids === null ? [objet.fr] : [],
+      lignes: [{ cle: cleLigne('récolte', objet.fr), type: 'récolte', objet: objet.fr, total: Q, points: pointsParPrise(objet.fr, Q, recettes, articles, p, false), poids, intermediaire: false, aFixer: poids === null }],
+    }
+  }
+  const t = traduire(objet, Q, recettes, p)
+  if (!t.ok) return t
+  const lignes = t.lignes.map((l): LigneProposee => {
+    const ms = t.missions.filter((m) => m.ligne === l.cle)
+    const poids = ms[0]?.poids ?? null
+    // Without a floor the shares are empty: a harvest earns the standing missions' rate, a craft nothing.
+    const points = t.plancher !== null ? ms.reduce((s, m) => s + m.points, 0) : l.type === 'récolte' ? pointsParPrise(l.objet, l.total, recettes, articles, p, false) : 0
+    return { cle: l.cle, type: l.type, objet: l.objet, total: l.total, points, poids, intermediaire: l.intermediaire, aFixer: (l.type === 'récolte' || l.intermediaire) && poids === null }
+  })
+  return { ok: true, article: t.article, quantite: Q, plancher: t.plancher, lignes, recette: t.recette, aFixer: t.aFixer }
+}
+
+/** A line's points for the quantity kept (pro rata of its whole need; a raised line earns more at the same rate). */
+export const pointsDeLigne = (l: Pick<LigneProposee, 'points' | 'total'>, q: number) => (l.total > 0 ? Math.round((l.points * q) / l.total) : 0)
+
 /* ───────────────────────── Rows read from the sheet ───────────────────────── */
 
 // « Transformation » (the prototype's first wording) reads as a fabrication.
@@ -616,6 +675,8 @@ export function lireMissions(o: Onglets): MissionsLues {
       pointsFabrication: nombre(r.pointsFabrication) ?? 0,
       statut: texte(r.statut) || 'ouverte',
       note: texte(r.note),
+      titre: texte(r.titre),
+      missive: texte(r.missive),
     }))
     .filter((d) => d.numero)
   const missions: Mission[] = (o.missions ?? [])
@@ -663,47 +724,34 @@ export function lireMissions(o: Onglets): MissionsLues {
   return { actif, ponderation: ponderationLue(o.ponderation ?? [], o.reglagesMissions ?? []), demandes, missions, points, permanentes }
 }
 
-/* ───────────────────────── Members, demands ───────────────────────── */
+/* ───────────────────────── Demands ───────────────────────── */
 
-export const enCoursDe = (missions: Mission[], membre: string | null) =>
-  membre ? missions.filter((m) => m.statut === 'en cours' && cle(m.prisPar) === cle(membre)) : []
+/** A sheet's progress: its missions filled, and how far (by units received over units asked, every line weighed alike). */
+export function avancement(d: Pick<Demande, 'numero'>, missions: Mission[], intendance: LigneIntendance[]) {
+  const ms = missions.filter((m) => m.demande === d.numero)
+  const etats = ms.map((m) => etatMission(m, intendance))
+  const comblees = etats.filter((e) => e.comblee).length
+  return {
+    total: ms.length,
+    comblees,
+    points: ms.reduce((t, m) => t + m.points, 0),
+    avance: etats.length ? etats.reduce((t, e) => t + e.avance, 0) / etats.length : 0,
+  }
+}
 
-/** Each member's points (credited), most first. */
-export function soldes(points: LignePoints[], missions: Mission[] = []) {
-  const par = new Map<string, { membre: string; total: number; accomplies: number; enCours: number; promis: number }>()
+/** Each member's points (credited), most first, and how many hand-overs they made (received rows, the prototype's missions). */
+export function soldes(points: LignePoints[], missions: Mission[] = [], intendance: LigneIntendance[] = []) {
+  const par = new Map<string, { membre: string; total: number; remises: number }>()
   const de = (membre: string) => {
     const k = cle(membre)
-    const s = par.get(k) ?? { membre, total: 0, accomplies: 0, enCours: 0, promis: 0 }
+    const s = par.get(k) ?? { membre, total: 0, remises: 0 }
     par.set(k, s)
     return s
   }
-  for (const p of points) {
-    const s = de(p.membre)
-    s.total += p.points
-    if (p.mission) s.accomplies++
-  }
-  for (const m of missions) {
-    if ((m.statut !== 'en cours' && m.statut !== 'remise') || !m.prisPar) continue
-    const s = de(m.prisPar)
-    s.enCours++
-    s.promis += m.points
-  }
+  for (const p of points) de(p.membre).total += p.points
+  for (const l of intendance) if (l.membre && l.statut === 'reçue' && (l.genre === 'remise' || l.genre === 'don')) de(l.membre).remises++
+  for (const m of missions) if (m.statut === 'accomplie' && m.prisPar) de(m.prisPar).remises++
   return [...par.values()].sort((a, b) => b.total - a.total || a.membre.localeCompare(b.membre, 'fr'))
-}
-
-/** A demand's progress: its missions by state, its points credited and still to earn. */
-export function avancement(d: Demande, missions: Mission[]) {
-  const ms = missions.filter((m) => m.demande === d.numero)
-  const accomplies = ms.filter((m) => m.statut === 'accomplie')
-  return {
-    total: ms.length,
-    ouvertes: ms.filter((m) => m.statut === 'ouverte').length,
-    enCours: ms.filter((m) => m.statut === 'en cours').length,
-    accomplies: accomplies.length,
-    points: ms.reduce((t, m) => t + m.points, 0),
-    credites: accomplies.reduce((t, m) => t + m.points, 0),
-    avance: ms.length ? accomplies.length / ms.length : 0,
-  }
 }
 
 /**
@@ -734,20 +782,6 @@ export function pointsParPrise(objet: string, quantite: number, recettes: Recett
   }
   if (!parUnite.length) return 0
   return Math.round((parUnite.reduce((t, x) => t + x, 0) / parUnite.length) * quantite)
-}
-
-/**
- * Takes of each standing mission in the week [debut, fin): the confirmed ones confirmed in it, and those
- * still running (en cours, remise), so the ceiling cannot be passed.
- */
-export function prisesDeLaSemaine(missions: Mission[], debut: number, fin: number): Record<string, number> {
-  const res: Record<string, number> = {}
-  for (const m of missions) {
-    if (!/^p-/i.test(m.demande)) continue
-    const t = Date.parse(m.accomplieLe)
-    if (m.statut === 'en cours' || m.statut === 'remise' || (m.statut === 'accomplie' && t >= debut && t < fin)) res[m.demande] = (res[m.demande] ?? 0) + 1
-  }
-  return res
 }
 
 /** An item's quantity per mission: its lot set by hand, else its rarity's (or the settings' for a final product). */

@@ -16,7 +16,7 @@ export type Article = {
   ombre?: boolean
 }
 
-export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'missions' | 'tresor' | 'caravane' | 'ombre'
+export type PartieId = 'sommaire' | 'marchandises' | 'atelier' | 'missives' | 'missions' | 'intendance' | 'tresor' | 'caravane' | 'ombre'
 
 /**
  * `ruban`: this part has no ribbon of its own; its pages hang from that part's ribbon, their side tabs set apart after the
@@ -67,11 +67,16 @@ export type PageOmbre = Base & { type: 'ombre' }
 /** The signed member's sales (sealed orders whose seller is them), in the Marchandises part, after the chapters. */
 export type PageVentes = Base & { type: 'ventes'; intro: string }
 
-/** The missions (prototype, lib/missions.ts): the call for missions (open ones, the member's own), their points. */
+/** The missions (lib/missions.ts): the call for missions — the missives and the sheets with what they still need. */
 export type PageMissions = Base & { type: 'missions'; intro: string; citation: string }
-export type PagePoints = Base & { type: 'points'; intro: string }
-/** The Patriarch's table: the demands for merchandise, every member's points, the pondération (open to all for now). */
-export type PagePatriarche = Base & { type: 'patriarche'; vue: 'demandes' | 'points' | 'ponderation'; intro: string }
+/** The member's own notebook: what they declared or handed over, their private progress (never points). */
+export type PageCarnet = Base & { type: 'carnet'; intro: string }
+/** One sheet of missions (« demande »), in the missive interface: opened from the call, no side tab. */
+export type PageDemande = Base & { type: 'demande'; numero: string }
+/** Every member's points (in the Trésor) and the pondération (in the Intendance). */
+export type PagePatriarche = Base & { type: 'patriarche'; vue: 'points' | 'ponderation'; intro: string }
+/** The Livre de l'Intendance (lib/intendance.ts): what enters, what leaves, writing missions. */
+export type PageIntendance = Base & { type: 'intendance'; vue: 'reception' | 'sorties' | 'ecrire'; intro: string }
 
 /** The Livre du Trésor (the pay, lib/paie.ts): the week, the invoices, the events, the closings, the settings. */
 export type PageTresor = Base & { type: 'tresor'; vue: 'semaine' | 'factures' | 'evenements' | 'clotures' | 'reglages'; intro: string }
@@ -79,7 +84,7 @@ export type PageTresor = Base & { type: 'tresor'; vue: 'semaine' | 'factures' | 
 export type PageDivinite = Base & { type: 'divinite'; divinite: string }
 export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre | PageMissions | PagePoints | PagePatriarche | PageTresor
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre | PageMissions | PageCarnet | PageDemande | PageIntendance | PagePatriarche | PageTresor
 
 /**
  * `caches`: the articles of hidden chapters (content/chapitres.json « masque »), with their chapter id.

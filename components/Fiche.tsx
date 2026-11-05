@@ -273,7 +273,7 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
     case 'missive':
       return { surtitre: 'Livre des Missives', titre: 'Écrire une missive', corps: <Signe env={env} action="missive"><FormMissive env={env} /></Signe> }
     case 'releve':
-      return { surtitre: 'Le coffre des missives', titre: 'Relever le coffre', corps: <Signe env={env} action="releve"><FormReleve env={env} numero={f.numero} /></Signe> }
+      return { surtitre: 'Le coffre', titre: 'Relever le coffre', corps: <Signe env={env} action="releve"><FormReleve env={env} numero={f.numero} /></Signe> }
     case 'depot':
       return { surtitre: missive?.missive.titre ?? 'Missive', titre: 'Déposer au coffre', corps: <Signe env={env} action="depot"><FormDepot env={env} numero={f.numero} objet={f.objet} qte={f.quantite} /></Signe> }
     case 'fabrication':
@@ -314,12 +314,15 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       const c = contenuTresor(f, { reg: env.reg, icones: env.icones, fermer: env.fermer })
       return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
     }
-    case 'demande':
+    case 'ecrire':
+    case 'signaler':
+    case 'entree':
+    case 'faconnage':
+    case 'perte':
     case 'reglages-missions':
     case 'classes-missions':
     case 'refus-mission':
     case 'permanente':
-    case 'don':
     case 'matiere-mission': {
       const c = contenuMission(f, { reg: env.reg, articles: env.articles, chapitres: env.chapitres, icones: env.icones, fermer: env.fermer })
       return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }

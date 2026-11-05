@@ -10,6 +10,9 @@ import { quantiteLue } from '@/lib/commande'
 import { anglaisDe, arbre, cle, coutMatieres, enStock, estClose, estMatiere, parProduit, recetteUsage, variantesDe, type Recette, type Ressource, type Vente, partager, rejouer, texteCycle, type EtatMissive, type LigneBesoin, type Mouvement, type Niveau } from '@/lib/missives'
 import type { EtatRegistre } from './Registre'
 import type { EtatMissions, FicheMission } from './Missions'
+import { etatMission } from '@/lib/intendance'
+import { ChampRecherche } from './MissionsCommun'
+import { VERBES as VERBES_MISSION } from '@/lib/missions'
 import type { EtatTresor, FicheTresor } from './Tresor'
 import { Action, En, Icone, Plume, Septims } from './Ornements'
 
@@ -121,7 +124,7 @@ function Ferme({ r }: { r: EtatRegistre }) {
     return (
       <div className="registre-ferme">
         <p>{r.erreur}</p>
-        <Action icone="coursier" onClick={r.relire}>
+        <Action icone="coursier" onClick={() => r.relire()}>
           renvoyer le coursier
         </Action>
       </div>
@@ -267,10 +270,25 @@ export function GaucheMissive({ page, reg, icones }: { page: PageMissive; reg?: 
           <div className="gestes">
             {permis('releve') && <Geste icone={icones['magnifying-glass']} onClick={() => reg.ouvrir({ genre: 'releve', numero: m.numero })}>Relever le coffre</Geste>}
             {permis('depot') && <Geste icone={icones['open-chest']} onClick={() => reg.ouvrir({ genre: 'depot', numero: m.numero })}>Déposer au coffre</Geste>}
-            {permis('fabrication') && <Geste icone={icones['anvil-impact']} onClick={() => reg.ouvrir({ genre: 'fabrication', numero: m.numero })}>Façonner</Geste>}
             {permis('cloture') && <Geste icone={icones['hand-truck']} onClick={() => reg.ouvrir({ genre: 'livrer', numero: m.numero })}>Livrer la missive</Geste>}
             {permis('cloture') && <Geste icone={icones['wax-seal']} onClick={() => reg.ouvrir({ genre: 'abandonner', numero: m.numero })}>Abandonner la missive</Geste>}
+            {/* Lot 2: the missive's missions are written like any sheet, linked to it (needs v3r). */}
+            {permis('demande') && reg.m?.donnees && (
+              <Geste icone={icones['scroll-quill']} disabled={!reg.m.donnees.intendanceActive} onClick={() => reg.ouvrir({ genre: 'ecrire', missive: m.numero, objet: m.lignes[0]?.produit, quantite: m.lignes[0]?.quantite })}>
+                Écrire ses missions
+              </Geste>
+            )}
           </div>
+          {/* « Façonner » moved to the Livre de l'Intendance (Sorties): materials leave the chest, the goods come back. */}
+          {reg.r.marchand?.droits?.intendance === true && (
+            <p className="note-encre">
+              Pour façonner avec les matières du coffre :{' '}
+              <button type="button" className="lien-encre" onClick={() => reg.allerA('sorties')}>
+                Livre de l’Intendance, Sorties
+              </button>
+              .
+            </p>
+          )}
         </>
       )}
     </>
@@ -348,7 +366,6 @@ function LigneBesoinVue({ b, e, reg, ouverte, icones }: { b: LigneBesoin; e: Eta
   const fini = e.lignes.find((l) => cle(l.produit) === cle(b.nom) && b.niveau === 'fini')
   const avance = fini ? fini.avance : b.besoin > 0 ? b.auCoffre / b.besoin : 1
   const deposer = ouverte && b.manque > 0 && droits?.depot !== false
-  const faconner = ouverte && b.rendement !== null && b.fournees > 0 && droits?.fabrication !== false
   const ouvrirDepot = () => reg.ouvrir({ genre: 'depot', numero: e.missive.numero, objet: b.nom, quantite: b.manque })
   return (
     <div
@@ -371,21 +388,6 @@ function LigneBesoinVue({ b, e, reg, ouverte, icones }: { b: LigneBesoin; e: Eta
         <span className="besoins-mot">
           {b.nom}
           <En nom={anglaisDe(reg.r.donnees, b.nom)} />
-          {faconner && (
-            <button
-              type="button"
-              className="besoins-faconner"
-              title={`Façonner ${b.nom}`}
-              aria-label={`Façonner ${b.nom}`}
-              onClick={(ev) => {
-                ev.stopPropagation()
-                reg.ouvrir({ genre: 'fabrication', numero: e.missive.numero, produit: b.nom })
-              }}
-              onKeyDown={(ev) => ev.stopPropagation()}
-            >
-              <Icone corps={icones['anvil-impact']} />
-            </button>
-          )}
         </span>
         <ChoixRecette nom={b.nom} e={e} reg={reg} ouverte={ouverte} />
         {b.niveau !== 'fini' && <AFaconner b={b} />}
@@ -535,6 +537,7 @@ export function DroiteMissive({ page, reg, interactif, icones }: { page: PageMis
           )}
         </>
       )}
+      <MissionsDeLaMissive numero={e.missive.numero} reg={reg} interactif={interactif} />
       <h3 className="titre-section" title={EXPLICATION_PARTS} data-pattes>
         Les pattes de la missive
       </h3>
@@ -545,9 +548,39 @@ export function DroiteMissive({ page, reg, interactif, icones }: { page: PageMis
   )
 }
 
+/** The missions this missive spawned (Missions v2, lot 2): each sheet linked to it, its missions and what they lack. */
+function MissionsDeLaMissive({ numero, reg, interactif }: { numero: string; reg: CtxRegistre; interactif: boolean }) {
+  const d = reg.m?.donnees
+  const feuillets = (d?.demandes ?? []).filter((x) => x.missive === numero)
+  if (!d || !feuillets.length) return null
+  return (
+    <>
+      <h3 className="titre-section">Les missions de la missive</h3>
+      <ul className="inventaire missions-missive">
+        {feuillets.flatMap((x) =>
+          d.missions
+            .filter((m) => m.demande === x.numero)
+            .map((m) => {
+              const e = etatMission(m, d.intendance)
+              return (
+                <li key={m.numero}>
+                  <button type="button" className="lien-encre" tabIndex={interactif ? 0 : -1} onClick={() => reg.allerA(`demande-${x.numero}`)}>
+                    {VERBES_MISSION[m.type]} {m.objet}
+                  </button>
+                  <span className="points" />
+                  {e.comblee ? <Coche titre="comblée" /> : <strong>{quantite(e.recu)} / {quantite(e.requis)}</strong>}
+                </li>
+              )
+            }),
+        )}
+      </ul>
+    </>
+  )
+}
+
 /* ───────────────────────── The chest ───────────────────────── */
 
-export function GaucheCoffre({ page, reg, icones, compact }: { page: PageCoffre; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
+export function GaucheCoffre({ page, reg, icones, compact, recherche }: { page: PageCoffre; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
   const r = reg?.r
   return (
     <>
@@ -563,17 +596,19 @@ export function GaucheCoffre({ page, reg, icones, compact }: { page: PageCoffre;
               </Geste>
             </div>
           )}
+          <ChampRecherche recherche={recherche} placeholder="Chercher dans le coffre…" />
         </>
       )}
     </>
   )
 }
 
-export function DroiteCoffre({ reg }: { reg?: CtxRegistre }) {
+export function DroiteCoffre({ reg, requetes = [] }: { reg?: CtxRegistre; requetes?: string[] }) {
   const d = reg?.r.donnees
   if (!d?.relie) return null
   const { stock, releves } = rejouer(d.mouvements)
-  const contenu = [...stock.values()].filter((s) => s.qte !== 0).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+  const cherche = (nom: string) => requetes.every((q) => !q.trim() || nomsCorrespondent([nom, anglaisDe(d, nom)], q))
+  const contenu = [...stock.values()].filter((s) => s.qte !== 0 && cherche(s.nom)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
   const ecarts = releves.filter((x) => x.ecart !== 0)
   return (
     <div className="coffre-droite">

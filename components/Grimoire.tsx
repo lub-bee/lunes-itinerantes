@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { flushSync } from 'react-dom'
-import type { Article, Livre, Page, PageChapitre, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
+import type { Article, Livre, Page, PageChapitre, PageDemande, PageExLibris, PageMetier, PageMissive, PartieId } from '@/lib/types'
 import { ATTENTE_RECHERCHE_MS, divinite as divin, EMBLEME, oeufDeRecherche } from '@/lib/oeufs'
 import { idMetier } from '@/lib/metiers'
 import { estClose } from '@/lib/missives'
@@ -20,7 +20,7 @@ import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Co
 import { useRegistre } from './Registre'
 import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from './Missives'
 import { FicheVolante } from './Fiche'
-import { useMissions } from './Missions'
+import { idDemande, titreDemande, useMissions } from './Missions'
 import { useTresor } from './Tresor'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 import { Annule, blocsTexte, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
@@ -92,8 +92,8 @@ const SERRES = 12
 /** A recipe matches a query by its French or English name, or its craft. */
 const recetteCorrespond = (r: Recette, requete: string) => nomsCorrespondent([r.produit, r.en, metierDe(r.artisan).nom], requete)
 
-/** The pages that open with the Livre du Trésor: its own, and the points' (Mes points, Points de la caravane). */
-const pageDuTresor = (p: Page) => p.partie === 'tresor' || p.type === 'points' || (p.type === 'patriarche' && p.vue === 'points')
+/** The pages that open with the Livre du Trésor: its own, the caravan's points among them. */
+const pageDuTresor = (p: Page) => p.partie === 'tresor' || (p.type === 'patriarche' && p.vue === 'points')
 
 export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const { icones } = livreServeur
@@ -102,9 +102,23 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   // The Livre du Trésor and the points' pages open only to who may (lib/droits.ts « tresor »; the server
   // refuses their data to anyone else).
   const tresorOuvert = registre.marchand?.droits?.tresor === true
-  const parties = useMemo(() => (tresorOuvert ? livreServeur.parties : livreServeur.parties.filter((p) => p.id !== 'tresor')), [livreServeur.parties, tresorOuvert])
-  // The missions (prototype): their data and the state their pages share.
-  const missions = useMissions(registre.marchand?.identite ?? null)
+  // The Livre de l'Intendance, the same way (« intendance »; its writes are each checked by the server).
+  const intendanceOuverte = registre.marchand?.droits?.intendance === true
+  const parties = useMemo(
+    () => livreServeur.parties.filter((p) => (p.id !== 'tresor' || tresorOuvert) && (p.id !== 'intendance' || intendanceOuverte)),
+    [livreServeur.parties, tresorOuvert, intendanceOuverte],
+  )
+  // The missions: their data and the state their pages share. After a write, the chest's ledger and (a name just
+  // reserved) the register's names are read again.
+  const { relire: relireRegistre, relireNoms } = registre
+  const apresMission = useCallback(
+    (version: number, reserves: string[]) => {
+      relireRegistre(version)
+      if (reserves.length) relireNoms(version)
+    },
+    [relireRegistre, relireNoms],
+  )
+  const missions = useMissions(registre.marchand?.identite ?? null, apresMission)
   // The pay (prototype): the Livre du Trésor's data and the week shown (read only when it opens).
   const tresor = useTresor(registre.marchand?.identite ?? null, tresorOuvert)
 
@@ -130,6 +144,16 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       court: e.missive.titre.length > COURT_MAX ? `${e.missive.titre.slice(0, COURT_MAX - 1).trimEnd()}…` : e.missive.titre,
       icone: estClose(e.missive) ? 'wax-seal' : 'tied-scroll',
     }))
+    // One page per sheet of missions (opened from the call, no side tab), after the missions' own pages.
+    const feuillets: PageDemande[] = (missions.donnees?.demandes ?? []).map((x) => ({
+      type: 'demande',
+      id: idDemande(x.numero),
+      partie: 'missions',
+      numero: x.numero,
+      titre: titreDemande(x),
+      court: titreDemande(x).slice(0, COURT_MAX),
+      icone: 'treasure-map',
+    }))
     const d = relie && divinite ? divin(divinite) : null
     const exLibris: Page[] = relie ? [{ type: 'exlibris', id: 'ex-libris', partie: 'sommaire', titre: 'Ex-libris', court: 'Ex-libris', icone: 'quill' } as PageExLibris] : []
     if (d) {
@@ -148,7 +172,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     const complet = Boolean(registre.donnees?.catalogueComplet)
     const enArticle = (a: (typeof lignes)[number]): Article => ({ id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note, lot: a.lot ?? null })
     const retires = new Set((registre.donnees?.retires ?? []).map(cle))
-    if (!vues.length && !exLibris.length && !metiers.length && !lignes.length && !retires.size) return livreServeur
+    if (!vues.length && !feuillets.length && !exLibris.length && !metiers.length && !lignes.length && !retires.size) return livreServeur
     const chapitres = new Set(livreServeur.pages.flatMap((x) => (x.type === 'chapitre' ? [x.id] : [])))
     // A row in a hidden chapter stays out of the book; an unknown chapter lands in « Divers ».
     const caches = new Set((CHAPITRES as { id: string; masque?: boolean }[]).filter((c) => c.masque).map((c) => c.id))
@@ -176,15 +200,19 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           })
         : livreServeur.pages
     const apresRecettes = p.findIndex((x) => x.id === 'recettes') + 1
-    const apresMissives = p.findIndex((x) => x.type === 'missives') + 1
+    const avantMissives = p.findIndex((x) => x.type === 'missives')
+    const apresMissives = avantMissives + 1
     return {
       ...livreServeur,
-      pages: [...exLibris, ...p.slice(0, apresRecettes), ...metiers, ...p.slice(apresRecettes, apresMissives), ...vues, ...p.slice(apresMissives)],
+      pages: [...exLibris, ...p.slice(0, apresRecettes), ...metiers, ...p.slice(apresRecettes, avantMissives), ...feuillets, ...p.slice(avantMissives, apresMissives), ...vues, ...p.slice(apresMissives)],
     }
-  }, [livreServeur, registre.calcul, registre.donnees, relie, divinite])
+  }, [livreServeur, registre.calcul, registre.donnees, relie, divinite, missions.donnees?.demandes])
   const livreJour = useMemo(
-    (): Livre => (tresorOuvert ? livreBrut : { ...livreBrut, parties, pages: livreBrut.pages.filter((p) => !pageDuTresor(p)) }),
-    [livreBrut, tresorOuvert, parties],
+    (): Livre =>
+      tresorOuvert && intendanceOuverte
+        ? livreBrut
+        : { ...livreBrut, parties, pages: livreBrut.pages.filter((p) => (tresorOuvert || !pageDuTresor(p)) && (intendanceOuverte || p.partie !== 'intendance')) },
+    [livreBrut, tresorOuvert, intendanceOuverte, parties],
   )
   // The shadow book: its goods (the published copy's and the sheet's « Ombre » rows), its recipes, its teachings.
   const livre = useMemo((): Livre => {
@@ -600,6 +628,13 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
           .map((x) => ({ cle: x.nom, fr: x.nom, en: x.en, fiche: { genre: 'ressource' as const, nom: x.nom } }))
         return autres.length ? [{ i, page: p, total: autres.length, articles: [], autres }] : []
       }
+      if (p.type === 'demande') {
+        // A sheet of missions, by its title, its merchandise or the items of its missions.
+        const x = missions.donnees?.demandes.find((y) => y.numero === p.numero)
+        const objets = (missions.donnees?.missions ?? []).filter((m) => m.demande === p.numero).map((m) => m.objet)
+        if (!x || !nomsCorrespondent([p.titre, x.article, ...objets], requete)) return []
+        return [{ i, page: p, total: 1, articles: [], autres: [{ cle: x.numero, fr: p.titre, en: x.membre }] }]
+      }
       if (p.type === 'missive') {
         // A missive, by its title, its client or the goods it asks for.
         const m = registre.donnees?.missives.find((x) => x.numero === p.numero)
@@ -608,7 +643,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       }
       return []
     })
-  }, [pages, requete, registre.donnees?.recettes, registre.donnees?.ressources, registre.donnees?.missives])
+  }, [pages, requete, registre.donnees?.recettes, registre.donnees?.ressources, registre.donnees?.missives, missions.donnees?.demandes, missions.donnees?.missions])
   /** Where a result is: « Marchandises · Alcools » (the book's name as on its ribbon, then the page). */
   const chemin = (p: Page) => `${parties.find((x) => x.id === p.partie)?.court ?? ''} · ${p.titre}`
 
@@ -875,7 +910,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       ? [{ p: pages[destination], i: destination, groupe: '' }]
       : pages
           .map((p, i) => ({ p, i }))
-          .filter(({ p }) => rubanDe(p.partie) === partieOnglets && !(p.type === 'missive' && p.close))
+          .filter(({ p }) => rubanDe(p.partie) === partieOnglets && !(p.type === 'missive' && p.close) && p.type !== 'demande')
           .map((o, k, tous) => ({
             ...o,
             groupe: `${tous.some((x) => x.p.partie !== partieOnglets) ? `onglet-partie-${o.p.partie}` : ''} ${k > 0 && tous[k - 1].p.partie !== o.p.partie ? 'onglet-groupe' : ''}`,

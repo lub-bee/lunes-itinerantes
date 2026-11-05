@@ -1,73 +1,69 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
-import type { Article, PageMissions, PagePatriarche, PagePoints } from '@/lib/types'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import type { Article, PageCarnet, PageDemande, PageMissions, PagePatriarche } from '@/lib/types'
 import { dateTamrielique, prix } from '@/lib/format'
-import { cle, type Recette } from '@/lib/missives'
+import { cle, estClose, rejouer, enStock, type EtatMissive } from '@/lib/missives'
+import { nomsCorrespondent } from '@/lib/recherche'
+import { estEntree, etatMission, porteurs, PETITES_LUNES, TEXTES_INTENDANCE, type LigneIntendance } from '@/lib/intendance'
 import {
   avancement,
   CODE_TRANSFORMATION,
-  enCoursDe,
-  ICONES_TYPES,
-  intitule,
   ORIGINES,
-  estDon,
-  minimumDon,
-  pointsDon,
+  pointsDeLigne,
   pointsParPrise,
-  quantiteParMission,
   peser,
-  raisonPoints,
-  recetteDe,
+  proposer,
+  quantiteParMission,
   REGLAGES,
   soldes,
   TEXTES,
-  traduire,
-  TYPES_MISSION,
   VERBES,
-  type LigneDemande,
   type ActionMission,
   type Assignation,
   type Classe,
+  type Demande,
   type DonneesMissions,
   type Mission,
   type Ponderation,
-  type TypeMission,
 } from '@/lib/missions'
 import { Action, Icone } from './Ornements'
-import { Geste, Jauge, quand, quantite, Signature, type CtxRegistre } from './Missives'
+import { Coche, Geste, idMissive, Jauge, quand, quantite, Signature, echeance, type CtxRegistre, type RechercheLocale } from './Missives'
 import { Sceller } from './Fiche'
+import { ChampNombre, ChampRecherche, ciblesDe, Ferme, GlypheType, Inactif, Message, Meta, moiDe, nf, nomsObjets, ouvert, permis, poids, Pts, pts, useScelle, voitPoints, type Reponse } from './MissionsCommun'
+import { EnAttente, FicheEntree, FicheFaconnage, FichePerte, FicheSignaler } from './Intendance'
 
 /*
- * The book of Missions (prototype): the call for missions (open ones to take, the member's own to give
- * back or complete), the member's points, and the Patriarch's table — demands for merchandise, every
- * member's points, the pondération. The pages only show; every form is a note laid over the left page
- * (components/Fiche.tsx): the demand with its live, line-by-line preview, the settings, the classes, one
- * item's class / weight / lot. One hook holds the missions' data, the filter and the demand's draft.
+ * The book of Missions (Missions v2, lot 2), in the missives' interface: the call lists the missives in progress
+ * (each with its sponsor's seal and the missions it spawned), the caravan's own sheets of missions and the standing
+ * missions, each mission with what it still lacks; nobody takes a mission first. A member signals what they handed
+ * over or left in the « coffre des petites lunes » (it waits for a yes / no), someone allowed records what they
+ * received (components/Intendance.tsx). « Mon carnet »: the member's own hand-overs and private progress. One page per
+ * sheet (opened from the call, no side tab). Points are internal: only who opens the Trésor sees them (its « Points »
+ * page, and beside each mission). Every form is a note laid over the left page (components/Fiche.tsx).
  */
 
 /* ───────────────────────── The hook ───────────────────────── */
 
-export type Reponse = { ok: boolean; message: string; numero?: string }
 type Prevision = { id: number; prevoir: (d: DonneesMissions) => DonneesMissions }
-/** The demand being written on its note; `lots`: the units per mission typed for some lines (key `cleLigne`). */
-export type Brouillon = { article: string; quantite: string; note: string; lots: Record<string, string> }
-
-export const BROUILLON_VIDE: Brouillon = { article: '', quantite: '', note: '', lots: {} }
 
 const ECHEC = "Le coursier n'est pas revenu. Rien n'a été consigné : réessaie."
 const FERME = "Le registre des missions ne répond pas : le coursier n'a pu l'ouvrir. Réessaie dans un moment."
 
-export function useMissions(signe: string | null) {
+/**
+ * The missions' data. `apres`: called after a write the registre accepted, with its version and the names just
+ * reserved in Membres (the chest's page and the names' suggestions read again).
+ */
+export function useMissions(signe: string | null, apres?: (version: number, reserves: string[]) => void) {
   const [base, setBase] = useState<DonneesMissions | null>(null)
   const [previsions, setPrevisions] = useState<Prevision[]>([])
   const [erreur, setErreur] = useState<string | null>(null)
   /** The last answer of the registre to a gesture (shown on the missions' pages). */
   const [message, setMessage] = useState<{ ok: boolean; texte: string; n: number } | null>(null)
-  const [filtre, setFiltre] = useState<TypeMission | 'toutes'>('toutes')
-  const [brouillon, setBrouillon] = useState<Brouillon>(BROUILLON_VIDE)
   const compteur = useRef(0)
   const version = useRef(0)
+  const apresRef = useRef(apres)
+  apresRef.current = apres
 
   const recevoir = useCallback((d: DonneesMissions) => {
     version.current = Math.max(version.current, d.version ?? 0)
@@ -85,10 +81,27 @@ export function useMissions(signe: string | null) {
       .catch(() => setErreur(FERME))
   }, [recevoir])
 
-  // Read again when the reader signs (their own missions and points).
+  // Read again when the reader signs (their own hand-overs).
+  const luLe = useRef(0)
   useEffect(() => {
+    luLe.current = Date.now()
     lire()
   }, [lire, signe])
+  // And when the book comes back to the front after a while (the Intendance answers what others declared meanwhile):
+  // one listener, at most one read per half-minute; nothing runs while the page stays in view.
+  useEffect(() => {
+    const revenir = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - luLe.current < 30000) return
+      luLe.current = Date.now()
+      lire()
+    }
+    document.addEventListener('visibilitychange', revenir)
+    window.addEventListener('focus', revenir)
+    return () => {
+      document.removeEventListener('visibilitychange', revenir)
+      window.removeEventListener('focus', revenir)
+    }
+  }, [lire])
 
   useEffect(() => {
     if (!message) return
@@ -105,12 +118,13 @@ export function useMissions(signe: string | null) {
       let frais = false
       try {
         const rep = await fetch('/api/missions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, vu: version.current, ...corps }) })
-        const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string; donnees?: DonneesMissions | null } | null
+        const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string; reserves?: string[]; donnees?: DonneesMissions | null } | null
         if (r?.donnees) {
           recevoir(r.donnees)
           frais = true
         }
-        res = { ok: Boolean(rep.ok && r?.ok), message: r?.message ?? ECHEC, numero: r?.numero }
+        res = { ok: Boolean(rep.ok && r?.ok), message: r?.message ?? ECHEC, numero: r?.numero, reserves: r?.reserves ?? [] }
+        if (res.ok) apresRef.current?.(r?.donnees?.version ?? version.current, res.reserves ?? [])
       } catch {
         res = { ok: false, message: ECHEC }
       }
@@ -134,95 +148,100 @@ export function useMissions(signe: string | null) {
     }, base)
   }, [base, previsions])
 
-  return { donnees, erreur, message, relire: lire, agir, filtre, setFiltre, brouillon, setBrouillon }
+  return { donnees, erreur, message, relire: lire, agir }
 }
 
 export type EtatMissions = ReturnType<typeof useMissions>
 
-/* ───────────────────────── Small pieces ───────────────────────── */
+export const idDemande = (numero: string) => `demande-${numero}`
 
-const moiDe = (reg: CtxRegistre) => reg.r.marchand?.identite ?? reg.m?.donnees?.moi ?? null
+/** The settings shown: nobody takes a mission any more (lot 2), so the hold limit and the crafts' split are left out. */
+const REGLAGES_VUS = REGLAGES.filter((r) => r.cle !== 'maxEnCours' && r.cle !== 'objetsParFabrication')
 
-/** Not linked, not read yet, unreadable: said in character (nothing else is shown then). */
-function Ferme({ reg }: { reg: CtxRegistre }) {
-  const m = reg.m
-  if (!m) return null
-  if (m.erreur && !m.donnees)
-    return (
-      <div className="registre-ferme">
-        <p>{m.erreur}</p>
-        <Action icone="coursier" onClick={m.relire}>
-          renvoyer le coursier
-        </Action>
-      </div>
-    )
-  if (!m.donnees) return <p className="registre-ferme attente-encre">Le scribe déroule le registre des missions…</p>
-  if (!m.donnees.relie) return <p className="registre-ferme">Le registre des missions n&apos;est pas encore relié au grimoire. Qu&apos;un patriarche y pourvoie.</p>
-  return null
-}
+/** A sheet's title: the one written, else « 1 000 Flèches en fer ». */
+export const titreDemande = (d: Pick<Demande, 'titre' | 'quantite' | 'article'>) => d.titre || `${nf(d.quantite)} ${d.article}`
 
-/** Before the sheet's script knows the missions (v3m): the pages are read, nothing is written. */
-function Inactif({ reg }: { reg: CtxRegistre }) {
-  const d = reg.m?.donnees
-  if (!d?.relie || d.actif) return null
-  return <p className="missions-inactif">{TEXTES.inactif}</p>
-}
+/* ───────────────────────── The call: missives, sheets, standing missions ───────────────────────── */
 
-/** The registre's answer to the last gesture. */
-function Message({ reg }: { reg: CtxRegistre }) {
-  const m = reg.m?.message
-  if (!m) return null
+/** The missions of a sheet that a member can work on (the prototype's donations and standing takes left out). */
+const missionsDe = (d: DonneesMissions, numero: string) => d.missions.filter((m) => m.demande === numero)
+const enJeu = (m: Mission) => !/^(don|p-)/i.test(m.demande)
+
+/** A missive's wax seal, with its sponsor's initial (plain colour: no filter). */
+export function SceauMissive({ commanditaire }: { commanditaire: string }) {
+  const lettre = (commanditaire.trim().match(/\p{L}/u)?.[0] ?? '✶').toUpperCase()
   return (
-    <p key={m.n} className={`message-encre ${m.ok ? 'ok' : 'erreur'}`} role="status">
-      {m.texte}
-    </p>
-  )
-}
-
-function GlypheType({ type, icones }: { type: TypeMission; icones: Record<string, string> }) {
-  return (
-    <span className={`glyphe-mission glyphe-${type === 'récolte' ? 'recolte' : type}`} title={type}>
-      <Icone corps={icones[ICONES_TYPES[type]]} />
+    <span className="sceau-missive" aria-hidden title={commanditaire ? `Sceau de ${commanditaire}` : undefined}>
+      {lettre}
     </span>
   )
 }
 
-const pts = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} pt${Math.abs(n) > 1 ? 's' : ''}`
-/** Points are internal (Missions v2): shown only to who opens the Trésor (lib/droits.ts « tresor »). */
-const voitPoints = (reg?: CtxRegistre) => reg?.r.marchand?.droits?.tresor === true
-/** A mission's points, or nothing for a member who may not see them. */
-function Pts({ reg, n }: { reg?: CtxRegistre; n: number }) {
-  return voitPoints(reg) ? <strong className="mission-points">{pts(n)}</strong> : null
-}
-
-/** « rareté à fixer » when a mission was sized without a known rarity (the weight itself stays internal). */
-function poids(m: Pick<Mission, 'type' | 'poids'> & { intermediaire?: boolean; note?: string }): ReactNode {
-  if (m.poids !== null) return null
-  // A harvest (or an intermediate's craft) without rarity; the final product's crafts have none.
-  return m.type === 'récolte' || m.intermediaire || /fixer/.test(m.note ?? '') ? <span className="a-fixer">{TEXTES.aFixer}</span> : null
-}
-
-/** A mission's small line: its parts, the empty ones left out, separated by a middle dot. */
-function Meta({ parts }: { parts: ReactNode[] }) {
-  const pleins = parts.filter((x) => x !== null && x !== undefined && x !== false && x !== '')
-  if (!pleins.length) return null
+/** One mission and what it still lacks; the member signals a hand-over, someone allowed records one. */
+function LigneMission({ m, reg, icones, tab }: { m: Mission; reg: CtxRegistre; icones: Record<string, string>; tab: number }) {
+  const d = reg.m!.donnees!
+  const e = etatMission(m, d.intendance)
+  const actif = d.intendanceActive
   return (
-    <span className="mission-meta">
-      {pleins.map((x, i) => (
-        <span key={i}>
-          {i > 0 && ' · '}
-          {x}
+    <li className={`mission ${e.comblee ? 'comblee' : ''} ${m.enAttente ? 'en-attente' : ''}`}>
+      <GlypheType type={m.type} icones={icones} />
+      <span className="mission-texte">
+        <span className="mission-intitule">
+          {VERBES[m.type]} {m.objet}
         </span>
-      ))}
-    </span>
+        <span className="mission-avance">
+          <Jauge avance={e.avance} titre={`${nf(e.recu)} reçus sur ${nf(e.requis)}`} />
+          <span>
+            {nf(e.recu)} / {nf(e.requis)}
+          </span>
+        </span>
+        <Meta parts={[e.attente > 0 && `${nf(e.attente)} en attente de confirmation`, poids(m)]} />
+      </span>
+      <span className="mission-cote">
+        {e.comblee ? <span className="mission-comblee"><Coche titre="comblée" /> comblée</span> : <span className="mission-manque">manque {nf(e.manque)}</span>}
+        <Pts reg={reg} n={m.points} />
+        <span className="mission-gestes">
+          {permis(reg, 'signaler') && (
+            <Action icone="signaler" tabIndex={tab} disabled={!actif} title={actif ? 'Tu as remis ou déposé de quoi remplir cette mission' : TEXTES_INTENDANCE.inactif} onClick={() => reg.ouvrir({ genre: 'signaler', mission: m.numero })}>
+              j’en ai remis
+            </Action>
+          )}
+          {permis(reg, 'entree') && (
+            <Action icone="entree" tabIndex={tab} disabled={!actif} title={actif ? 'Consigner ce qu’on t’a remis pour cette mission' : TEXTES_INTENDANCE.inactif} onClick={() => reg.ouvrir({ genre: 'entree', mission: m.numero })}>
+              consigner
+            </Action>
+          )}
+        </span>
+      </span>
+    </li>
   )
 }
 
-const ouvert = (reg?: CtxRegistre) => Boolean(reg?.m?.donnees?.relie)
+/** A sheet in the call: its title (to its page; under a missive of the same title, a plain link), who wrote it, its missions. */
+function BlocDemande({ dm, ms, reg, icones, tab, missive }: { dm: Demande; ms: Mission[]; reg: CtxRegistre; icones: Record<string, string>; tab: number; missive?: string }) {
+  const meme = missive !== undefined && cle(missive) === cle(titreDemande(dm))
+  return (
+    <li className="feuillet">
+      <button type="button" className={meme ? 'lien-encre feuillet-lien' : 'feuillet-titre'} tabIndex={tab} onClick={() => reg.allerA(idDemande(dm.numero))}>
+        {meme ? 'ses missions' : titreDemande(dm)}
+      </button>
+      <span className="feuillet-meta">
+        {dm.membre && <>écrit par {dm.membre}</>}
+        {dm.horodatage && <> le {dateTamrielique(dm.horodatage)}</>}
+      </span>
+      <ul className="missions-liste">
+        {ms.map((m) => (
+          <LigneMission key={m.numero} m={m} reg={reg} icones={icones} tab={tab} />
+        ))}
+      </ul>
+    </li>
+  )
+}
 
-/* ───────────────────────── The call for missions ───────────────────────── */
+/** Whether a sheet, a mission or a missive matches the page's search (title, sponsor, item). */
+const cherche = (requetes: string[], noms: string[]) => requetes.every((q) => !q.trim() || nomsCorrespondent(noms, q))
 
-export function GaucheMissions({ page, reg, icones, compact }: { page: PageMissions; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
+export function GaucheMissions({ page, reg, icones, compact, recherche }: { page: PageMissions; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean; recherche?: RechercheLocale }) {
   const d = reg?.m?.donnees
   return (
     <>
@@ -231,309 +250,169 @@ export function GaucheMissions({ page, reg, icones, compact }: { page: PageMissi
       {reg && d && ouvert(reg) && (
         <>
           <Signature reg={reg} />
-          <Inactif reg={reg} />
+          <Inactif reg={reg} intendance />
           <Message reg={reg} />
-          {moiDe(reg) && (
-            <div className="gestes">
-              {reg.r.marchand?.droits?.don !== false && (
-                <Geste icone={icones['hand']} onClick={() => reg.ouvrir({ genre: 'don' })}>
-                  Déclarer un don
-                </Geste>
-              )}
-              {reg.r.marchand?.droits?.permanente !== false && (
-                <Geste icone={icones['hunting-horn']} onClick={() => reg.ouvrir({ genre: 'permanente' })}>
-                  Ouvrir une mission permanente
-                </Geste>
-              )}
-            </div>
-          )}
+          <div className="gestes">
+            {permis(reg, 'signaler') && (
+              <Geste icone={icones['hand']} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'signaler' })}>
+                Signaler une remise
+              </Geste>
+            )}
+            {permis(reg, 'entree') && (
+              <Geste icone={icones['entry-door']} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'entree' })}>
+                Consigner une remise
+              </Geste>
+            )}
+            {permis(reg, 'demande') && (
+              <Geste icone={icones['scroll-quill']} disabled={!d.actif} onClick={() => reg.ouvrir({ genre: 'ecrire' })}>
+                Écrire une mission
+              </Geste>
+            )}
+          </div>
           <p className="note-encre">
-            Un don libre (une grosse récolte, hors mission) se déclare ici ; une autre patte le confirme, et il rapporte au taux des missions à partir du minimum de la ressource.
+            Tu as récolté ou façonné pour une mission ? Remets-le à une patte de l’Intendance, ou dépose-le au coffre des petites lunes et signale-le ici : on te
+            répondra « reçu ». Pas besoin d’ouvrir le grimoire pour aider : qui reçoit écrit ton nom.
           </p>
+          <ChampRecherche recherche={recherche} placeholder="Chercher une mission, une missive…" />
         </>
       )}
     </>
   )
 }
 
-function MesMissions({ reg, icones }: { reg: CtxRegistre; icones: Record<string, string> }) {
-  const d = reg.m!.donnees!
-  const moi = moiDe(reg)
-  if (!moi) return null
-  const enCours = enCoursDe(d.missions, moi)
-  // Handed over, waiting for another member's confirmation: no longer counted against the limit.
-  const remises = d.missions.filter((m) => m.statut === 'remise' && cle(m.prisPar) === cle(moi))
-  const max = d.ponderation.reglages.maxEnCours
-  const droits = reg.r.marchand?.droits
-  const geste = (m: Mission, action: 'rendre' | 'remettre') =>
-    reg.m!.agir(action, { numero: m.numero }, (x) => ({
-      ...x,
-      missions: x.missions.map((y) =>
-        y.numero !== m.numero ? y : action === 'rendre' ? { ...y, statut: 'ouverte', prisPar: '', prisLe: '', enAttente: true } : { ...y, statut: 'remise', remiseLe: new Date().toISOString(), enAttente: true },
-      ),
-    }))
-  return (
-    <section className="mes-missions">
-      <h3 className="titre-section">
-        Mes missions en cours <span className="compte-missions">{enCours.length} / {max}</span>
-      </h3>
-      {enCours.length || remises.length ? (
-        <ul className="missions-liste">
-          {[...enCours, ...remises].map((m) => (
-            <li key={m.numero} className={`mission tenue ${m.statut === 'remise' ? 'remise' : ''} ${m.enAttente ? 'en-attente' : ''}`}>
-              <GlypheType type={m.type} icones={icones} />
-              <span className="mission-texte">
-                <span className="mission-intitule">{estDon(m) ? `Don : ${quantite(m.quantite)} ${m.objet}` : intitule(m)}</span>
-                <Meta parts={[m.statut === 'remise' ? m.remiseLe && `${estDon(m) ? 'déclaré' : 'remise'} le ${dateTamrielique(m.remiseLe)}` : m.prisLe && `prise le ${dateTamrielique(m.prisLe)}`, /^p-/i.test(m.demande) && 'mission permanente', poids(m)]} />
-              </span>
-              <span className="mission-cote">
-                <Pts reg={reg} n={m.points} />
-                <span className="mission-gestes">
-                  {m.statut === 'remise' ? (
-                    <span className="tampon petit">remise, à confirmer</span>
-                  ) : (
-                    <>
-                      {droits?.remettre !== false && (
-                        <Action icone="accomplir" disabled={m.enAttente} title="Le butin est remis à un officier : qu’une autre patte le confirme" onClick={() => geste(m, 'remettre')}>
-                          butin remis
-                        </Action>
-                      )}
-                      {droits?.rendre !== false && (
-                        <Action icone="rendre" disabled={m.enAttente} title="Renoncer : la mission retourne à l’appel" onClick={() => geste(m, 'rendre')}>
-                          renoncer
-                        </Action>
-                      )}
-                    </>
-                  )}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="vide-encre">Tes pattes sont libres : prends une mission à l’appel de la caravane.</p>
-      )}
-    </section>
-  )
-}
-
-/** Standing missions: always open, each take an ordinary mission for the taker; a weekly ceiling, a pause. */
-function Permanentes({ reg, icones, tab }: { reg: CtxRegistre; icones: Record<string, string>; tab: number }) {
-  const m = reg.m!
-  const d = m.donnees!
-  const liste = d.permanentes.filter((x) => x.statut !== 'close')
-  if (!liste.length) return null
-  const moi = moiDe(reg)
-  const max = d.ponderation.reglages.maxEnCours
-  const pleines = moi ? enCoursDe(d.missions, moi).length >= max : false
-  const droits = reg.r.marchand?.droits
-  return (
-    <section className="permanentes">
-      <h3 className="titre-section">Missions permanentes</h3>
-      <ul className="missions-liste">
-        {liste.map((x) => {
-          const prises = d.prises[x.id] ?? 0
-          const pleine = x.plafond !== null && prises >= x.plafond
-          const fermee = x.statut !== 'ouverte' || pleine
-          return (
-            <li key={x.id} className={`mission permanente ${fermee ? 'fermee' : ''}`}>
-              <GlypheType type={x.type} icones={icones} />
-              <span className="mission-texte">
-                <span className="mission-intitule">{intitule(x)}</span>
-                <Meta
-                  parts={[
-                    x.statut === 'en pause' ? 'en pause' : pleine ? 'close jusqu’à la semaine prochaine' : <span className="toujours">toujours ouverte</span>,
-                    x.plafond !== null && `${prises} / ${x.plafond} cette semaine`,
-                  ]}
-                />
-              </span>
-              <span className="mission-cote">
-                <Pts reg={reg} n={x.points} />
-                <span className="mission-gestes">
-                  {moi && droits?.prendrePermanente !== false && (
-                    <Action icone="prendre" tabIndex={tab} disabled={fermee || pleines || !d.actif} title={pleines ? TEXTES.limite(max) : undefined} onClick={() => m.agir('prendrePermanente', { id: x.id })}>
-                      prendre
-                    </Action>
-                  )}
-                  {moi && droits?.permanente !== false && (
-                    <Action icone="corriger" tabIndex={tab} onClick={() => reg.ouvrir({ genre: 'permanente', id: x.id })}>
-                      régler
-                    </Action>
-                  )}
-                </span>
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-}
-
-/** The loot others handed over: anyone but the holder confirms it (points credited then) or refuses it. */
-function AConfirmer({ reg, icones }: { reg: CtxRegistre; icones: Record<string, string> }) {
-  const d = reg.m!.donnees!
-  const moi = moiDe(reg)
-  const liste = d.missions.filter((m) => m.statut === 'remise')
-  if (!liste.length) return null
-  const droits = reg.r.marchand?.droits
-  const confirmer = (m: Mission) =>
-    reg.m!.agir('confirmer', { numero: m.numero }, (x) => ({
-      ...x,
-      missions: x.missions.map((y) => (y.numero !== m.numero ? y : { ...y, statut: 'accomplie', accomplieLe: new Date().toISOString(), confirmePar: moi ?? '', enAttente: true })),
-      points: [...x.points, { horodatage: new Date().toISOString(), membre: m.prisPar, points: m.points, raison: raisonPoints(m), mission: m.numero, confirmePar: moi ?? '', enAttente: true }],
-    }))
-  return (
-    <section className="a-confirmer">
-      <h3 className="titre-section">
-        Butins à confirmer <span className="compte-missions">{liste.length}</span>
-      </h3>
-      <ul className="missions-liste">
-        {liste.map((m) => {
-          const sienne = Boolean(moi) && cle(m.prisPar) === cle(moi!)
-          return (
-            <li key={m.numero} className={`mission ${m.enAttente ? 'en-attente' : ''}`}>
-              <GlypheType type={m.type} icones={icones} />
-              <span className="mission-texte">
-                <span className="mission-intitule">{estDon(m) ? `Don : ${quantite(m.quantite)} ${m.objet}` : intitule(m)}</span>
-                <Meta parts={[estDon(m) ? `don libre de ${m.prisPar}` : `remis par ${m.prisPar}`, m.remiseLe && `le ${dateTamrielique(m.remiseLe)}`, estDon(m) && !m.points && 'sous le minimum : sans point']} />
-              </span>
-              <span className="mission-cote">
-                <Pts reg={reg} n={m.points} />
-                <span className="mission-gestes">
-                  {sienne || !moi ? (
-                    <em className="mission-meta">{sienne ? 'une autre patte confirmera' : ''}</em>
-                  ) : (
-                    <>
-                      {droits?.confirmer !== false && (
-                        <Action icone="accomplir" disabled={m.enAttente} onClick={() => confirmer(m)}>
-                          reçu
-                        </Action>
-                      )}
-                      {droits?.refuser !== false && (
-                        <Action icone="annuler" disabled={m.enAttente} onClick={() => reg.ouvrir({ genre: 'refus-mission', numero: m.numero })}>
-                          pas reçu
-                        </Action>
-                      )}
-                    </>
-                  )}
-                </span>
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-}
-
-function FiltreMissions({ reg }: { reg: CtxRegistre }) {
-  const m = reg.m!
-  const ouvertes = m.donnees!.missions.filter((x) => x.statut === 'ouverte')
-  const choix: (TypeMission | 'toutes')[] = ['toutes', ...TYPES_MISSION]
-  const nom = { toutes: 'Toutes', récolte: 'Récoltes', fabrication: 'Fabrications' } as const
-  return (
-    <div className="filtre-missions" role="group" aria-label="Filtrer les missions ouvertes">
-      {choix.map((c) => (
-        <button key={c} type="button" className={`lien-encre ${m.filtre === c ? 'actif' : ''}`} aria-pressed={m.filtre === c} onClick={() => m.setFiltre(c)}>
-          {nom[c]} <span className="compte-missions">{c === 'toutes' ? ouvertes.length : ouvertes.filter((x) => x.type === c).length}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-export function DroiteMissions({ reg, icones, interactif, citation }: { reg?: CtxRegistre; icones: Record<string, string>; interactif: boolean; citation: ReactNode }) {
+export function DroiteMissions({ reg, icones, interactif, citation, requetes = [] }: { reg?: CtxRegistre; icones: Record<string, string>; interactif: boolean; citation: ReactNode; requetes?: string[] }) {
   const d = reg?.m?.donnees
   if (!reg || !d?.relie) return null
-  const m = reg.m!
-  const moi = moiDe(reg)
-  const max = d.ponderation.reglages.maxEnCours
-  const pleines = moi ? enCoursDe(d.missions, moi).length >= max : false
-  const peutPrendre = Boolean(moi) && reg.r.marchand?.droits?.prendre !== false
-  const demandes = new Map(d.demandes.map((x) => [x.numero, x]))
-  // Identical open missions of one demand are one row (« ×6 »): taking it takes the first of them.
-  const ouvertes: Mission[][] = []
-  for (const x of d.missions) {
-    if (x.statut !== 'ouverte' || (m.filtre !== 'toutes' && x.type !== m.filtre)) continue
-    const der = ouvertes[ouvertes.length - 1]
-    const pareille = (y: Mission) => y.demande === x.demande && y.type === x.type && y.objet === x.objet && y.quantite === x.quantite && y.points === x.points
-    if (der && pareille(der[0])) der.push(x)
-    else ouvertes.push([x])
-  }
-  const ailleurs = d.missions.filter((x) => x.statut === 'en cours' && (!moi || cle(x.prisPar) !== cle(moi)))
-  const prendre = (x: Mission) =>
-    m.agir('prendre', { numero: x.numero }, (y) => ({
-      ...y,
-      missions: y.missions.map((z) => (z.numero === x.numero ? { ...z, statut: 'en cours', prisPar: moi ?? '', prisLe: new Date().toISOString(), enAttente: true } : z)),
-    }))
   const tab = interactif ? 0 : -1
+  const etats = reg.r.calcul?.etats ?? []
+  const missivesEnCours = etats.filter((e) => !estClose(e.missive))
+  const ouvertes = new Set(missivesEnCours.map((e) => e.missive.numero))
+  const demandes = [...d.demandes].reverse()
+  const avec = demandes.map((dm) => ({ dm, ms: missionsDe(d, dm.numero).filter(enJeu) })).filter((x) => x.ms.length)
+  const comblee = (x: { ms: Mission[] }) => x.ms.every((m) => etatMission(m, d.intendance).comblee)
+  const trouve = (x: { dm: Demande; ms: Mission[] }, e?: EtatMissive) =>
+    cherche(requetes, [titreDemande(x.dm), x.dm.article, ...x.ms.map((m) => m.objet), ...(e ? [e.missive.titre, e.missive.commanditaire] : [])])
+  const internes = avec.filter((x) => !ouvertes.has(x.dm.missive) && trouve(x))
+  const enCours = internes.filter((x) => !comblee(x))
+  const comblees = internes.filter(comblee)
+  const permanentes = d.permanentes.filter((x) => x.statut === 'ouverte' && cherche(requetes, [x.objet]))
+  const missives = missivesEnCours
+    .map((e) => ({ e, feuillets: avec.filter((x) => x.dm.missive === e.missive.numero) }))
+    .filter(({ e, feuillets }) => (feuillets.length ? feuillets.some((x) => trouve(x, e)) : cherche(requetes, [e.missive.titre, e.missive.commanditaire, ...e.missive.lignes.map((l) => l.produit)])))
+  const rien = !missives.length && !enCours.length && !permanentes.length && !comblees.length
   return (
     <div className="missions-droite">
-      {/* The member's own missions first, then the call (the same order on a phone). */}
-      <MesMissions reg={reg} icones={icones} />
-      <AConfirmer reg={reg} icones={icones} />
-      <Permanentes reg={reg} icones={icones} tab={tab} />
-      <h3 className="titre-section">Missions ouvertes</h3>
-      <FiltreMissions reg={reg} />
-      {pleines && <p className="note-encre">{TEXTES.limite(max)}</p>}
-      {ouvertes.length ? (
-        <ul className="missions-liste">
-          {ouvertes.map((g) => {
-            const x = g.find((y) => !y.enAttente) ?? g[0]
-            const dm = demandes.get(x.demande)
-            return (
-              <li key={g[0].numero} className={`mission ${g.every((y) => y.enAttente) ? 'en-attente' : ''}`}>
-                <GlypheType type={x.type} icones={icones} />
-                <span className="mission-texte">
-                  <span className="mission-intitule">
-                    {intitule(x)}
-                    {g.length > 1 && <span className="mission-fois"> · {g.length} missions pareilles</span>}
+      {/* What waits for a yes / no, for who may answer but does not open the Intendance (a Voix, a Maître). */}
+      {permis(reg, 'recevoir') && reg.r.marchand?.droits?.intendance !== true && <EnAttente reg={reg} icones={icones} tab={tab} />}
+      {missives.length > 0 && (
+        <>
+          <h3 className="titre-section">Missives en cours</h3>
+          <ul className="liste-feuillets">
+            {missives.map(({ e, feuillets }) => (
+              <li key={e.missive.numero} className="bloc-missive">
+                <div className="bloc-missive-tete">
+                  <SceauMissive commanditaire={e.missive.commanditaire} />
+                  <button type="button" className="feuillet-titre" tabIndex={tab} onClick={() => reg.allerA(idMissive(e.missive.numero))}>
+                    {e.missive.titre}
+                  </button>
+                  <span className="feuillet-meta">
+                    {e.missive.commanditaire && <>pour {e.missive.commanditaire}</>}
+                    {e.missive.echeance && <> · échéance : {echeance(e.missive.echeance)}</>}
                   </span>
-                  <Meta parts={[dm && `pour ${quantite(dm.quantite)} ${dm.article}`, poids(x)]} />
-                </span>
-                <span className="mission-cote">
-                  <Pts reg={reg} n={x.points} />
-                  <span className="mission-gestes">
-                    {peutPrendre && (
-                      <Action icone="prendre" tabIndex={tab} disabled={pleines || !d.actif || x.enAttente} title={!d.actif ? TEXTES.inactif : pleines ? TEXTES.limite(max) : undefined} onClick={() => prendre(x)}>
-                        prendre
+                </div>
+                {feuillets.length ? (
+                  <ul className="liste-feuillets">
+                    {feuillets.map((x) => (
+                      <BlocDemande key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} missive={e.missive.titre} />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="vide-encre">
+                    Nulle mission n’est encore écrite pour cette missive.{' '}
+                    {permis(reg, 'demande') && (
+                      <Action icone="ligne" tabIndex={tab} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'ecrire', missive: e.missive.numero, objet: e.missive.lignes[0]?.produit, quantite: e.missive.lignes[0]?.quantite })}>
+                        écrire ses missions
                       </Action>
                     )}
-                  </span>
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      ) : (
-        <p className="vide-encre">{d.missions.length ? 'Nulle mission ouverte de cette sorte : la caravane ne manque de rien, pour l’heure.' : 'Nulle mission n’est encore lancée. Le Patriarche n’a rien demandé.'}</p>
-      )}
-      {ailleurs.length > 0 && (
-        <>
-          <h3 className="titre-section">Entre d’autres pattes</h3>
-          <ul className="inventaire missions-ailleurs">
-            {ailleurs.map((x) => (
-              <li key={x.numero}>
-                <span>{intitule(x)}</span>
-                <span className="points" />
-                <em>{x.prisPar}</em>
+                  </p>
+                )}
               </li>
             ))}
           </ul>
         </>
       )}
+      {enCours.length > 0 && (
+        <>
+          <h3 className="titre-section">Pour la caravane</h3>
+          <ul className="liste-feuillets">
+            {enCours.map((x) => (
+              <BlocDemande key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} />
+            ))}
+          </ul>
+        </>
+      )}
+      {permanentes.length > 0 && (
+        <>
+          <h3 className="titre-section">Missions permanentes</h3>
+          <p className="note-encre">Toujours ouvertes : la caravane en a toujours besoin.</p>
+          <ul className="missions-liste">
+            {permanentes.map((x) => (
+              <li key={x.id} className="mission permanente">
+                <GlypheType type={x.type} icones={icones} />
+                <span className="mission-texte">
+                  <span className="mission-intitule">
+                    {VERBES[x.type]} {x.objet}
+                  </span>
+                  <Meta parts={[<span key="t" className="toujours">toujours ouverte</span>]} />
+                </span>
+                <span className="mission-cote">
+                  <Pts reg={reg} n={x.points} />
+                  <span className="mission-gestes">
+                    {permis(reg, 'signaler') && (
+                      <Action icone="signaler" tabIndex={tab} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'signaler', mission: x.id })}>
+                        j’en ai remis
+                      </Action>
+                    )}
+                    {permis(reg, 'entree') && (
+                      <Action icone="entree" tabIndex={tab} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'entree', mission: x.id })}>
+                        consigner
+                      </Action>
+                    )}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {comblees.length > 0 && (
+        <>
+          <h3 className="titre-section">Comblées, on y livre encore</h3>
+          <ul className="inventaire missions-comblees">
+            {comblees.map((x) => (
+              <li key={x.dm.numero}>
+                <button type="button" className="lien-encre" tabIndex={tab} onClick={() => reg.allerA(idDemande(x.dm.numero))}>
+                  {titreDemande(x.dm)}
+                </button>
+                <span className="points" />
+                <Coche titre="comblée" />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {rien && <p className="vide-encre">{requetes.some((q) => q.trim()) ? 'Nulle mission ne répond à ce nom.' : 'Nulle mission n’est encore écrite : la caravane ne manque de rien, pour l’heure.'}</p>}
       {citation}
     </div>
   )
 }
 
-/* ───────────────────────── My points ───────────────────────── */
+/* ───────────────────────── My notebook ───────────────────────── */
 
-export function GauchePoints({ page, reg, compact }: { page: PagePoints; reg?: CtxRegistre; compact: boolean }) {
+const STATUTS: Record<LigneIntendance['statut'], string> = { 'en attente': 'en attente', reçue: 'reçu', refusée: 'pas reçu', 'en cours': 'en cours', close: 'clos', sortie: 'sorti' }
+
+export function GaucheCarnet({ page, reg, icones, compact }: { page: PageCarnet; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
   const d = reg?.m?.donnees
-  const moi = reg ? moiDe(reg) : null
-  const mien = d && moi ? soldes(d.points.filter((p) => cle(p.membre) === cle(moi)), d.missions).find((s) => cle(s.membre) === cle(moi)) : null
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
@@ -541,21 +420,13 @@ export function GauchePoints({ page, reg, compact }: { page: PagePoints; reg?: C
       {reg && d && ouvert(reg) && (
         <>
           <Signature reg={reg} />
-          <Inactif reg={reg} />
-          {moi && (
-            <div className="points-total">
-              <span className="points-nom">{moi}</span>
-              <strong>{new Intl.NumberFormat('fr-FR').format(mien?.total ?? 0)}</strong>
-              <span>point{(mien?.total ?? 0) > 1 ? 's' : ''}</span>
-              <p className="points-detail">
-                {mien?.accomplies ?? 0} mission{(mien?.accomplies ?? 0) > 1 ? 's' : ''} accomplie{(mien?.accomplies ?? 0) > 1 ? 's' : ''}
-                {mien?.enCours ? (
-                  <>
-                    <br />
-                    {mien.enCours} en cours, {pts(mien.promis)} promis
-                  </>
-                ) : null}
-              </p>
+          <Inactif reg={reg} intendance />
+          <Message reg={reg} />
+          {permis(reg, 'signaler') && (
+            <div className="gestes">
+              <Geste icone={icones['hand']} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'signaler' })}>
+                Signaler une remise
+              </Geste>
             </div>
           )}
         </>
@@ -564,48 +435,446 @@ export function GauchePoints({ page, reg, compact }: { page: PagePoints; reg?: C
   )
 }
 
-export function DroitePoints({ reg }: { reg?: CtxRegistre }) {
+/** The member's own progress on missions (« 60 sur 100 »): kept in this browser only, never sent (Missions v2, S7). */
+function Avancement({ reg, moi, tab }: { reg: CtxRegistre; moi: string; tab: number }) {
+  const d = reg.m!.donnees!
+  const cleStock = `caravane-carnet:${cle(moi)}`
+  const [notes, setNotes] = useState<{ k: string; v: Record<string, number> } | null>(null)
+  useEffect(() => {
+    try {
+      const t = window.localStorage.getItem(cleStock)
+      const v = t ? (JSON.parse(t) as Record<string, number>) : null
+      if (v && typeof v === 'object') setNotes({ k: cleStock, v })
+    } catch {
+      // No storage (private window…): the notes simply are not kept.
+    }
+  }, [cleStock])
+  const v = notes?.k === cleStock ? notes.v : {}
+  const garder = (x: Record<string, number>) => {
+    setNotes({ k: cleStock, v: x })
+    try {
+      window.localStorage.setItem(cleStock, JSON.stringify(x))
+    } catch {
+      // Not kept: shown for this visit only.
+    }
+  }
+  const suivies = d.missions.filter((m) => m.numero in v)
+  const libres = d.missions.filter((m) => enJeu(m) && !(m.numero in v) && !etatMission(m, d.intendance).comblee)
+  const titres = new Map(d.demandes.map((x) => [x.numero, titreDemande(x)]))
+  return (
+    <section className="avancement">
+      <h3 className="titre-section">Où j’en suis</h3>
+      <p className="note-encre">Pour toi seul : ces notes restent dans ce grimoire-ci, nul autre ne les voit.</p>
+      {suivies.length > 0 && (
+        <ul className="missions-liste">
+          {suivies.map((m) => {
+            const n = v[m.numero] ?? 0
+            return (
+              <li key={m.numero} className="mission avancement-ligne">
+                <span className="mission-texte">
+                  <span className="mission-intitule">
+                    {VERBES[m.type]} {m.objet}
+                  </span>
+                  <span className="mission-meta">{titres.get(m.demande) ?? ''}</span>
+                  <Jauge avance={m.quantite ? n / m.quantite : 0} />
+                </span>
+                <span className="mission-cote avancement-saisie">
+                  <label>
+                    <span className="sr">J’en ai</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      tabIndex={tab}
+                      value={n ? String(n) : ''}
+                      placeholder="0"
+                      aria-label={`${m.objet} : où j’en suis`}
+                      onChange={(e) => garder({ ...v, [m.numero]: Number(e.target.value.replace(/\D/g, '').slice(0, 7)) || 0 })}
+                    />
+                  </label>
+                  <span className="mission-meta">sur {nf(m.quantite)}</span>
+                  <button
+                    type="button"
+                    className="fiche-rayer"
+                    tabIndex={tab}
+                    aria-label={`Ne plus suivre ${m.objet}`}
+                    title="Ne plus suivre"
+                    onClick={() => {
+                      const { [m.numero]: _, ...reste } = v
+                      garder(reste)
+                    }}
+                  >
+                    ✕
+                  </button>
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {libres.length > 0 && (
+        <label className="fiche-champ suivre-mission">
+          <span>Suivre une mission</span>
+          <select tabIndex={tab} value="" onChange={(e) => e.target.value && garder({ ...v, [e.target.value]: 0 })}>
+            <option value="">— choisir —</option>
+            {libres.map((m) => (
+              <option key={m.numero} value={m.numero}>
+                {VERBES[m.type]} {m.objet} ({titres.get(m.demande) ?? m.demande})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </section>
+  )
+}
+
+export function DroiteCarnet({ reg, interactif }: { reg?: CtxRegistre; interactif: boolean }) {
   const d = reg?.m?.donnees
   if (!reg || !d?.relie) return null
   const moi = moiDe(reg)
-  if (!moi) return <p className="vide-encre">Signe d’abord l’ex-libris : le registre ne montre à chacun que ses propres points.</p>
-  const lignes = d.points.filter((p) => cle(p.membre) === cle(moi)).sort((a, b) => b.horodatage.localeCompare(a.horodatage))
+  if (!moi) return <p className="vide-encre">Signe d’abord l’ex-libris : le carnet est celui de ton nom.</p>
+  const tab = interactif ? 0 : -1
+  const mien = d.intendance.filter((l) => estEntree(l) && l.genre !== 'rentrée' && cle(l.membre) === cle(moi)).sort((a, b) => (b.date || b.le).localeCompare(a.date || a.le))
+  const anciennes = d.missions.filter((m) => m.statut === 'accomplie' && cle(m.prisPar) === cle(moi))
   return (
-    <div className="points-droite">
-      <h3 className="titre-section">Le livre de mes points</h3>
-      {lignes.length ? (
-        <ul className="detail-lignes historique-points">
-          {lignes.map((p, i) => (
-            <li key={`${p.mission}-${i}`} className={p.enAttente ? 'en-attente' : ''}>
-              <span className="historique-quand">{p.horodatage ? quand(p.horodatage) : '—'}</span>
-              <span className="historique-raison">{p.raison || p.mission}</span>
-              <span className="points" />
-              <strong>{pts(p.points)}</strong>
+    <div className="carnet-droite">
+      <h3 className="titre-section">Ce que j’ai remis</h3>
+      {mien.length || anciennes.length ? (
+        <ul className="missions-liste">
+          {mien.map((l) => (
+            <li key={l.id} className={`mission remise-carnet statut-${cle(l.statut)} ${l.enAttente ? 'en-attente' : ''}`}>
+              <span className="mission-texte">
+                <span className="mission-intitule">
+                  {nf(l.quantite)} {l.objet}
+                </span>
+                <Meta parts={[(l.date || l.le) && `le ${dateTamrielique(l.date || l.le)}`, l.coffre === PETITES_LUNES ? 'au coffre des petites lunes' : null, l.statut !== 'en attente' && l.par && `${l.statut === 'reçue' ? 'reçu' : 'répondu'} par ${l.par}`]} />
+              </span>
+              <span className="mission-cote">
+                <span className={`tampon petit ${l.statut === 'refusée' ? 'refuse' : ''}`}>{STATUTS[l.statut]}</span>
+              </span>
+            </li>
+          ))}
+          {anciennes.map((m) => (
+            <li key={m.numero} className="mission remise-carnet statut-recue">
+              <span className="mission-texte">
+                <span className="mission-intitule">
+                  {nf(m.quantite)} {m.objet}
+                </span>
+                <Meta parts={[m.accomplieLe && `le ${dateTamrielique(m.accomplieLe)}`, m.confirmePar && `reçu par ${m.confirmePar}`]} />
+              </span>
+              <span className="mission-cote">
+                <span className="tampon petit">reçu</span>
+              </span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="vide-encre">Nul point n’est encore inscrit à ton nom. Une mission accomplie, et l’encre coulera.</p>
+        <p className="vide-encre">Rien encore à ton nom. Remets une récolte à l’Intendance, ou signale ce que tu as déposé.</p>
+      )}
+      <Avancement reg={reg} moi={moi} tab={tab} />
+    </div>
+  )
+}
+
+/* ───────────────────────── One sheet's page (the missive interface) ───────────────────────── */
+
+const demandeDe = (reg: CtxRegistre | undefined, numero: string) => reg?.m?.donnees?.demandes.find((x) => x.numero === numero)
+
+export function GaucheDemande({ page, reg, icones }: { page: PageDemande; reg?: CtxRegistre; icones: Record<string, string> }) {
+  const dm = demandeDe(reg, page.numero)
+  if (!reg || !dm) return reg ? <Ferme reg={reg} /> : null
+  const d = reg.m!.donnees!
+  const missive = dm.missive ? reg.r.calcul?.etats.find((e) => e.missive.numero === dm.missive)?.missive : undefined
+  const a = avancement(dm, d.missions, d.intendance)
+  const premiere = missionsDe(d, dm.numero).find((m) => !etatMission(m, d.intendance).comblee) ?? missionsDe(d, dm.numero)[0]
+  return (
+    <>
+      <div className="missive-meta">
+        {missive ? (
+          <p className="missive-pour feuillet-missive">
+            <SceauMissive commanditaire={missive.commanditaire} /> pour la missive{' '}
+            <button type="button" className="lien-encre" onClick={() => reg.allerA(idMissive(missive.numero))}>
+              {missive.titre}
+            </button>
+            {missive.commanditaire && <> de {missive.commanditaire}</>}
+          </p>
+        ) : (
+          <p className="missive-pour">pour la caravane</p>
+        )}
+        <p>
+          Écrit par {dm.membre || 'une patte anonyme'}
+          {dm.horodatage && <> le {dateTamrielique(dm.horodatage)}</>}
+        </p>
+        {dm.note && <p className="note-encre">{dm.note}</p>}
+      </div>
+      <p className="missive-resume">
+        {a.total} mission{a.total > 1 ? 's' : ''} · {a.comblees === a.total ? 'toutes comblées' : `${a.comblees} comblée${a.comblees > 1 ? 's' : ''}`} · {Math.round(a.avance * 100)} % réuni
+      </p>
+      <Signature reg={reg} />
+      <Inactif reg={reg} intendance />
+      <Message reg={reg} />
+      <div className="gestes">
+        {permis(reg, 'signaler') && premiere && (
+          <Geste icone={icones['hand']} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'signaler', mission: premiere.numero })}>
+            Signaler une remise
+          </Geste>
+        )}
+        {permis(reg, 'entree') && premiere && (
+          <Geste icone={icones['entry-door']} disabled={!d.intendanceActive} onClick={() => reg.ouvrir({ genre: 'entree', mission: premiere.numero })}>
+            Consigner une remise
+          </Geste>
+        )}
+      </div>
+    </>
+  )
+}
+
+export function DroiteDemande({ page, reg, icones, interactif }: { page: PageDemande; reg?: CtxRegistre; icones: Record<string, string>; interactif: boolean }) {
+  const dm = demandeDe(reg, page.numero)
+  if (!reg || !dm) return null
+  const d = reg.m!.donnees!
+  const ms = missionsDe(d, dm.numero)
+  const numeros = new Set(ms.map((m) => m.numero))
+  const qui = porteurs(numeros, d.intendance, ms)
+  const journal = d.intendance.filter((l) => numeros.has(l.mission) && estEntree(l)).sort((a, b) => (b.date || b.le).localeCompare(a.date || a.le))
+  const tab = interactif ? 0 : -1
+  const ouvrir = (m: Mission) => (permis(reg, 'entree') ? reg.ouvrir({ genre: 'entree', mission: m.numero }) : permis(reg, 'signaler') ? reg.ouvrir({ genre: 'signaler', mission: m.numero }) : undefined)
+  const actionnable = interactif && d.intendanceActive && (permis(reg, 'entree') || permis(reg, 'signaler'))
+  return (
+    <div className="missive-droite demande-droite">
+      <h3 className="titre-section">Ce qu’il faut réunir</h3>
+      <div className="besoins" role="table">
+        <div className="besoins-entete" role="row">
+          <span>Mission</span>
+          <span>Requis</span>
+          <span>Reçu</span>
+          <span>Manque</span>
+        </div>
+        {ms.map((m) => {
+          const e = etatMission(m, d.intendance)
+          return (
+            <div
+              key={m.numero}
+              role="row"
+              className={`besoins-ligne ${e.manque > 0 ? 'manquant' : 'reuni'} ${actionnable ? 'actionnable' : ''}`}
+              {...(actionnable
+                ? {
+                    tabIndex: tab,
+                    title: permis(reg, 'entree') ? `Consigner une remise pour ${m.objet}` : `Signaler une remise pour ${m.objet}`,
+                    onClick: () => ouvrir(m),
+                    onKeyDown: (ev: React.KeyboardEvent) => {
+                      if (ev.target !== ev.currentTarget || (ev.key !== 'Enter' && ev.key !== ' ')) return
+                      ev.preventDefault()
+                      ouvrir(m)
+                    },
+                  }
+                : {})}
+            >
+              <span className="besoins-nom">
+                <span className="besoins-mot">
+                  <GlypheType type={m.type} icones={icones} /> {VERBES[m.type]} {m.objet}
+                </span>
+                {e.attente > 0 && <em>{nf(e.attente)} en attente de confirmation</em>}
+                {voitPoints(reg) && <em>{pts(m.points)}</em>}
+                <Jauge avance={e.avance} />
+              </span>
+              <span>{nf(e.requis)}</span>
+              <span>{nf(e.recu)}</span>
+              <span className="besoins-manque">{e.manque > 0 ? nf(e.manque) : <Coche />}</span>
+            </div>
+          )
+        })}
+      </div>
+      <h3 className="titre-section">Les pattes de la mission</h3>
+      {qui.length ? (
+        <ul className="inventaire">
+          {qui.map((p) => (
+            <li key={p.membre}>
+              <span>{p.membre}</span>
+              <span className="points" />
+              <em>
+                {p.fois} remise{p.fois > 1 ? 's' : ''}
+              </em>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="vide-encre">Nulle patte n’a encore rien remis pour ce feuillet.</p>
+      )}
+      <h3 className="titre-section">Journal des remises</h3>
+      {journal.length ? (
+        <ol className="journal">
+          {journal.slice(0, 40).map((l) => (
+            <li key={l.id} className={`journal-${l.statut === 'reçue' ? 'depot' : 'attente'} ${l.enAttente ? 'encre-fraiche' : ''}`}>
+              <span className="journal-ligne">
+                <strong className="journal-qui">{l.membre || 'Anonyme'}</strong>
+                <span className="journal-quand">{quand(l.date || l.le)}</span>
+                <span className="journal-quoi">
+                  {nf(l.quantite)} {l.objet} · {STATUTS[l.statut]}
+                  {l.statut === 'reçue' && l.par ? ` par ${l.par}` : ''}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="vide-encre">Rien encore n’est écrit dans ce journal.</p>
       )}
     </div>
   )
 }
 
-/* ───────────────────────── The Patriarch's table ───────────────────────── */
+/* ───────────────────────── Writing a sheet: the tree, sorted before publishing (S8) ───────────────────────── */
 
-/** A catalogue chapter of the day book and the ids of its articles (as the slips receive them). */
-type Chapitre = { id: string; titre: string; ids: string[] }
+type Choix = Record<string, { garde?: boolean; q?: string }>
 
-/** The day book's merchandise that has a recipe (what a demand can ask for), by chapter. */
-function marchandises(chapitres: Chapitre[], articles: Article[], recettes: Recette[]): { titre: string; articles: Article[] }[] {
-  return chapitres
-    .map((c) => ({ titre: c.titre, articles: articles.filter((a) => c.ids.includes(a.id) && !a.ombre && recetteDe(recettes, a.fr)) }))
-    .filter((g) => g.articles.length)
+function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quantite: q0, missive: missive0 }: EnvMission & { objet?: string; quantite?: number; missive?: string }) {
+  const m = reg.m!
+  const d = m.donnees!
+  const recettes = useMemo(() => (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre), [reg.r.donnees?.recettes])
+  const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
+  const stock = useMemo(() => rejouer(reg.r.donnees?.mouvements ?? []).stock, [reg.r.donnees?.mouvements])
+  const [v, setV] = useState({ objet: objet0, quantite: q0 ? String(q0) : '', titre: '', note: '', missive: false, commanditaire: '', echeance: '' })
+  const [choix, setChoix] = useState<Choix>({})
+  const missiveLiee = missive0 ? reg.r.calcul?.etats.find((e) => e.missive.numero === missive0)?.missive : undefined
+  const nom = noms.get(cle(v.objet)) ?? ''
+  const article = articles.find((a) => !a.ombre && cle(a.fr) === cle(nom))
+  const Q = Number(v.quantite)
+  const p = useMemo(() => (nom && Q >= 1 ? proposer(article ? { fr: article.fr, min: article.min } : { fr: nom, min: null }, Q, recettes, d.ponderation, articles) : null), [nom, Q, article, recettes, d.ponderation, articles])
+  const { etat, erreur, envoyer } = useScelle(fermer)
+  // A line's state: ticked by default unless the chest already holds what the tree needs; its quantity what is missing.
+  const ligne = (l: { cle: string; objet: string; total: number }) => {
+    const c = choix[l.cle] ?? {}
+    const auCoffre = Math.max(0, enStock(stock, l.objet))
+    const manque = Math.max(0, l.total - auCoffre)
+    const q = c.q ?? String(manque || l.total)
+    return { auCoffre, manque, garde: c.garde ?? manque > 0, q, n: Number(q) }
+  }
+  const lignes = p?.ok ? p.lignes.map((l) => ({ l, ...ligne(l) })) : []
+  const gardees = lignes.filter((x) => x.garde && x.n >= 1)
+  const pret = Boolean(p?.ok) && gardees.length > 0 && (!v.missive || v.commanditaire.trim()) && lignes.every((x) => !x.garde || x.n >= 1)
+  const changer = (k: string, x: Choix[string]) => setChoix({ ...choix, [k]: { ...choix[k], ...x } })
+  const publier = (e: FormEvent) => {
+    e.preventDefault()
+    if (!pret) return
+    envoyer(() =>
+      m.agir('demande', {
+        objet: nom,
+        quantite: Q,
+        titre: v.titre,
+        note: v.note,
+        lignes: gardees.map((x) => ({ cle: x.l.cle, quantite: x.n })),
+        ...(missiveLiee ? { missive: missiveLiee.numero } : v.missive ? { missive: { commanditaire: v.commanditaire, echeance: v.echeance } } : {}),
+      }),
+    )
+  }
+  const liste = [...noms.values()].sort((a, b) => a.localeCompare(b, 'fr'))
+  return (
+    <form className="fiche-form demande-form" onSubmit={publier}>
+      {missiveLiee && (
+        <p className="fiche-aide feuillet-missive">
+          <SceauMissive commanditaire={missiveLiee.commanditaire} /> Pour la missive « {missiveLiee.titre} »{missiveLiee.commanditaire ? ` de ${missiveLiee.commanditaire}` : ''}.
+        </p>
+      )}
+      <div className="fiche-deux">
+        <label className="fiche-champ">
+          <span>Ce qu’il faut réunir</span>
+          <input type="text" list="objets-ecrire" value={v.objet} placeholder="Flèches en fer, Blé…" maxLength={120} onChange={(e) => (setV({ ...v, objet: e.target.value }), setChoix({}))} />
+          <datalist id="objets-ecrire">
+            {liste.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+        </label>
+        <label className="fiche-champ">
+          <span>Combien</span>
+          <input type="text" inputMode="numeric" value={v.quantite} placeholder="1000" onChange={(e) => (setV({ ...v, quantite: e.target.value.replace(/\D/g, '').slice(0, 6) }), setChoix({}))} />
+        </label>
+      </div>
+      {v.objet && !nom && <p className="message-encre erreur">Khajiit ne connaît nulle ressource ni marchandise de ce nom.</p>}
+      <label className="fiche-champ">
+        <span>Titre (facultatif)</span>
+        <input type="text" value={v.titre} maxLength={120} placeholder={nom && Q ? `${nf(Q)} ${nom}` : 'Les flèches du Jarl'} onChange={(e) => setV({ ...v, titre: e.target.value })} />
+      </label>
+      {!missiveLiee && (
+        <label className="fiche-coche">
+          <input type="checkbox" checked={v.missive} disabled={!d.intendanceActive} onChange={(e) => setV({ ...v, missive: e.target.checked })} />
+          <span>C’est une missive (une commande venue du dehors)</span>
+        </label>
+      )}
+      {!missiveLiee && !d.intendanceActive && <p className="fiche-aide">{TEXTES_INTENDANCE.inactif}</p>}
+      {v.missive && !missiveLiee && (
+        <div className="fiche-deux">
+          <label className="fiche-champ">
+            <span>Qui commande</span>
+            <input type="text" value={v.commanditaire} maxLength={80} placeholder="le Jarl de Blancherive" onChange={(e) => setV({ ...v, commanditaire: e.target.value })} />
+          </label>
+          <label className="fiche-champ">
+            <span>Échéance</span>
+            <input type="text" value={v.echeance} maxLength={40} placeholder="dans dix jours" onChange={(e) => setV({ ...v, echeance: e.target.value })} />
+          </label>
+        </div>
+      )}
+      {p && !p.ok && <p className="message-encre erreur">{p.erreur}</p>}
+      {p?.ok && (
+        <>
+          <h3 className="fiche-sous-titre">Les missions proposées</h3>
+          <p className="fiche-aide">Décoche ce que la caravane a déjà ; change une quantité sur sa ligne. Rien n’est écrit avant « Publier ».</p>
+          <div className="tri-missions" role="table">
+            <div className="tri-entete" role="row">
+              <span>Mission</span>
+              <span>Il en faut</span>
+              <span>Au coffre</span>
+              <span>À demander</span>
+            </div>
+            {lignes.map(({ l, auCoffre, garde, q, n }) => (
+              <div key={l.cle} className={`tri-ligne ${garde ? '' : 'retiree'}`} role="row">
+                <label className="tri-nom">
+                  <input type="checkbox" checked={garde} onChange={(e) => changer(l.cle, { garde: e.target.checked })} />
+                  <GlypheType type={l.type} icones={icones} />
+                  <span>
+                    {VERBES[l.type]} {l.objet}
+                    {l.aFixer && <em className="a-fixer"> · {TEXTES.aFixer}</em>}
+                    {voitPoints(reg) && garde && n >= 1 && <em className="tri-points"> · {pts(pointsDeLigne(l, n))}</em>}
+                  </span>
+                </label>
+                <span>{nf(l.total)}</span>
+                <span>{nf(auCoffre)}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={q}
+                  disabled={!garde}
+                  aria-label={`${l.objet} : quantité à demander`}
+                  onChange={(e) => changer(l.cle, { q: e.target.value.replace(/\D/g, '').slice(0, 7) })}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="fiche-partage">
+            <strong>{gardees.length}</strong> mission{gardees.length > 1 ? 's' : ''} à publier
+            {lignes.length > gardees.length && <>, {lignes.length - gardees.length} retirée{lignes.length - gardees.length > 1 ? 's' : ''}</>}.
+          </p>
+        </>
+      )}
+      <label className="fiche-champ">
+        <span>Note (facultative)</span>
+        <input type="text" value={v.note} maxLength={200} placeholder="pour la foire de Blancherive" onChange={(e) => setV({ ...v, note: e.target.value })} />
+      </label>
+      {erreur && <p className="message-encre erreur">{erreur}</p>}
+      <div className="fiche-pied">
+        <Sceller etat={etat} icones={icones} disabled={!pret}>
+          Publier
+        </Sceller>
+      </div>
+    </form>
+  )
 }
+
+/* ───────────────────────── Every member's points (the Trésor) and the pondération (the Intendance) ───────────────────────── */
 
 export function GauchePatriarche({ page, reg, icones, compact }: { page: PagePatriarche; reg?: CtxRegistre; icones: Record<string, string>; compact: boolean }) {
   const d = reg?.m?.donnees
-  const droits = reg?.r.marchand?.droits
   return (
     <>
       {!compact && <p className="intro lettrine">{page.intro}</p>}
@@ -615,22 +884,6 @@ export function GauchePatriarche({ page, reg, icones, compact }: { page: PagePat
           <Signature reg={reg} />
           <Inactif reg={reg} />
           <Message reg={reg} />
-          {page.vue === 'demandes' && (
-            <>
-              {droits?.demande !== false && (
-                <div className="gestes">
-                  <Geste icone={icones['throne-king']} onClick={() => reg.ouvrir({ genre: 'demande' })}>
-                    Demander une marchandise
-                  </Geste>
-                </div>
-              )}
-              <p className="decompte">
-                {d.demandes.length
-                  ? `${d.demandes.length} demande${d.demandes.length > 1 ? 's' : ''} scellée${d.demandes.length > 1 ? 's' : ''}, ${d.missions.filter((x) => x.statut === 'ouverte').length} mission${d.missions.filter((x) => x.statut === 'ouverte').length > 1 ? 's' : ''} ouverte${d.missions.filter((x) => x.statut === 'ouverte').length > 1 ? 's' : ''}`
-                  : 'Nulle demande encore : la caravane attend la parole du Patriarche.'}
-              </p>
-            </>
-          )}
           {page.vue === 'points' && <ResumePoints reg={reg} />}
           {page.vue === 'ponderation' && <ResumeReglages reg={reg} icones={icones} />}
         </>
@@ -641,273 +894,46 @@ export function GauchePatriarche({ page, reg, icones, compact }: { page: PagePat
 
 export function DroitePatriarche({ page, reg }: { page: PagePatriarche; reg?: CtxRegistre }) {
   if (!reg?.m?.donnees?.relie) return null
-  if (page.vue === 'demandes') return <Demandes reg={reg} />
   if (page.vue === 'points') return <TableauPoints reg={reg} />
   return <VuePonderation reg={reg} />
 }
 
-/** Identical missions in a row, together (« 5 missions »). */
-function pareilles<T extends Pick<Mission, 'type' | 'objet' | 'quantite' | 'points'>>(xs: T[]): T[][] {
-  const res: T[][] = []
-  for (const x of xs) {
-    const der = res[res.length - 1]
-    if (der && der[0].type === x.type && der[0].objet === x.objet && der[0].quantite === x.quantite && der[0].points === x.points) der.push(x)
-    else res.push([x])
-  }
-  return res
-}
-
-/* ── Demands ── */
-
-function Demandes({ reg }: { reg: CtxRegistre }) {
-  const d = reg.m!.donnees!
-  const demandes = [...d.demandes].sort((a, b) => b.horodatage.localeCompare(a.horodatage))
-  return (
-    <div className="demandes-droite">
-      <h3 className="titre-section">Demandes scellées</h3>
-      {demandes.length ? (
-        <ul className="liste-demandes">
-          {demandes.map((x) => {
-            const a = avancement(x, d.missions)
-            return (
-              <li key={x.numero} className="demande">
-                <span className="demande-titre">
-                  {quantite(x.quantite)} {x.article}
-                </span>
-                <span className="demande-meta">
-                  {x.horodatage && <>le {dateTamrielique(x.horodatage)}</>}
-                  {x.membre && <> par {x.membre}</>} · n° {x.numero}
-                  {x.note && <> · {x.note}</>}
-                </span>
-                <span className="demande-avance">
-                  <Jauge avance={a.avance} titre={`${a.accomplies} missions accomplies sur ${a.total}`} />
-                  <span>
-                    {a.accomplies}/{a.total} accomplies, {a.enCours} en cours{voitPoints(reg) && <> · {pts(a.credites)} sur {pts(a.points)}</>}
-                  </span>
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      ) : (
-        <p className="vide-encre">Nulle demande n’est encore scellée.</p>
-      )}
-    </div>
-  )
-}
-
-/** The sealing of a note: the scribe writes, the seal is stamped, the note goes. */
-export function useScelle(fermer: () => void, reste = false) {
-  const [etat, setEtat] = useState<'repos' | 'ecrit' | 'scelle'>('repos')
-  const [erreur, setErreur] = useState<string | null>(null)
-  const envoyer = async (f: () => Promise<Reponse>, apres?: () => void) => {
-    if (etat !== 'repos') return
-    setEtat('ecrit')
-    setErreur(null)
-    const r = await f()
-    if (!r.ok) {
-      setEtat('repos')
-      setErreur(r.message)
-      return
-    }
-    setEtat('scelle')
-    setTimeout(() => {
-      apres?.()
-      fermer()
-      // `reste`: the form stays on its note (an event's ledger, its « corriger »), back at rest so it can be sent
-      // again. Otherwise the note rolls up showing « Consigné. ».
-      if (reste) setEtat('repos')
-    }, 1100)
-  }
-  return { etat, erreur, envoyer }
-}
-
-const SOURCES: Record<LigneDemande['source'], string> = { demande: 'choisi ici', ponderation: 'lot de la pondération', effort: 'selon l’effort', reglage: 'réglage' }
-
-/** The demand note: merchandise, quantity, and every line of missions with its lot per mission, live. */
-function FicheDemande({ reg, articles, chapitres, icones, fermer }: EnvMission) {
-  const m = reg.m!
-  const d = m.donnees
-  const recettes = useMemo(() => reg.r.donnees?.recettes ?? [], [reg.r.donnees?.recettes])
-  const groupes = useMemo(() => marchandises(chapitres, articles, recettes), [chapitres, articles, recettes])
-  const b = m.brouillon
-  const changer = (x: Partial<Brouillon>) => m.setBrouillon({ ...b, ...x })
-  const lots = useMemo(() => {
-    const res: Record<string, number> = {}
-    for (const [k, v] of Object.entries(b.lots)) {
-      const n = Number(v)
-      if (Number.isInteger(n) && n >= 1) res[k] = n
-    }
-    return res
-  }, [b.lots])
-  const apercu = useMemo(() => {
-    const article = articles.find((a) => !a.ombre && cle(a.fr) === cle(b.article))
-    const q = Number(b.quantite)
-    if (!article || !d || !Number.isInteger(q) || q <= 0) return null
-    return traduire(article, q, recettes, d.ponderation, lots)
-  }, [articles, b.article, b.quantite, d, recettes, lots])
-  const { etat, erreur, envoyer } = useScelle(fermer)
-  if (!d) return null
-  const sceller = (e: FormEvent) => {
-    e.preventDefault()
-    if (!apercu?.ok) return
-    envoyer(
-      () => m.agir('demande', { article: b.article, quantite: Number(b.quantite), note: b.note, lots }),
-      () => m.setBrouillon(BROUILLON_VIDE),
-    )
-  }
-  return (
-    <form className="fiche-form demande-form" onSubmit={sceller}>
-      <label className="fiche-champ">
-        <span>Marchandise</span>
-        <select value={b.article} onChange={(e) => changer({ article: e.target.value, lots: {} })}>
-          <option value="">— choisir dans le catalogue —</option>
-          {groupes.map((g) => (
-            <optgroup key={g.titre} label={g.titre}>
-              {g.articles.map((a) => (
-                <option key={a.id} value={a.fr}>
-                  {a.fr}
-                  {a.min !== null ? ` (plancher ${prix(a.min)})` : ''}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      <div className="fiche-deux">
-        <label className="fiche-champ">
-          <span>Quantité</span>
-          <input type="text" inputMode="numeric" value={b.quantite} placeholder="50" onChange={(e) => changer({ quantite: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
-        </label>
-        <label className="fiche-champ">
-          <span>Note</span>
-          <input type="text" value={b.note} placeholder="pour la foire de Blancherive" maxLength={200} onChange={(e) => changer({ note: e.target.value })} />
-        </label>
-      </div>
-      {apercu && !apercu.ok && <p className="message-encre erreur">{apercu.erreur}</p>}
-      {apercu?.ok && (
-        <>
-          <h3 className="fiche-sous-titre">Les missions, ligne par ligne</h3>
-          <p className="fiche-aide">« Par mission » : ce que tient une mission ; change-le, la ligne se redécoupe.</p>
-          <ul className="lignes-demande">
-            {apercu.lignes.map((l) => {
-              const ms = apercu.missions.filter((x) => x.ligne === l.cle)
-              const choisi = b.lots[l.cle]
-              return (
-                <li key={l.cle} className="ligne-demande">
-                  <GlypheType type={l.type} icones={icones} />
-                  <span className="ligne-demande-nom">
-                    <span className="mission-intitule">
-                      {VERBES[l.type]} {l.objet}
-                    </span>
-                    <span className="mission-meta">
-                      {quantite(l.total)} en tout{l.intermediaire ? ' · intermédiaire' : ''}
-                      {ms[0] && poids(ms[0]) && <> · {poids(ms[0])}</>}
-                    </span>
-                  </span>
-                  <label className="ligne-demande-lot">
-                    <span>par mission</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={choisi ?? String(l.lot)}
-                      aria-label={`${l.objet} : quantité par mission`}
-                      onChange={(e) => changer({ lots: { ...b.lots, [l.cle]: e.target.value.replace(/\D/g, '').slice(0, 6) } })}
-                    />
-                    <em title={`par défaut : ${quantite(l.defaut)}`}>
-                      {l.source === 'demande' ? (
-                        <button type="button" className="lien-encre" onClick={() => { const { [l.cle]: _, ...reste } = b.lots; changer({ lots: reste }) }}>
-                          revenir à {quantite(l.defaut)}
-                        </button>
-                      ) : (
-                        SOURCES[l.source]
-                      )}
-                    </em>
-                  </label>
-                  <span className="ligne-demande-decoupe">
-                    {pareilles(ms).map((g, i) => (
-                      <span key={i}>
-                        {g.length > 1 ? `${g.length} missions` : '1 mission'} de {quantite(g[0].quantite)} {voitPoints(reg) && <strong>{pts(g[0].points)}</strong>}
-                        {g.length > 1 ? ' chacune' : ''}
-                      </span>
-                    ))}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="fiche-partage demande-resume">
-            <p>
-              <strong>{apercu.missions.length}</strong> mission{apercu.missions.length > 1 ? 's' : ''} : {apercu.missions.filter((x) => x.type === 'récolte').length} de récolte,{' '}
-              {apercu.missions.filter((x) => x.type === 'fabrication').length} de fabrication.
-            </p>
-            {!voitPoints(reg) ? null : apercu.plancher !== null ? (
-              <p>
-                Plancher {prix(apercu.plancher)} × {quantite(apercu.quantite)} : <strong>{pts(apercu.pointsRessources)}</strong> pour les ressources ({d.ponderation.reglages.partRessources} %),{' '}
-                <strong>{pts(apercu.pointsFabrication)}</strong> pour la fabrication ({d.ponderation.reglages.partFabrication} %).
-              </p>
-            ) : (
-              <p className="a-fixer">Cette marchandise n’a pas de plancher : ses missions ne rapportent aucun point.</p>
-            )}
-            {apercu.aFixer.length > 0 && (
-              <p className="a-fixer">
-                Rareté à fixer : {apercu.aFixer.join(', ')} (missions de {prix(d.ponderation.reglages.quantiteRepli)} par défaut).
-              </p>
-            )}
-          </div>
-        </>
-      )}
-      {erreur && <p className="message-encre erreur">{erreur}</p>}
-      <div className="fiche-pied">
-        <Sceller etat={etat} icones={icones} disabled={!apercu?.ok}>
-          Sceller la demande
-        </Sceller>
-      </div>
-    </form>
-  )
-}
-
-/* ── Every member's points ── */
-
 function ResumePoints({ reg }: { reg: CtxRegistre }) {
   const d = reg.m!.donnees!
   const total = d.points.reduce((t, p) => t + p.points, 0)
-  const enJeu = d.missions.filter((m) => m.statut !== 'accomplie').reduce((t, m) => t + m.points, 0)
   const n = new Set(d.points.map((p) => cle(p.membre))).size
   return (
     <p className="missive-resume">
       {pts(total)} crédités à {n} membre{n > 1 ? 's' : ''}
-      <br />
-      {pts(enJeu)} encore en jeu
     </p>
   )
 }
 
 function TableauPoints({ reg }: { reg: CtxRegistre }) {
   const d = reg.m!.donnees!
-  const liste = soldes(d.points, d.missions)
+  const liste = soldes(d.points, d.missions, d.intendance)
   if (!liste.length) return <p className="vide-encre">Nul point n’est encore inscrit au registre.</p>
   return (
     <div className="tableau-points" role="table">
       <div className="tableau-points-entete" role="row">
         <span>Membre</span>
         <span>Points</span>
-        <span>Accomplies</span>
-        <span>En cours</span>
+        <span>Remises</span>
       </div>
       {liste.map((s) => (
         <div key={s.membre} className="tableau-points-ligne" role="row">
           <span>{s.membre}</span>
-          <strong>{new Intl.NumberFormat('fr-FR').format(s.total)}</strong>
-          <span>{s.accomplies}</span>
-          <span title={s.enCours ? `${pts(s.promis)} promis` : undefined}>{s.enCours ? `${s.enCours} (${pts(s.promis)})` : '—'}</span>
+          <strong>{nf(s.total)}</strong>
+          <span>{s.remises || '—'}</span>
         </div>
       ))}
     </div>
   )
 }
 
+
 /* ── The pondération: shown on the page, changed on notes ── */
+
 
 /** Every item the recipes use (raw or intermediate) and every raw material; then the final products. */
 function matieres(reg: CtxRegistre, p: Ponderation) {
@@ -943,7 +969,7 @@ function ResumeReglages({ reg, icones }: { reg: CtxRegistre; icones: Record<stri
       </p>
       <h3 className="titre-section">Réglages</h3>
       <ul className="inventaire reglages-missions">
-        {REGLAGES.map((r) => (
+        {REGLAGES_VUS.map((r) => (
           <li key={r.cle}>
             <span>{r.libelle}</span>
             <span className="points" />
@@ -1078,7 +1104,7 @@ function FicheReglages({ reg, icones, fermer }: EnvMission) {
         envoyer(() => graver(reg, { ...p, reglages: r }))
       }}
     >
-      {REGLAGES.map((x) => (
+      {REGLAGES_VUS.map((x) => (
         <label key={x.cle} className="fiche-champ reglage">
           <span>{x.libelle}</span>
           <ChampNombre valeur={r[x.cle]} changer={(v) => setR({ ...r, [x.cle]: v ?? 0 })} />
@@ -1216,28 +1242,19 @@ function FicheMatiere({ reg, icones, fermer, nom }: EnvMission & { nom: string }
   )
 }
 
-/** Every name a mission or a donation can be about: raw materials, recipe ingredients and products, the day book's merchandise. */
-function nomsObjets(reg: CtxRegistre, articles: Article[]) {
-  const noms = new Map<string, string>()
-  const ajouter = (n: string) => n && !noms.has(cle(n)) && noms.set(cle(n), n)
-  ;(reg.r.donnees?.ressources ?? []).forEach((r) => ajouter(r.nom))
-  ;(reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre).forEach((r) => (ajouter(r.produit), r.ingredients.forEach((i) => ajouter(i.nom))))
-  articles.filter((a) => !a.ombre).forEach((a) => ajouter(a.fr))
-  return noms
-}
-
 /** Whether an item is only a final product (a craft of it, its crafting share). */
 function estFini(reg: CtxRegistre, articles: Article[], nom: string) {
   const recettes = (reg.r.donnees?.recettes ?? []).filter((r) => !r.ombre)
   return recettes.some((r) => cle(r.produit) === cle(nom)) && articles.some((a) => !a.ombre && cle(a.fr) === cle(nom)) && !recettes.some((r) => r.ingredients.some((i) => cle(i.nom) === cle(nom)))
 }
 
+/** A standing mission: always open; its points per « quantité de référence » set the rate of every hand-over. */
 function FichePermanente({ reg, icones, fermer, id, articles }: EnvMission & { id?: string }) {
   const d = reg.m!.donnees!
   const x = d.permanentes.find((y) => y.id === id)
   const recettes = reg.r.donnees?.recettes ?? []
   const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
-  const [v, setV] = useState({ objet: x?.objet ?? '', quantite: x ? String(x.quantite) : '', points: x ? String(x.points) : '', plafond: x?.plafond ? String(x.plafond) : '', statut: x?.statut ?? 'ouverte', note: x?.note ?? '' })
+  const [v, setV] = useState({ objet: x?.objet ?? '', quantite: x ? String(x.quantite) : '', points: x ? String(x.points) : '', statut: x?.statut ?? 'ouverte', note: x?.note ?? '' })
   const objet = noms.get(cle(v.objet)) ?? ''
   const fini = objet ? estFini(reg, articles, objet) : false
   const qDefaut = objet ? quantiteParMission(d.ponderation, objet, recettes, fini) : 0
@@ -1249,7 +1266,7 @@ function FichePermanente({ reg, icones, fermer, id, articles }: EnvMission & { i
       className="fiche-form"
       onSubmit={(e) => {
         e.preventDefault()
-        envoyer(() => reg.m!.agir('permanente', { id, objet: objet || v.objet, quantite: q, points: v.points, plafond: v.plafond, statut: v.statut, note: v.note }))
+        envoyer(() => reg.m!.agir('permanente', { id, objet: objet || v.objet, quantite: q, points: v.points, statut: v.statut, note: v.note }))
       }}
     >
       <label className="fiche-champ">
@@ -1264,29 +1281,25 @@ function FichePermanente({ reg, icones, fermer, id, articles }: EnvMission & { i
       {v.objet && !objet && <p className="message-encre erreur">Khajiit ne connaît nulle ressource ni ouvrage de ce nom.</p>}
       <div className="fiche-deux">
         <label className="fiche-champ">
-          <span>Quantité par prise</span>
+          <span>Quantité de référence</span>
           <input type="text" inputMode="numeric" value={v.quantite} placeholder={qDefaut ? String(qDefaut) : '40'} onChange={(e) => setV({ ...v, quantite: e.target.value.replace(/\D/g, '').slice(0, 6) })} />
         </label>
-        <label className="fiche-champ">
-          <span>Points par prise</span>
-          <input type="text" inputMode="numeric" value={v.points} placeholder={String(pDefaut)} onChange={(e) => setV({ ...v, points: e.target.value.replace(/\D/g, '').slice(0, 7) })} />
-        </label>
+        {voitPoints(reg) && (
+          <label className="fiche-champ">
+            <span>Points pour cette quantité</span>
+            <input type="text" inputMode="numeric" value={v.points} placeholder={String(pDefaut)} onChange={(e) => setV({ ...v, points: e.target.value.replace(/\D/g, '').slice(0, 7) })} />
+          </label>
+        )}
       </div>
-      <p className="fiche-aide">Points par défaut : ce que rapporte cette quantité dans les recettes qui l’emploient ({pts(pDefaut)}).</p>
-      <div className="fiche-deux">
-        <label className="fiche-champ">
-          <span>Prises par semaine, au plus</span>
-          <input type="text" inputMode="numeric" value={v.plafond} placeholder="sans limite" onChange={(e) => setV({ ...v, plafond: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
-        </label>
-        <label className="fiche-champ">
-          <span>État</span>
-          <select value={v.statut} onChange={(e) => setV({ ...v, statut: e.target.value as typeof v.statut })}>
-            <option value="ouverte">ouverte</option>
-            <option value="en pause">en pause</option>
-            <option value="close">close</option>
-          </select>
-        </label>
-      </div>
+      <p className="fiche-aide">Chaque remise rapporte au même taux, quelle qu’en soit la quantité.{voitPoints(reg) && ` Par défaut : ce que rapporte cette quantité dans les recettes qui l’emploient (${pts(pDefaut)}).`}</p>
+      <label className="fiche-champ">
+        <span>État</span>
+        <select value={v.statut} onChange={(e) => setV({ ...v, statut: e.target.value as typeof v.statut })}>
+          <option value="ouverte">ouverte</option>
+          <option value="en pause">en pause</option>
+          <option value="close">close</option>
+        </select>
+      </label>
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones} disabled={!objet}>
@@ -1297,79 +1310,7 @@ function FichePermanente({ reg, icones, fermer, id, articles }: EnvMission & { i
   )
 }
 
-function FicheDon({ reg, icones, fermer, articles }: EnvMission) {
-  const d = reg.m!.donnees!
-  const recettes = reg.r.donnees?.recettes ?? []
-  const noms = useMemo(() => nomsObjets(reg, articles), [reg, articles])
-  const [v, setV] = useState({ objet: '', quantite: '', note: '' })
-  const objet = noms.get(cle(v.objet)) ?? ''
-  const fini = objet ? estFini(reg, articles, objet) : false
-  const q = Number(v.quantite) || 0
-  const don = objet && q > 0 ? pointsDon(objet, q, recettes, articles, d.ponderation, fini) : null
-  const { etat, erreur, envoyer } = useScelle(fermer)
-  return (
-    <form
-      className="fiche-form"
-      onSubmit={(e) => {
-        e.preventDefault()
-        envoyer(() => reg.m!.agir('don', { objet, quantite: q, note: v.note }))
-      }}
-    >
-      <div className="fiche-deux">
-        <label className="fiche-champ">
-          <span>Ressource ou ouvrage</span>
-          <input type="text" list="objets-don" value={v.objet} placeholder="Blé" onChange={(e) => setV({ ...v, objet: e.target.value })} />
-          <datalist id="objets-don">
-            {[...noms.values()].sort((a, b) => a.localeCompare(b, 'fr')).map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
-        </label>
-        <label className="fiche-champ">
-          <span>Quantité</span>
-          <input type="text" inputMode="numeric" value={v.quantite} placeholder="300" onChange={(e) => setV({ ...v, quantite: e.target.value.replace(/\D/g, '').slice(0, 7) })} />
-        </label>
-      </div>
-      <label className="fiche-champ">
-        <span>Note</span>
-        <input type="text" value={v.note} maxLength={120} placeholder="une journée aux champs de Blancherive" onChange={(e) => setV({ ...v, note: e.target.value })} />
-      </label>
-      {objet && (
-        <p className="fiche-aide">
-          Minimum pour des points : {quantite(minimumDon(d.ponderation, objet, recettes, fini))} {objet}.
-        </p>
-      )}
-      {don &&
-        (don.points ? (
-          <p className="fiche-partage">
-            {voitPoints(reg) ? (
-              <>
-                {quantite(q)} {objet} : <strong>{pts(don.points)}</strong>
-                {don.bonus && ` (dont le bonus des gros dons, ${prix(d.ponderation.reglages.bonusDon)} %)`}, crédités quand une autre patte aura confirmé le don.
-              </>
-            ) : (
-              <>
-                {quantite(q)} {objet} : ton don comptera dans l’effort de la caravane quand une autre patte l’aura confirmé.
-              </>
-            )}
-          </p>
-        ) : (
-          <p className="message-encre erreur">
-            Sous le minimum de {quantite(don.minimum)} : le don sera reçu au coffre, mais ne rapportera aucun point.
-          </p>
-        ))}
-      {v.objet && !objet && <p className="message-encre erreur">Khajiit ne connaît nulle ressource ni ouvrage de ce nom.</p>}
-      {erreur && <p className="message-encre erreur">{erreur}</p>}
-      <div className="fiche-pied">
-        <Sceller etat={etat} icones={icones} disabled={!objet || q <= 0}>
-          Déclarer le don
-        </Sceller>
-      </div>
-    </form>
-  )
-}
-
-/** Refusing a loot handed over (not received, incomplete): a short word, the mission back to its holder. */
+/** A hand-over made the prototype's way (before lot 2), not received: a short word. */
 function FicheRefus({ reg, icones, fermer, numero }: EnvMission & { numero: string }) {
   const m = reg.m!.donnees!.missions.find((x) => x.numero === numero)
   const [note, setNote] = useState('')
@@ -1384,7 +1325,7 @@ function FicheRefus({ reg, icones, fermer, numero }: EnvMission & { numero: stri
       }}
     >
       <p className="fiche-aide">
-        {intitule(m)}, remis par {m.prisPar}. Refusé, il retourne entre ses pattes, « en cours ».
+        {nf(m.quantite)} {m.objet}, remis par {m.prisPar}.
       </p>
       <label className="fiche-champ">
         <span>Pourquoi</span>
@@ -1393,30 +1334,45 @@ function FicheRefus({ reg, icones, fermer, numero }: EnvMission & { numero: stri
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones}>
-          Refuser le butin
+          Pas reçu
         </Sceller>
       </div>
     </form>
   )
 }
 
-/* ── The notes of the missions, laid over the left page (components/Fiche.tsx) ── */
+/* ── The notes of the missions and of the Intendance, laid over the left page (components/Fiche.tsx) ── */
 
-type EnvMission = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; fermer: () => void }
+/** A catalogue chapter and the ids of its articles (as the slips receive them). */
+type Chapitre = { id: string; titre: string; ids: string[] }
+export type EnvMission = { reg: CtxRegistre; articles: Article[]; chapitres: Chapitre[]; icones: Record<string, string>; fermer: () => void }
 export type FicheMission =
-  | { genre: 'demande' }
+  | { genre: 'ecrire'; objet?: string; quantite?: number; missive?: string }
+  | { genre: 'signaler'; mission?: string }
+  | { genre: 'entree'; mission?: string; lien?: string; don?: boolean; petites?: boolean }
+  | { genre: 'faconnage'; produit?: string; mission?: string }
+  | { genre: 'perte' }
   | { genre: 'reglages-missions' }
   | { genre: 'classes-missions' }
   | { genre: 'matiere-mission'; nom: string }
   | { genre: 'refus-mission'; numero: string }
   | { genre: 'permanente'; id?: string }
-  | { genre: 'don' }
+
+export const GENRES_MISSION: FicheMission['genre'][] = ['ecrire', 'signaler', 'entree', 'faconnage', 'perte', 'reglages-missions', 'classes-missions', 'matiere-mission', 'refus-mission', 'permanente']
 
 export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: string; titre: string; corps: ReactNode; action: ActionMission } {
   if (!env.reg.m?.donnees) return { surtitre: 'Livre des Missions', titre: 'Missions', corps: <p className="registre-ferme attente-encre">Le scribe déroule le registre des missions…</p>, action: 'demande' }
   switch (f.genre) {
-    case 'demande':
-      return { surtitre: 'Les demandes du Patriarche', titre: 'Demander une marchandise', corps: <FicheDemande {...env} />, action: 'demande' }
+    case 'ecrire':
+      return { surtitre: 'Livre de l’Intendance', titre: 'Écrire une mission', corps: <FicheEcrire {...env} objet={f.objet} quantite={f.quantite} missive={f.missive} />, action: 'demande' }
+    case 'signaler':
+      return { surtitre: 'L’appel aux missions', titre: 'Signaler une remise', corps: <FicheSignaler {...env} mission={f.mission} />, action: 'signaler' }
+    case 'entree':
+      return { surtitre: 'Réception', titre: f.lien ? 'Le retour de chez l’artisan' : f.petites ? 'Le coffre des petites lunes' : f.don ? 'Consigner un don' : 'Consigner une remise', corps: <FicheEntree {...env} mission={f.mission} lien={f.lien} don={f.don} petites={f.petites} />, action: 'entree' }
+    case 'faconnage':
+      return { surtitre: 'Sorties', titre: 'Sortir pour façonner', corps: <FicheFaconnage {...env} produit={f.produit} mission={f.mission} />, action: 'faconnage' }
+    case 'perte':
+      return { surtitre: 'Sorties', titre: 'Consigner une sortie', corps: <FichePerte {...env} />, action: 'sortie' }
     case 'reglages-missions':
       return { surtitre: 'La pondération des efforts', titre: 'Les réglages', corps: <FicheReglages {...env} />, action: 'ponderation' }
     case 'classes-missions':
@@ -1424,39 +1380,8 @@ export function contenuMission(f: FicheMission, env: EnvMission): { surtitre: st
     case 'matiere-mission':
       return { surtitre: 'La pondération des efforts', titre: f.nom, corps: <FicheMatiere {...env} nom={f.nom} />, action: 'ponderation' }
     case 'refus-mission':
-      return { surtitre: 'Butins à confirmer', titre: 'Pas reçu', corps: <FicheRefus {...env} numero={f.numero} />, action: 'refuser' }
+      return { surtitre: 'À confirmer', titre: 'Pas reçu', corps: <FicheRefus {...env} numero={f.numero} />, action: 'refuser' }
     case 'permanente':
-      return { surtitre: 'L’appel aux missions', titre: f.id ? 'Régler la mission permanente' : 'Ouvrir une mission permanente', corps: <FichePermanente {...env} id={f.id} />, action: 'permanente' }
-    case 'don':
-      return { surtitre: 'L’appel aux missions', titre: 'Déclarer un don', corps: <FicheDon {...env} />, action: 'don' }
+      return { surtitre: 'Livre de l’Intendance', titre: f.id ? 'Régler la mission permanente' : 'Ouvrir une mission permanente', corps: <FichePermanente {...env} id={f.id} />, action: 'permanente' }
   }
-}
-
-const nombreSaisi = (s: string) => {
-  const t = s.replace(',', '.').trim()
-  if (!t) return null
-  const n = Number(t)
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
-/** A number typed in a cell: the text is kept as typed (« 1, » on the way to « 1,5 »), the value follows. */
-export function ChampNombre({ valeur, changer, ...props }: { valeur: number | null; changer: (v: number | null) => void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
-  const [t, setT] = useState(valeur === null ? '' : String(valeur).replace('.', ','))
-  useEffect(() => {
-    if (nombreSaisi(t) !== valeur) setT(valeur === null ? '' : String(valeur).replace('.', ','))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valeur])
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={t}
-      onChange={(e) => {
-        const s = e.target.value.replace(/[^\d.,]/g, '').slice(0, 8)
-        setT(s)
-        changer(nombreSaisi(s))
-      }}
-      {...props}
-    />
-  )
 }

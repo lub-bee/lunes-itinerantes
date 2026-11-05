@@ -15,7 +15,8 @@ import { divinite, poemesDe, PRESENCE } from '@/lib/oeufs'
 import { ExLibris, Gaufrage } from './ExLibris'
 import { ArbreRangs } from './Caravane'
 import { DroiteTresor, GaucheTresor } from './Tresor'
-import { DroiteMissions, DroitePatriarche, DroitePoints, GaucheMissions, GauchePatriarche, GauchePoints } from './Missions'
+import { DroiteCarnet, DroiteDemande, DroiteMissions, DroitePatriarche, GaucheCarnet, GaucheDemande, GaucheMissions, GauchePatriarche } from './Missions'
+import { DroiteIntendance, GaucheIntendance } from './Intendance'
 import { Geste, DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -106,10 +107,10 @@ function Folio({ n }: { n: number }) {
 /**
  * A page's chapter in its part: its rank among the part's pages that have a side tab, in the book's order
  * (so crafts and missives renumber themselves as they come and go). None for the front matter (ex-libris,
- * Sommaire) and for closed missives (opened from the list, no side tab).
+ * Sommaire), for closed missives and for the sheets of missions (opened from their list, no side tab).
  */
 export function chapitreDe(pages: Page[], page: Page): number | null {
-  const sansOnglet = (p: Page) => p.partie === 'sommaire' || (p.type === 'missive' && p.close)
+  const sansOnglet = (p: Page) => p.partie === 'sommaire' || (p.type === 'missive' && p.close) || p.type === 'demande'
   // The member's own sales: a tab set apart, not a chapter.
   if (sansOnglet(page) || page.type === 'ventes') return null
   const n = pages.filter((p) => p.partie === page.partie && !sansOnglet(p) && p.type !== 'ventes').findIndex((p) => p.id === page.id)
@@ -204,25 +205,37 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       case 'coffre':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GaucheCoffre page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+            <GaucheCoffre page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} recherche={rechercheLocale(ctx)} />
           </EnTete>
         )
       case 'missions':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GaucheMissions page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+            <GaucheMissions page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} recherche={rechercheLocale(ctx)} />
+          </EnTete>
+        )
+      case 'carnet':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheCarnet page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
+          </EnTete>
+        )
+      case 'demande':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheDemande page={page} reg={ctx.registre} icones={ctx.livre.icones} />
+          </EnTete>
+        )
+      case 'intendance':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            <GaucheIntendance page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} recherche={rechercheLocale(ctx)} />
           </EnTete>
         )
       case 'tresor':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheTresor page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} />
-          </EnTete>
-        )
-      case 'points':
-        return (
-          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
-            <GauchePoints page={page} reg={ctx.registre} compact={compact} />
           </EnTete>
         )
       case 'patriarche':
@@ -488,11 +501,15 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'missive':
         return <DroiteMissive page={page} reg={ctx.registre} interactif={ctx.interactif} icones={ctx.livre.icones} />
       case 'coffre':
-        return <DroiteCoffre reg={ctx.registre} />
+        return <DroiteCoffre reg={ctx.registre} requetes={[ctx.requete, ctx.locale]} />
       case 'missions':
-        return <DroiteMissions reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} citation={<CitationFin texte={page.citation} />} />
-      case 'points':
-        return <DroitePoints reg={ctx.registre} />
+        return <DroiteMissions reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} citation={<CitationFin texte={page.citation} />} requetes={[ctx.requete, ctx.locale]} />
+      case 'carnet':
+        return <DroiteCarnet reg={ctx.registre} interactif={ctx.interactif} />
+      case 'demande':
+        return <DroiteDemande page={page} reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} />
+      case 'intendance':
+        return <DroiteIntendance page={page} reg={ctx.registre} icones={ctx.livre.icones} interactif={ctx.interactif} requetes={[ctx.requete, ctx.locale]} />
       case 'tresor':
         return <DroiteTresor page={page} reg={ctx.registre} />
       case 'patriarche':

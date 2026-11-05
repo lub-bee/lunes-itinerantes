@@ -10,7 +10,8 @@
 //   whatever the other ranks (a rule of the code, not a box); with it, the union of the boxes of all one's ranks.
 // - Entering the grimoire is a gesture (« Entrer dans le grimoire », `entrer`), checked at the Discord seal.
 // The defaults below only SEED the Grimoire's rows once, when the tab holds none (lib/registre.ts semerPermissions,
-// the secret page); a gesture added later arrives unchecked. A failed read grants nothing (`lu` false).
+// the secret page); a gesture added later arrives unchecked, except one marked `semee` (lot 2: `sortie`), whose missing
+// row the next seal writes once with its defaults (lib/registre.ts semerSiBesoin). A failed read grants nothing (`lu` false).
 // Testers (TESTEURS_DISCORD_IDS, never the sheet; lib/testeurs.ts) hold every gesture and the secret page, even when
 // the tabs cannot be read.
 // The server checks every write (and the Trésor's reads); the page only hides what a member may not do.
@@ -84,6 +85,7 @@ export type Geste =
   | 'missionsMembre'
   | 'don'
   | 'ponderation'
+  | 'sortie'
   | 'intendance'
   | 'tresor'
   | 'reglagesPaie'
@@ -93,8 +95,13 @@ export type Geste =
   | 'clotureSemaine'
   | 'paiement'
 
-/** `defaut`: the ranks whose box the seed checks; 'tous' = the « Membre » box (every caravan member holds it). */
-export type DefGeste = { cle: Geste; groupe: string; libelle: string; defaut: 'tous' | Role[]; note?: string }
+/**
+ * `defaut`: the ranks whose box the seed checks; 'tous' = the « Membre » box (every caravan member holds it).
+ * `semee`: a gesture added after the first seed whose row is seeded once with its defaults when the tab lacks it
+ * (lot 2: the brief asks the new gestures to arrive with the round-4 defaults, not unchecked); once the row exists,
+ * the sheet decides alone.
+ */
+export type DefGeste = { cle: Geste; groupe: string; libelle: string; defaut: 'tous' | Role[]; note?: string; semee?: boolean }
 
 const P = 'patriarche'
 const A = 'argentier'
@@ -117,17 +124,18 @@ export const GESTES: DefGeste[] = [
   { cle: 'recetteCorriger', groupe: 'Recettes', libelle: 'Corriger une recette / ajouter une variante', defaut: SAUF_PETITES },
   { cle: 'usage', groupe: 'Recettes', libelle: 'Choisir la recette d’usage d’un ouvrage', defaut: 'tous' },
   { cle: 'ressource', groupe: 'Recettes', libelle: 'Inscrire / mettre à jour une matière', defaut: [P, A, ...VOIX, MARCHAND] },
-  { cle: 'ecrire', groupe: 'Missives et missions', libelle: 'Écrire une mission ou une missive', defaut: [P, A, ADC], note: 'missive, demande, mission permanente' },
-  { cle: 'remise', groupe: 'Missives et missions', libelle: 'Consigner une remise ou un don', defaut: [P, A, ADC, ...VOIX], note: 'confirmer ou refuser ce qui a été remis' },
+  { cle: 'ecrire', groupe: 'Missives et missions', libelle: 'Écrire une mission ou une missive', defaut: [P, A, ADC], note: 'missive, feuillet de missions, mission permanente' },
+  { cle: 'remise', groupe: 'Missives et missions', libelle: 'Consigner une remise ou un don', defaut: [P, A, ADC, ...VOIX], note: 'et répondre oui / non à ce qui a été déposé' },
   { cle: 'cloture', groupe: 'Missives et missions', libelle: 'Clore une missive (livrée ou inachevée)', defaut: 'tous' },
   { cle: 'choix', groupe: 'Missives et missions', libelle: 'Choisir la recette d’une ligne de missive', defaut: 'tous' },
   { cle: 'releve', groupe: 'Missives et missions', libelle: 'Relever le coffre (compter)', defaut: 'tous' },
   { cle: 'depot', groupe: 'Missives et missions', libelle: 'Déposer au coffre', defaut: 'tous' },
-  { cle: 'fabrication', groupe: 'Missives et missions', libelle: 'Façonner pour une missive', defaut: 'tous' },
-  { cle: 'missionsMembre', groupe: 'Missives et missions', libelle: 'Prendre, rendre ou remettre une mission', defaut: 'tous' },
-  { cle: 'don', groupe: 'Missives et missions', libelle: 'Déclarer un don libre', defaut: 'tous', note: 'il attend qu’on le consigne' },
+  { cle: 'fabrication', groupe: 'Missives et missions', libelle: 'Façonner pour une missive', defaut: 'tous', note: 'plus proposé : on façonne depuis les Sorties' },
+  { cle: 'missionsMembre', groupe: 'Missives et missions', libelle: 'Signaler une remise ou un dépôt', defaut: 'tous', note: 'au coffre des petites lunes, ou remis en main propre : il attend qu’on réponde' },
+  { cle: 'don', groupe: 'Missives et missions', libelle: 'Déclarer un don libre', defaut: 'tous', note: 'plus proposé : on le signale comme une remise' },
   { cle: 'ponderation', groupe: 'Missives et missions', libelle: 'Régler la pondération des efforts', defaut: [P] },
-  { cle: 'intendance', groupe: 'Livres', libelle: 'Ouvrir le livre de l’Intendance', defaut: [P, A, ADC], note: 'le livre viendra au lot 2' },
+  { cle: 'sortie', groupe: 'Missives et missions', libelle: 'Consigner une sortie du coffre', defaut: [P, A, ADC], note: 'sortir pour façonner, confirmer une vente prise au coffre, une perte', semee: true },
+  { cle: 'intendance', groupe: 'Livres', libelle: 'Ouvrir le livre de l’Intendance', defaut: [P, A, ADC] },
   { cle: 'tresor', groupe: 'Livres', libelle: 'Ouvrir le livre du Trésor (et voir les points)', defaut: TRESOR },
   { cle: 'reglagesPaie', groupe: 'Trésor', libelle: 'Régler la paie', defaut: TRESOR },
   { cle: 'facture', groupe: 'Trésor', libelle: 'Inscrire, corriger ou rayer une facture', defaut: TRESOR },
@@ -154,15 +162,17 @@ export const GESTE_DE: Record<Action, Geste> = {
   retirer: 'retirer',
   versement: 'versement',
   demande: 'ecrire',
-  prendre: 'missionsMembre',
-  rendre: 'missionsMembre',
-  remettre: 'missionsMembre',
+  entree: 'remise',
+  signaler: 'missionsMembre',
+  recevoir: 'remise',
+  faconnage: 'sortie',
+  sortie: 'sortie',
+  sortir: 'sortie',
+  clore: 'sortie',
   confirmer: 'remise',
   refuser: 'remise',
   ponderation: 'ponderation',
   permanente: 'ecrire',
-  prendrePermanente: 'missionsMembre',
-  don: 'don',
   reglagesPaie: 'reglagesPaie',
   facture: 'facture',
   evenement: 'evenement',
@@ -247,6 +257,11 @@ export function lirePermissions(o: { roles?: Record<string, unknown>[]; permissi
 /** The seed of the Grimoire's rows: every gesture, its defaults checked for the ranks of the Rôles tab. */
 export function semis(t: TablePermissions) {
   return GESTES.map((g) => ({ cle: g.cle, geste: g.libelle, valeurs: Object.fromEntries(t.colonnes.map((c) => [c.nom, defautDe(g, c.cle)])) }))
+}
+
+/** The rows of the gestures added later (`semee`) that the tab lacks, with their defaults (seeded once, lot 2). */
+export function semisNouveaux(t: TablePermissions) {
+  return semis(t).filter((l) => GESTES.find((g) => g.cle === l.cle)?.semee && !t.ecrites[l.cle as Geste])
 }
 
 /* ───────────────────────── Who may ───────────────────────── */

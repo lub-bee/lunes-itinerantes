@@ -70,7 +70,9 @@ export function useRegistre(articles: Article[]) {
         .catch(() => {}),
     [],
   )
-  const lireDonnees = useCallback(() => {
+  /** `v`: a version known newer (a write made elsewhere, e.g. the Intendance's): never answered with an older copy. */
+  const lireDonnees = useCallback((v?: number) => {
+    if (typeof v === 'number') version.current = Math.max(version.current, v)
     setErreur(null)
     return fetch(`/api/registre?v=${version.current}`)
       .then(async (r) => {
@@ -86,22 +88,28 @@ export function useRegistre(articles: Article[]) {
     lireDonnees()
   }, [lireMarchand, lireDonnees])
 
-  // The caravan's ranks, once the reader has signed.
+  // The caravan's ranks, once the reader has signed (and again when a name was just written in Membres).
   const signe = marchand?.identite ?? null
+  const [tourNoms, setTourNoms] = useState(0)
+  /** `v`: the version of the write that reserved a name (the shared copy may be older). */
+  const relireNoms = useCallback((v?: number) => {
+    if (typeof v === 'number') version.current = Math.max(version.current, v)
+    setTourNoms((n) => n + 1)
+  }, [])
   useEffect(() => {
     if (!signe) {
       setHierarchie(null)
       setNoms(SANS_NOMS)
       return
     }
-    fetch('/api/caravane')
+    fetch(`/api/caravane?v=${version.current}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { rangs?: Hierarchie; noms?: string[] } | null) => {
         if (j?.rangs) setHierarchie(j.rangs)
         if (Array.isArray(j?.noms)) setNoms(j.noms)
       })
       .catch(() => {})
-  }, [signe])
+  }, [signe, tourNoms])
 
   useEffect(() => {
     if (!avis) return
@@ -172,7 +180,7 @@ export function useRegistre(articles: Article[]) {
     return { valeur, recettes: indexRecettes(donnees.recettes, donnees.ressources), etats: calculerMissives(donnees, valeur) }
   }, [donnees, articles])
 
-  return { hierarchie, noms, marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }
+  return { hierarchie, noms, relireNoms, marchand, donnees, erreur, calcul, avis, fermerAvis: () => setAvis(null), signer, oublier, agir, relire: lireDonnees }
 }
 
 export type EtatRegistre = ReturnType<typeof useRegistre>
