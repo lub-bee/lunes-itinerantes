@@ -668,6 +668,17 @@ own gesture: `remise` (record an entry, answer a declaration), `sortie` (new in 
   pre-filled with what it lacks, a search by item); everything else typed below is a gift (« Hors mission : un don »).
 - Until the script is v3s, « En cours » reads and says so in character; closing and correcting are refused (409).
 
+### The renaming of 2026-11-06 (script v3t, run once from the editor)
+
+The items' names brought to the official French names of the game (decisions in `_atelier/caravane/noms/`: `renommages.csv`,
+`revue-noms.md`, normalized in `plan-renommage.json`, embedded in grimoire.gs as `RENOMMAGE`). No web call reaches it; every
+answer is v3s's. In the editor: `grimoireRenommerSimuler` (writes nothing, logs every cell old → new, the rows deleted and added,
+the duplicates, the free text citing an old name), then `grimoireRenommer` (under the lock, once: the property `RENOMMAGE_FAIT`
+refuses a second run; refused too while a duplicate is not settled; each tab touched copied first to a hidden « Sauvegarde <tab>
+2026-11-06 »; the cache dropped and the version moved on). Name columns: Catalogues, Recettes, Ressources, Commandes, Pondération
+(not the levels), Missives, Mouvements, Demandes, Missions, Missions permanentes, Intendance, Écritures événements. Free text is
+never rewritten. `content/marchandises.csv` and the pondération's defaults (`lib/missions.ts`) carry the new names.
+
 Sheet tabs (Apps Script, created hidden when missing, editable by hand): `Pondération`, `Réglages missions`, `Demandes` (v3r adds
 `Titre` and `N° missive`), `Missions`, `Points`, `Missions permanentes`, and **`Intendance`** (v3r: `N°`, `Date`, `Genre` remise /
 don / rentrée / façonnage / vente / perte, `Statut` en attente / reçue / refusée / en cours / close / sortie, `Membre`, `Objet`,

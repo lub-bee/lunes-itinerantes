@@ -162,7 +162,7 @@ function liste(v: unknown, max: number, quoi: string): Record<string, unknown>[]
 function nomsConnus(lu: Lu, articles: { fr: string; en: string }[]): Map<string, string> {
   const res = new Map<string, string>()
   const ajouter = (n: string) => n && !res.has(cle(n)) && res.set(cle(n), n)
-  // The raw materials' own spelling wins over an ingredient's (« lys bleu » → « Lys Bleu »), and an
+  // The raw materials' own spelling wins over an ingredient's (« lys des cimes bleu » → « Lys des cimes bleu »), and an
   // English name of the catalogue or of a raw material leads to its French name.
   articles.forEach((a) => ajouter(a.fr))
   lu.ressources.forEach((r) => ajouter(r.nom))

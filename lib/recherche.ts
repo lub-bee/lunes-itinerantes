@@ -4,7 +4,7 @@ export function normaliser(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
-/** An article's id from its name (« Épée en fer » → « epee-en-fer »). */
+/** An article's id from its name (« Épée de fer » → « epee-de-fer »). */
 export function slug(s: string): string {
   return normaliser(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }

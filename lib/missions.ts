@@ -154,7 +154,7 @@ export const ACTIONS_MISSION: ActionMission[] = ['demande', 'entree', 'signaler'
 
 /* ───────────────────────── Defaults (missions/ponderation.md, 2026-10-28) ───────────────────────── */
 
-/** The level of intermediate products (Cuir from Peaux, Bande de cuir from Cuir, Sels…). */
+/** The level of intermediate products (Cuir from Peaux, Bandes de cuir from Cuir, Sels…). */
 export const CODE_TRANSFORMATION = 'T'
 
 // Ludo vouches for the alchemy; the other levels are a first guess, to be corrected in the tab.
@@ -191,32 +191,31 @@ const PAR_DEFAUT: [string, string, string[]][] = [
     'R1',
     'Cueillette',
     [
-      'Lavande', 'Lys Bleu', 'Lys jaune', 'Lys rouge', 'Lys violet', "Cosse d'herbe", 'Cloquerille', 'Chapeau blanc',
-      'Champignon luminescent', 'Branche de chardon', 'Coton de toundra', 'Langue de dragon', 'Lichen géant', 'Baies de genièvre',
-      'Genièvres', 'Hivernelle', 'Griveboise', 'Sel',
+      'Lavande', 'Lys des cimes bleu', 'Lys des cimes jaune', 'Lys des cimes rouge', 'Lys des cimes violet', 'Cosse', 'Cloquerille',
+      'Chapeau-blanc', 'Champignon luisant', 'Tige de chardon', 'Coton sauvage', 'Langue de dragon', 'Lichen géant', 'Genièvres',
+      'Hivernelle', 'Givreboises', 'Tas de sel',
     ],
   ],
   [
     'R2',
     'Cueillette / récolte localisée',
     [
-      'Pied de lutin', "Oreille d'elfe", 'Couronne sanglante', 'Mousse pendante', 'Grappe rampante', 'Campanule mortelle',
-      'Racine de canis', 'Pulpe de racine', 'Fronde de somnalius', 'Tapinelle mora', 'Coupe de tache verte', 'Obscurcine',
-      'Raisins Jazbay', 'Morelle noire', 'Myrrhe givrée', 'Amanite tue-mouches', 'Pholiotes à écailles', 'Mycènes des marais',
-      'Amanites jaunes',
+      'Pied-de-lutin', "Oreille d'Elfe", 'Couronne sanglante', 'Mousse barbue', 'Plantes grimpantes', 'Grelot-de-la-mort',
+      'Racine de canis', 'Pulpe de racine', 'Fronde de somnalius', 'Mora Tapinella', 'Coupe de tache verte', 'Obscurcine',
+      'Raisin jazbay', 'Amanite tue-mouches', 'Pholiote à écailles', 'Mycène des marais', 'Amanites jaunes',
     ],
   ],
-  ['R3', 'Chasse', ['Oeuf de Fauvette', 'Œuf de poisson carnassier', 'Écailles de poisson carnassier', 'Chitine de crabe de vase', 'Rayon de miel', 'Miel', 'Peau de ragnard carbonisée', 'Lapin cru']],
+  ['R3', 'Chasse', ['Oeuf de fauvette', 'Œuf de poisson carnassier', 'Écailles de poisson carnassier', 'Chitine de vasard', 'Rayons de miel', 'Miel', 'Peau de ragnard carbonisé', 'Patte de lapin crue']],
   [
     'R4',
     'Chasse',
-    ['Peau de loup', 'Peau de loup des neiges', "Peau d'ours", "Peau d'ours des neiges", 'Peau de Smilodon', 'Peau de Smilodon des neiges', "Griffes d'ours", 'Croc de smilodon', 'Venaison', 'Horqueur cru', 'Bœuf cru', 'Grands bois'],
+    ['Peau de loup', 'Peau de loup des glaces', "Peau d'ours", "Peau d'ours des neiges", 'Peau de smilodon', 'Peau de smilodon des neiges', "Griffes d'ours", 'Dent de smilodon', 'Venaison', 'Viande de horqueur', 'Boeuf cru', 'Grande ramure'],
   ],
-  ['R5', 'Créature', ['Graisse de troll', 'Œufs de chaurus', 'Chitine de chaurus', 'Venin de givre', 'Ectoplasme', 'Dents de spectre de glace', 'Défense de mammouth', 'Plumes de harfreuse', "Poudre d'os"]],
+  ['R5', 'Créature', ['Graisse de troll', 'Œufs de chaurus', 'Chitine de chaurus', 'Venin de givrépeire', 'Ectoplasme', 'Dent de spectre de glace', 'Défense de mammouth', "Plumes d'harfreuse", "Farine d'os"]],
   ['R6', 'Créature', ['Coeur de Daedra']],
   ['R6', 'Achat', ['Huile dwemer']],
-  ['', 'Mine', ["Minerai de fer", 'Minerai de corindon', "Minerai d'or", "Minerai d'argent", 'Minerai de vif-argent', 'Gemme spirituelle insignifiante', 'Rubis', 'Saphir', 'Améthyste', 'Charbon', 'Charbon pauvre']],
-  ['', 'Achat', ['Sucrelune', 'Morceau de Lin', 'Petit bois']],
+  ['', 'Mine', ["Minerai de fer", 'Corindon brut', "Minerai d'or", "Minerai d'argent", 'Minerai de vif-argent', 'Gemme spirituelle insignifiante', 'Rubis', 'Saphir', 'Améthyste', 'Charbon de bois', 'Charbon pauvre']],
+  ['', 'Achat', ['Sucrelune', 'Morceau de lin', 'Petit bois']],
 ]
 
 export const ASSIGNATIONS_DEFAUT: Assignation[] = PAR_DEFAUT.flatMap(([classe, origine, noms]) => noms.map((nom) => ({ nom, classe, origine, reference: null, note: '' })))
