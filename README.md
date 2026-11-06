@@ -709,19 +709,6 @@ whole accounting. Code: `lib/paie.ts` (pure), `app/api/paie/route.ts`, `componen
 - Tabs (Apps Script **v3n**, hidden, created on first write, sent only with `paie: true`): `Réglages paie`,
   `Factures`, `Événements`, `Écritures événements`, `Clôtures`. Without the flag, every answer is v3m's.
 
-## What pins the parchments (dagger or arrow, a trial)
-
-The loose slips (`components/Fiche.tsx`) and the order sheet (`components/Commande.tsx`) are pinned by a dagger
-planted through the paper, in their top-left corner (`components/Attache.tsx`, `.attache` in `app/globals.css`),
-instead of the old brass pin and iron nail. It sits in the paper layer, so it follows the falls, unrolls and lifts.
-The images (`public/attache/couteau.webp`, `fleche.webp`, 2x, slit and cast shadow baked in) are made in the atelier
-(`_atelier/caravane/attache/`: the dagger cut out of `couteau-source.png`, the arrow drawn as `src/fleche.svg`,
-`src/planter.py` cuts, rotates and shadows them).
-
-An arrow can replace the dagger, for comparing: on the testers' secret page `/permissions`, section « Ce qui cloue
-les parchemins », choose « La dague » or « La flèche ». The choice is stored in that browser only (localStorage
-`caravane-attache`, `couteau` by default and whenever storage is unavailable); nothing is written anywhere else.
-
 ## The Livre d'ombre (shadow book)
 
 A secret: the caravan's motto « Fidélité, Honnêteté, Septims » (on the title page and on the memo

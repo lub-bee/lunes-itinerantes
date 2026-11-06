@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import Permissions from '@/components/Permissions'
 import { ChoixQualite } from '@/components/Qualite'
-import { ChoixAttache } from '@/components/Attache'
 
 // The secret page of the permissions (lib/droits.ts, the Grimoire's rows of the shared tab): not in the book, reachable by its address only. The
 // middleware lets only testers in (TESTEURS_DISCORD_IDS); anyone else reads /permissions/scellee, answered 403.
@@ -29,7 +28,6 @@ export default function PagePermissions() {
         </p>
         <Permissions />
         <ChoixQualite />
-        <ChoixAttache />
       </article>
     </main>
   )
