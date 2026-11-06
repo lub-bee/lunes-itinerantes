@@ -1,5 +1,6 @@
 'use client'
 
+import { Attache } from './Attache'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { Article } from '@/lib/types'
 import { prix } from '@/lib/format'
@@ -523,7 +524,7 @@ export function FeuilleCommande({
       <div className="commande-masque">
       <div className="commande-corps" ref={corps}>
         <div className="commande-papier" aria-hidden />
-        <span className="commande-clou" aria-hidden />
+        <Attache />
         <header className="commande-tete">
           <div className="commande-surtitre">Caravane des Lunes Itinérantes</div>
           <h2 className="commande-titre">Bon de commande</h2>

@@ -1,5 +1,6 @@
 'use client'
 
+import { Attache } from './Attache'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Article } from '@/lib/types'
 import { prix, prixParLot } from '@/lib/format'
@@ -215,7 +216,7 @@ export function FicheVolante({
         <div className="fiche-masque">
           <div className="fiche-contenu" ref={papier}>
             <div className="fiche-papier" aria-hidden />
-            <span className="fiche-epingle" aria-hidden />
+            <Attache />
             <header className="fiche-tete">
               {embleme && <div className="fiche-embleme">{embleme}</div>}
               <div className="fiche-surtitre">{surtitre}</div>

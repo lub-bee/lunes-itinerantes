@@ -1103,7 +1103,7 @@ mark { background: linear-gradient(transparent 10%, var(--surligne) 10%, var(--s
 
 /* ─── The order sheet, laid over the left page ───
    Rag paper (greyer and colder than the book's parchment), deckled edges, a visible thickness and a
-   cast shadow; pinned by an iron nail. While a page turns it is lifted aside onto the table. */
+   cast shadow; pinned by a dagger (or an arrow, components/Attache.tsx). While a page turns it is lifted aside onto the table. */
 
 .commande-feuille {
   position: absolute;
@@ -1214,18 +1214,6 @@ mark { background: linear-gradient(transparent 10%, var(--surligne) 10%, var(--s
   box-shadow: 0 6px 9px rgba(25, 12, 0, 0.45), 0 2px 2px rgba(25, 12, 0, 0.35);
 }
 .commande-rouleau-lien { left: 44px; width: 18px; opacity: 0; }
-/* Iron nail pinning the sheet to the page, the paper dimpled round it. */
-.commande-clou {
-  position: absolute;
-  top: 7px;
-  left: 50%;
-  width: 12px;
-  height: 12px;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #c4bdb2, #615a51 40%, #24201c 80%);
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(90, 80, 60, 0.12), 0 0 7px 3px rgba(90, 80, 60, 0.18);
-}
 .commande-tete { position: relative; text-align: center; }
 .commande-surtitre { font-family: var(--f-capitales); font-size: 11.5px; letter-spacing: 0.16em; color: var(--encre-pale); margin-top: 4px; }
 .commande-titre { margin: 0; font-family: var(--f-gothique); font-weight: 400; font-size: 31px; line-height: 1.08; color: var(--encre); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4); }
@@ -1861,7 +1849,7 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .ressources-sorte { font-style: italic; font-size: 15px; color: var(--encre-douce); }
 
 /* ═══ The slip laid on the left page ═══
-   Loose rag paper, warmer than the order sheet, pinned with a brass pin. Set down with a short fall
+   Loose rag paper, warmer than the order sheet, pinned by a dagger (or an arrow). Set down with a short fall
    and taken away the same way (transform and opacity only, on its own layer). */
 
 .fiche {
@@ -1922,18 +1910,6 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
   filter: url(#fiche-barbes) drop-shadow(0 1px 0 #c3ad83);
 }
 .fiche-contenu::before { content: ''; position: absolute; inset: 8px; border: 1px solid rgba(47, 91, 58, 0.25); pointer-events: none; }
-/* Brass pin through the slip. */
-.fiche-epingle {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  width: 11px;
-  height: 11px;
-  translate: -50% 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #fff1c2, #c9a24e 40%, #6b4a14 85%);
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.5), 0 0 6px 3px rgba(120, 90, 40, 0.16);
-}
 .fiche-tete { position: relative; flex: none; text-align: center; margin-bottom: 6px; }
 .fiche-surtitre { font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.15em; color: var(--encre-pale); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 52px; }
 .fiche-titre { margin: 0; font-family: var(--f-gothique); font-weight: 400; font-size: 30px; line-height: 1.08; color: var(--encre); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4); }
@@ -4128,3 +4104,36 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 }
 .ecritures-evenement li.total > span:first-child { grid-column: 1 / 3; white-space: nowrap; }
 .ecritures-evenement li.total > strong { grid-column: 3 / -1; }
+
+/* ─── What pins the parchments (components/Attache.tsx): a dagger planted through the paper, or an arrow ───
+   One image per object (2x), the slit and the cast shadow baked in. Placed by its slit: --x / --y on the
+   paper, --fx / --fy the slit inside the image; scaled about the slit. Inside the paper layer, so it follows
+   the falls, unrolls and lifts of the sheet. In the top-left corner, clear of the centred heading. */
+.attache {
+  --x: 70px;
+  --y: 36px;
+  --s: 1;
+  position: absolute;
+  z-index: 2;
+  left: calc(var(--x) - var(--fx));
+  top: calc(var(--y) - var(--fy));
+  width: var(--w);
+  height: var(--h);
+  background: var(--img) 0 0 / 100% 100% no-repeat;
+  transform-origin: var(--fx) var(--fy);
+  scale: var(--s);
+  pointer-events: none;
+}
+.attache-couteau { --img: url('/attache/couteau.webp'); --w: 62px; --h: 51px; --fx: 54.3px; --fy: 40px; }
+.attache-fleche { --img: url('/attache/fleche.webp'); --w: 69px; --h: 43px; --fx: 64.5px; --fy: 38.6px; }
+.commande-corps > .attache { --x: 68px; --y: 34px; }
+@media (max-width: 860px) {
+  .attache { --s: 0.86; }
+  .fiche.mobile .attache { --x: 62px; --y: 37px; }
+  .commande-feuille.mobile .attache { --x: 56px; --y: 36px; }
+}
+/* The choice on the secret page /permissions: the two objects side by side. */
+.attache-option { gap: 10px; }
+.attache-option small { font-size: 13.5px; font-style: italic; color: var(--encre-pale); }
+.attache-apercu { position: relative; flex: none; width: 62px; height: 51px; background: var(--img) 50% 50% / contain no-repeat; }
+.attache-apercu.attache-fleche { width: 69px; height: 43px; }
