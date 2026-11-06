@@ -33,7 +33,7 @@ import {
 import { Action, Icone } from './Ornements'
 import { Coche, Geste, idMissive, Jauge, quand, quantite, Signature, echeance, type CtxRegistre, type RechercheLocale } from './Missives'
 import { Sceller } from './Fiche'
-import { ChampNombre, ChampRecherche, ciblesDe, destination, Ferme, gesteLivraison, GlypheLivraison, GlypheType, Inactif, livraisonDu, Message, Meta, moiDe, MOT_COURT_LIVRAISON, nf, nomsObjets, OptionsObjets, ouvert, permis, poids, Pts, pts, useScelle, voitPoints, type Reponse } from './MissionsCommun'
+import { ChampNombre, ChampRecherche, ciblesDe, destination, versDe, Ferme, gesteLivraison, GlypheLivraison, GlypheType, Inactif, livraisonDu, Message, Meta, moiDe, MOT_COURT_LIVRAISON, nf, nomsObjets, OptionsObjets, ouvert, permis, poids, Pts, pts, useScelle, voitPoints, type Reponse } from './MissionsCommun'
 import { AvisAllegement, EnAttente, FicheAlleger, FicheEntree, FicheEtatPermanente, FicheFaconnage, FicheFermer, FicheFeuillet, FichePerte, FicheSignaler } from './Intendance'
 
 /*
@@ -965,7 +965,7 @@ function FicheEcrire({ reg, articles, icones, fermer, objet: objet0 = '', quanti
                 <GlypheLivraison icones={icones} />
                 <span>
                   Livraison
-                  <em> · {objetQ(Q, p.article)} {missiveLiee ? `à destination de ${missiveLiee.commanditaire || missiveLiee.titre}` : v.missive ? (v.commanditaire.trim() ? `à destination de ${v.commanditaire.trim()}` : 'au commanditaire') : moiDe(reg) ? `à destination de ${moiDe(reg)}` : 'pour la caravane'}</em>
+                  <em> · {objetQ(Q, p.article)} {missiveLiee ? versDe(missiveLiee.commanditaire || missiveLiee.titre) : v.missive ? (v.commanditaire.trim() ? versDe(v.commanditaire) : 'au commanditaire') : versDe(moiDe(reg) ?? '')}</em>
                 </span>
               </span>
               <span>{nf(Q)}</span>

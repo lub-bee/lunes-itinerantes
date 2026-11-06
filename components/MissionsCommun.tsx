@@ -75,8 +75,16 @@ export function livraisonDu(reg: CtxRegistre, dm: Demande): Livraison {
   return livraisonDe(dm, d.missions, d.intendance, missive)
 }
 
-/** « à destination de Kesha » (who wrote the sheet, or the missive's client). */
-export const destination = (l: Livraison) => (l.destination ? `à destination de ${l.destination}` : 'pour la caravane')
+/** « à destination de Kesha », « du Jarl de Blancherive », « d’Ulfric »; nobody named: « pour la caravane ». */
+export function versDe(nom: string): string {
+  const n = nom.trim()
+  if (!n) return 'pour la caravane'
+  if (/^le /i.test(n)) return `à destination du ${n.slice(3)}`
+  if (/^les /i.test(n)) return `à destination des ${n.slice(4)}`
+  return /^[aeiouyàâéèêëîïôöûü]/i.test(n) ? `à destination d’${n}` : `à destination de ${n}`
+}
+/** The Livraison's destination (who wrote the sheet, or the missive's client). */
+export const destination = (l: Livraison) => versDe(l.destination)
 
 /** The Livraison's state in one or two words (a table cell). */
 export const MOT_COURT_LIVRAISON: Record<Livraison['etat'], string> = { attend: 'à faire', prete: 'prête', livree: 'livrée', abandonnee: 'abandonnée', close: 'close' }
