@@ -241,7 +241,7 @@ export async function chargerLivre(): Promise<Livre> {
     // leaves, writing missions, the weights.
     {
       type: 'intendance', vue: 'encours', id: 'en-cours', partie: 'intendance', titre: 'Les missions en cours', titreEn: 'Missions in Progress', court: 'En cours', icone: 'hunting-horn',
-      intro: 'Tout ce que la caravane attend encore : chaque feuillet, chaque mission, ce qu’il faut, ce qui est reçu, ce qui manque et ce qui attend qu’on le confirme. On y corrige un feuillet, on clôt une mission dont on n’a plus besoin, on rouvre ce qui a été clos trop tôt.',
+      intro: 'Tout ce que la caravane attend encore : chaque mission mère et ses missions enfants, ce qu’il faut, ce qui est reçu, ce qui manque et ce qui attend qu’on le confirme. Quand tout est réuni, on vérifie le coffre et on clôt la mission mère : c’est sa livraison. On y corrige une mission mère, on clôt une mission dont on n’a plus besoin, on rouvre ce qui a été clos trop tôt.',
     },
     {
       type: 'coffre', id: 'coffre', partie: 'intendance', titre: 'Le coffre', titreEn: 'The Chest', court: 'Le coffre', icone: 'open-chest',
@@ -257,7 +257,7 @@ export async function chargerLivre(): Promise<Livre> {
     },
     {
       type: 'intendance', vue: 'ecrire', id: 'demandes', partie: 'intendance', titre: 'Écrire une mission', titreEn: 'Writing Missions', court: 'Écrire', icone: 'scroll-quill',
-      intro: 'Choisis ce qu’il faut réunir : le grimoire propose l’arbre des besoins, tu décoches ce que la caravane a déjà, tu ajustes les quantités, puis tu publies. Pour une commande venue du dehors, coche « c’est une missive ».',
+      intro: 'Choisis ce qu’il faut réunir : c’est la mission mère. Le grimoire propose l’arbre des besoins, ses missions enfants ; tu décoches ce que la caravane a déjà, tu ajustes les quantités, puis tu publies. La livraison est toujours la dernière tâche, même quand tout est déjà au coffre. Pour une commande venue du dehors, coche « c’est une missive ».',
     },
     {
       type: 'patriarche', vue: 'ponderation', id: 'ponderation', partie: 'intendance', titre: 'La pondération des efforts', titreEn: 'Weights of Effort', court: 'Pondération', icone: 'weight-scale',

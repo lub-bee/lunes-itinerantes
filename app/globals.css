@@ -4128,3 +4128,89 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 }
 .ecritures-evenement li.total > span:first-child { grid-column: 1 / 3; white-space: nowrap; }
 .ecritures-evenement li.total > strong { grid-column: 3 / -1; }
+
+/* ───────── Lot 2c: the « Mission mère » and its « missions enfants », the Livraison, the « Terminée » stamp ───────── */
+
+/* « En cours »: every open mother a card of its own; its state in words on its header; its children indented under it. */
+.liste-meres, .liste-meres-closes { list-style: none; margin: 0; padding: 0; text-align: left; }
+.carte-mere { margin: 0 0 16px; padding: 9px 12px 8px; border: 1px solid rgba(110, 80, 45, 0.38); border-radius: 3px; background: rgba(255, 250, 235, 0.24); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 7px rgba(60, 30, 10, 0.14); }
+.carte-mere.prete { border-color: rgba(47, 91, 58, 0.6); border-left: 4px solid #2f5b3a; }
+.carte-mere.faite { border-left: 4px solid rgba(142, 31, 20, 0.6); }
+.mere-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.mere-surtitre { display: block; flex-basis: 100%; font-family: var(--f-capitales); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--encre-pale); }
+.mere-tete .feuillet-meta { flex: 1 1 100%; margin: 0; }
+.mere-etat { flex-basis: 100%; margin: 4px 0 2px; font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.02em; color: var(--encre-douce); }
+.mere-etat.prete { font-size: 17px; color: #2f5b3a; }
+.mere-etat.faite { color: var(--encre-rouge); }
+.mere-tete .mission-gestes { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 4px 16px; }
+.mere-suite { margin: 8px 0 4px; padding: 8px 10px; border: 1px dashed rgba(47, 91, 58, 0.6); background: rgba(120, 160, 110, 0.13); font-size: 15px; line-height: 1.4; color: var(--encre); }
+.mere-suite p { margin: 0 0 8px; }
+.mere-suite strong { font-family: var(--f-capitales); font-weight: 400; color: #2f5b3a; }
+.geste-mere { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 14px 5px; border: 1.5px solid rgba(142, 31, 20, 0.72); border-radius: 3px; background: rgba(142, 31, 20, 0.08); font-family: var(--f-capitales); font-size: 16px; letter-spacing: 0.04em; color: var(--encre-rouge); cursor: pointer; }
+.geste-mere .icone { flex: none; width: 18px; height: 18px; }
+.geste-mere:not(:disabled):hover, .geste-mere:focus-visible { outline: none; background: rgba(142, 31, 20, 0.17); }
+.geste-mere:disabled { opacity: 0.45; cursor: default; }
+.mere-enfants { margin: 6px 0 0 12px; padding-left: 10px; border-left: 2px solid rgba(110, 80, 45, 0.28); }
+.mere-enfants-titre { margin: 0 0 2px; font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.1em; color: var(--encre-pale); }
+
+/* Mission · Requis · Reçu · État: the state in words (« manque 40 », « comblée », « close »), the Livraison last. */
+.mere-table .besoins-entete, .mere-table .besoins-ligne, .fermer-enfants .besoins-entete, .fermer-enfants .besoins-ligne { grid-template-columns: minmax(0, 1fr) 56px 56px 86px; }
+.besoins-etat { text-align: right; font-size: 14.5px; line-height: 1.2; }
+.besoins-ligne.manquant .besoins-etat { color: var(--encre-rouge); }
+.besoins-ligne.reuni .besoins-etat { font-style: italic; color: #2f5b3a; }
+.besoins-ligne.close .besoins-etat { font-style: italic; color: var(--encre-pale); }
+.besoins-ligne.livraison { border-top: 1px solid rgba(110, 80, 45, 0.38); border-bottom: 0; }
+.besoins-ligne.livraison .besoins-etat { font-style: italic; color: var(--encre-douce); }
+.besoins-ligne.livraison.prete .besoins-etat { font-style: normal; font-weight: 600; color: #2f5b3a; }
+.besoins-ligne.livraison.livree .besoins-etat { color: #2f5b3a; }
+.besoins-ligne.livraison.close .besoins-mot, .besoins-ligne.livraison.abandonnee .besoins-mot { text-decoration: none; }
+.glyphe-livraison { color: #1f3a5f; }
+.besoins-mot .glyphe-livraison { width: 22px; height: 22px; }
+.besoins-mot .glyphe-livraison .icone { width: 14px; height: 14px; }
+.fermer-enfants { margin-bottom: 4px; }
+
+/* A closed mother, compact: [titre] [date] … [rouvrir], then one line per thing asked and one for its children. */
+.mere-close { margin: 0 0 10px; padding: 6px 10px 5px; border: 1px solid rgba(110, 80, 45, 0.22); border-radius: 3px; background: rgba(255, 250, 235, 0.12); }
+.mere-close-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.mere-close-tete .feuillet-titre { color: var(--encre-douce); }
+.mere-close-date { flex: 1 1 auto; font-size: 13.5px; font-style: italic; color: var(--encre-pale); }
+.mere-close-tete .action { margin-left: auto; }
+.mere-close-lignes { margin: 3px 0 0; padding-left: 20px; list-style: disc; font-size: 14.5px; color: var(--encre-douce); }
+.mere-close-lignes li { margin: 1px 0; overflow-wrap: anywhere; }
+.mere-close-lignes li > * + * { margin-left: 8px; }
+.mere-close-lignes em { color: var(--encre-rouge); }
+.mere-close-lignes em.fait, .missions-missive em.fait { color: #2f5b3a; }
+.mere-close-dest { font-style: italic; color: var(--encre-pale); }
+
+/* « Écrire »: what an open mother lacks, in words; a closed one under a big « Terminée » stamp over all its lines. */
+.liste-demandes .demande { position: relative; }
+.demande-manque { font-size: 14px; line-height: 1.35; color: var(--encre-douce); }
+.demande.terminee { min-height: 64px; }
+.demande.terminee > :not(.tampon-terminee) { opacity: 0.5; }
+.tampon.tampon-terminee { position: absolute; inset: 0; width: max-content; height: max-content; max-width: 92%; margin: auto; padding: 4px 18px 1px; border-width: 3px; font-size: 27px; letter-spacing: 0.16em; text-transform: uppercase; rotate: -7deg; pointer-events: none; }
+
+/* The call: a mother's children indented under it, its Livraison last. */
+.feuillet > .mere-surtitre { margin-bottom: 1px; }
+.missions-enfants { margin-left: 10px; padding-left: 8px; border-left: 2px solid rgba(110, 80, 45, 0.22); }
+.mission.livraison { border-top: 1px dashed rgba(110, 80, 45, 0.35); }
+.livraison-etat { font-style: italic; }
+.missions-missive li.livraison { border-top: 1px dashed rgba(110, 80, 45, 0.35); }
+
+/* « Écrire une mission »: the Livraison as the tree's last line, always there. */
+.tri-livraison .tri-nom { cursor: default; }
+.tri-fixe { display: grid; place-items: center; width: 18px; height: 18px; font-size: 14px; color: #2f5b3a; }
+.tri-toujours { font-size: 13px; font-style: italic; text-align: right; color: var(--encre-pale); }
+
+/* « Livrer la missive »: nobody brought anything, the leftover. */
+.fiche-personne { font-style: italic; }
+.fiche-reste { font-style: italic; }
+.fiche-unite input:disabled { opacity: 0.55; }
+
+@media (max-width: 520px) {
+  .carte-mere { padding: 8px 8px 6px; }
+  .mere-enfants { margin-left: 2px; padding-left: 6px; }
+  .mere-table .besoins-entete, .mere-table .besoins-ligne, .fermer-enfants .besoins-entete, .fermer-enfants .besoins-ligne { grid-template-columns: minmax(0, 1fr) 42px 42px 70px; column-gap: 4px; }
+  .besoins-etat { font-size: 13px; }
+  .missions-enfants { margin-left: 2px; padding-left: 6px; }
+  .tampon.tampon-terminee { font-size: 22px; padding: 3px 12px 1px; }
+}

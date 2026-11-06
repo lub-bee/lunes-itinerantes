@@ -668,6 +668,28 @@ own gesture: `remise` (record an entry, answer a declaration), `sortie` (new in 
   pre-filled with what it lacks, a search by item); everything else typed below is a gift (« Hors mission : un don »).
 - Until the script is v3s, « En cours » reads and says so in character; closing and correcting are refused (409).
 
+### Mission mère, missions enfants, the Livraison (lot 2c, no script change)
+
+- **Words**: a sheet is a « Mission mère » on every page, its lines its « missions enfants » (code identifiers unchanged:
+  `Demande`, `feuillet`…).
+- **The Livraison**, every mother's last task (`livraisonDe`, lib/missions.ts): derived, never stored: the asked goods to their
+  destination (the missive's client, else who wrote the mother). A missive's mother follows the missive (« livrée »,
+  « abandonnée »; its gesture « Livrer la missive »), the caravan's own follows its closing (closing it is delivering it); before
+  that « prête » once every open child is filled, else « à faire ». Shown last in « En cours », the call, the mother's page, the
+  missive's missions and « Écrire une mission ».
+- **A mother without children**: every line may be unticked in « Écrire une mission ». The script (v3m) refuses a demand without
+  missions, so the server writes one placeholder mission with it and, in a second call, sets it « retirée » (action `feuillet`,
+  v3s): no row is deleted, the reader leaves it out. A correction may now remove every child too.
+- **« En cours »**: one card per open mother (its state in words on its header; « Prochaine étape : vérifie le coffre, puis clos
+  la mission mère » and a prominent button once everything is gathered; children indented, Mission · Requis · Reçu · État in
+  words, then the Livraison); the closed mothers compact (title, closing date, rouvrir; the goods, their state and destination;
+  the children's count and state). The close confirmation lists each child and what the register counts in the chest.
+- **Closing date**: closing a mother writes « close le 2026-11-06 14:20 » (Tokyo time) in its Demandes « Statut » (still read as
+  closed, reopened as before); a mother closed before lot 2c shows no date.
+- **« Écrire »**: what each open mother still lacks, in words; a closed one under a large « Terminée » stamp.
+- **« Livrer la missive »**: when nobody brought anything, the form says so, greys the « Part commune » (everything is shared in
+  equal parts, `partager`) and shows the septims that do not divide evenly (« restent à la caravane »).
+
 ### The renaming of 2026-11-06 (script v3t, run once from the editor)
 
 The items' names brought to the official French names of the game (decisions in `_atelier/caravane/noms/`: `renommages.csv`,

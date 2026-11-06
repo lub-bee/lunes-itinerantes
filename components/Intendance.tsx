@@ -3,26 +3,31 @@
 import { useMemo, useState } from 'react'
 import type { Article, PageIntendance } from '@/lib/types'
 import { dateTamrielique } from '@/lib/format'
-import { avecAnglais, cle, dicoAnglais, enStock, recetteUsage, rejouer, variantesDe } from '@/lib/missives'
+import { avecAnglais, cle, dicoAnglais, enStock, recetteUsage, rejouer, variantesDe, type Stock } from '@/lib/missives'
 import { nomDuRegistre } from '@/lib/noms'
 import { nomsCorrespondent } from '@/lib/recherche'
 import { estEntree, etatFaconnage, etatMission, objetQ, PETITES_LUNES, quoiLigne, tauxDe, TEXTES_FEUILLETS, type LigneIntendance } from '@/lib/intendance'
-import { allegements, avancement, feuilletClos, pointsDon, prixDon, VERBES, type Allegement, type Demande, type DonneesMissions, type Mission, type Permanente } from '@/lib/missions'
-import { Action } from './Ornements'
+import { allegements, feuilletClos, fermeLe, pointsDon, prixDon, VERBES, type Allegement, type Demande, type DonneesMissions, type Livraison, type Mission, type Permanente } from '@/lib/missions'
+import { Action, Icone } from './Ornements'
 import { ChampNom } from './ChampNom'
 import { Coche, Geste, Jauge, quand, Signature, type CtxRegistre, type RechercheLocale } from './Missives'
 import { Sceller } from './Fiche'
 import {
   ChampRecherche,
   ciblesDe,
+  destination,
   Ferme,
+  gesteLivraison,
+  GlypheLivraison,
   GlypheType,
   Inactif,
   LIGNE_VIDE,
   lignesEnvoyees,
   LignesObjets,
+  livraisonDu,
   Message,
   Meta,
+  MOT_COURT_LIVRAISON,
   moiDe,
   nf,
   nomsObjets,
@@ -311,10 +316,14 @@ export function GaucheIntendance({ page, reg, icones, compact, recherche }: { pa
           </div>
           {page.vue === 'reception' && <p className="note-encre">Ce qui attend au coffre des petites lunes n’est pas encore dans le coffre de la caravane : réponds « reçu » ligne par ligne en le vidant. Ce que personne n’a signalé, consigne-le au nom de qui l’a déposé, ou comme don anonyme.</p>}
           {page.vue === 'sorties' && <p className="note-encre">Une vente ne touche pas au coffre, sauf ses lignes cochées « pris au coffre » sur le bon : elles attendent ici qu’on confirme la sortie.</p>}
-          {page.vue === 'encours' && <p className="note-encre">Une mission comblée reste ouverte : ce qui arrive après compte encore. Quand la caravane n’en a plus besoin, clos-la ; ce qu’elle a reçu reste compté.</p>}
-          {page.vue === 'encours' && <ChampRecherche recherche={recherche} placeholder="Chercher un feuillet, un objet, un nom…" />}
+          {page.vue === 'encours' && (
+            <p className="note-encre">
+              Une mission mère attend ses missions enfants, puis sa livraison. Une mission enfant comblée reste ouverte : ce qui arrive après compte encore. Quand toutes sont comblées, vérifie le coffre, puis clos la mission mère : c’est sa livraison ; ce qu’elle a reçu reste compté.
+            </p>
+          )}
+          {page.vue === 'encours' && <ChampRecherche recherche={recherche} placeholder="Chercher une mission mère, un objet, un nom…" />}
           {(page.vue === 'reception' || page.vue === 'sorties') && <ChampRecherche recherche={recherche} placeholder={page.vue === 'reception' ? 'Chercher une entrée, un nom…' : 'Chercher une sortie, un nom…'} />}
-          {page.vue === 'ecrire' && <ChampRecherche recherche={recherche} placeholder="Chercher un feuillet…" />}
+          {page.vue === 'ecrire' && <ChampRecherche recherche={recherche} placeholder="Chercher une mission mère…" />}
         </>
       )}
     </>
@@ -345,18 +354,22 @@ export function DroiteIntendance({ page, reg, icones, interactif, requetes = [] 
         <Registre reg={reg} requetes={requetes} lignes={d.intendance.filter((l) => !estEntree(l) && l.statut !== 'en attente')} />
       </div>
     )
-  // « Écrire une mission »: the sheets written, their progress; the standing missions.
+  // « Écrire une mission »: the sheets written, what each still lacks in words (a closed one under a « Terminée » stamp);
+  // the standing missions.
   const dico = dicoAnglais(reg.r.donnees)
   const feuillets = [...d.demandes].reverse().filter((x) => requetes.every((q) => !q.trim() || nomsCorrespondent([x.titre, ...avecAnglais([x.article], dico), x.membre], q)))
   return (
     <div className="intendance-droite">
-      <h3 className="titre-section">Les feuillets écrits</h3>
+      <h3 className="titre-section">Les missions mères écrites</h3>
       {feuillets.length ? (
         <ul className="liste-demandes">
           {feuillets.map((x) => {
-            const a = avancement(x, d.missions, d.intendance)
+            const clos = feuilletClos(x)
+            const ms = d.missions.filter((m) => m.demande === x.numero)
+            const points = ms.reduce((t, m) => t + m.points, 0)
+            const le = fermeLe(x)
             return (
-              <li key={x.numero} className="demande">
+              <li key={x.numero} className={`demande ${clos ? 'terminee' : ''}`}>
                 <button type="button" className="lien-encre demande-titre" tabIndex={tab} onClick={() => reg.allerA(idDemande(x.numero))}>
                   {x.titre || `${nf(x.quantite)} ${x.article}`}
                 </button>
@@ -364,20 +377,22 @@ export function DroiteIntendance({ page, reg, icones, interactif, requetes = [] 
                   {x.horodatage && <>le {dateTamrielique(x.horodatage)}</>}
                   {x.membre && <> par {x.membre}</>}
                   {x.missive && <> · missive</>}
-                  {feuilletClos(x) && <strong className="tampon-clos"> · clos</strong>}
                 </span>
-                <span className="demande-avance">
-                  <Jauge avance={a.avance} titre={`${a.comblees} missions comblées sur ${a.total}`} />
-                  <span>
-                    {a.comblees}/{a.total} comblées{voitPoints(reg) && <> · {pts(a.points)}</>}
+                <span className="demande-manque">
+                  {clos ? <>Terminée{le && <> le {dateTamrielique(le)}</>}.</> : <CeQuiManque reg={reg} dm={x} ms={ms} />}
+                  {voitPoints(reg) && points > 0 && <> · {pts(points)}</>}
+                </span>
+                {clos && (
+                  <span className="tampon tampon-terminee" aria-hidden>
+                    Terminée
                   </span>
-                </span>
+                )}
               </li>
             )
           })}
         </ul>
       ) : (
-        <p className="vide-encre">Nul feuillet n’est encore écrit.</p>
+        <p className="vide-encre">Nulle mission mère n’est encore écrite.</p>
       )}
       {d.permanentes.length > 0 && (
         <>
@@ -407,6 +422,27 @@ export function DroiteIntendance({ page, reg, icones, interactif, requetes = [] 
         </>
       )}
     </div>
+  )
+}
+
+/** What an open mother still lacks, in words (lot 2c): which child missions, how many; or that only its delivery is left. */
+const MAX_MANQUES = 4
+function CeQuiManque({ reg, dm, ms }: { reg: CtxRegistre; dm: Demande; ms: Mission[] }) {
+  const d = reg.m!.donnees!
+  const l = livraisonDu(reg, dm)
+  if (l.etat !== 'attend') {
+    if (l.etat === 'prete') return <>{l.enfants - l.closes ? 'Toutes ses missions enfants sont comblées' : 'Nulle mission enfant à remplir'} : reste la livraison.</>
+    return <>{l.etat === 'livree' ? 'Missive livrée' : 'Missive abandonnée'} : reste à clore la mission mère.</>
+  }
+  const manques = ms
+    .filter((m) => m.statut !== 'close')
+    .map((m) => ({ m, e: etatMission(m, d.intendance) }))
+    .filter((x) => x.e.manque > 0)
+  return (
+    <>
+      Il manque {manques.slice(0, MAX_MANQUES).map((x) => objetQ(x.e.manque, x.m.objet)).join(', ')}
+      {manques.length > MAX_MANQUES && <> et {manques.length - MAX_MANQUES} autre{manques.length - MAX_MANQUES > 1 ? 's' : ''}</>} ({manques.length} mission{manques.length > 1 ? 's' : ''} enfant{manques.length > 1 ? 's' : ''} sur {l.enfants - l.closes}), puis la livraison.
+    </>
   )
 }
 
@@ -845,94 +881,219 @@ export function AvisAllegement({ reg, numero, tab }: { reg: CtxRegistre; numero?
   )
 }
 
-/** One sheet in the missions in progress: its missions (Requis · Reçu · Manque, waiting), the gestures to correct or close. */
-function BlocEnCours({ dm, ms, reg, icones, tab }: { dm: Demande; ms: Mission[]; reg: CtxRegistre; icones: Record<string, string>; tab: number }) {
+/** A child mission's state in words (lot 2c, Ludo: « comblée » written, not a tick under « Manque »). */
+function etatEnfant(m: Mission, e: ReturnType<typeof etatMission>, mereClose = false) {
+  if (m.statut === 'close' || mereClose) return { mot: 'close', classe: 'close' }
+  return e.manque > 0 ? { mot: `manque ${nf(e.manque)}`, classe: 'manquant' } : { mot: 'comblée', classe: 'reuni' }
+}
+
+/** The mother's state in words, on its header (lot 2c). */
+function etatMere(l: Livraison): { texte: string; classe: string } {
+  const ouvertes = l.enfants - l.closes
+  if (l.etat === 'livree') return { texte: l.missive ? 'La missive est livrée.' : 'Livrée.', classe: 'faite' }
+  if (l.etat === 'abandonnee') return { texte: 'La missive est abandonnée.', classe: 'faite' }
+  if (l.etat === 'prete') return { texte: ouvertes ? 'Toutes ses missions enfants sont comblées.' : 'Nulle mission enfant à remplir : tout est déjà au coffre.', classe: 'prete' }
+  return { texte: `En cours : ${l.comblees} mission${l.comblees > 1 ? 's' : ''} enfant${l.comblees > 1 ? 's' : ''} comblée${l.comblees > 1 ? 's' : ''} sur ${ouvertes}.`, classe: 'attend' }
+}
+
+/** The children of a sheet and its Livraison as the rows of a table: Mission · Requis · Reçu · État. */
+function TableEnfants({ dm, ms, l, reg, icones, tab, gestes, auCoffre }: { dm: Demande; ms: Mission[]; l: Livraison; reg: CtxRegistre; icones: Record<string, string>; tab: number; gestes: boolean; auCoffre: number }) {
   const d = reg.m!.donnees!
-  const clos = feuilletClos(dm)
+  const pret = d.feuilletsActifs
+  const aide = pret ? undefined : TEXTES_FEUILLETS.inactif
+  return (
+    <div className="besoins encours-besoins mere-table" role="table">
+      <div className="besoins-entete" role="row">
+        <span>Mission</span>
+        <span>Requis</span>
+        <span>Reçu</span>
+        <span>État</span>
+      </div>
+      {ms.map((m) => {
+        const e = etatMission(m, d.intendance)
+        const close = m.statut === 'close'
+        const x = etatEnfant(m, e)
+        return (
+          <div key={m.numero} role="row" className={`besoins-ligne ${x.classe}`}>
+            <span className="besoins-nom">
+              <span className="besoins-mot">
+                <GlypheType type={m.type} icones={icones} /> {VERBES[m.type]} {m.objet}
+              </span>
+              {close && <em>close : elle a quitté l’appel</em>}
+              {e.attente > 0 && <em>{nf(e.attente)} en attente de confirmation</em>}
+              {gestes && (m.statut === 'ouverte' || close) && (
+                <span className="encours-gestes">
+                  <Action icone={close ? 'rouvrir' : 'clore'} tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'mission', numero: m.numero, ouvrir: close })}>
+                    {close ? 'rouvrir' : 'clore'}
+                  </Action>
+                </span>
+              )}
+            </span>
+            <span>{nf(e.requis)}</span>
+            <span>{nf(e.recu)}</span>
+            <span className="besoins-etat">{x.mot}</span>
+          </div>
+        )
+      })}
+      <div role="row" className={`besoins-ligne livraison ${l.etat}`}>
+        <span className="besoins-nom">
+          <span className="besoins-mot">
+            <GlypheLivraison icones={icones} /> Livraison
+          </span>
+          <em>
+            {objetQ(l.quantite, l.objet)} {destination(l)}
+            {l.etat === 'attend' && <> · au coffre, le registre en compte {nf(auCoffre)}</>}
+          </em>
+        </span>
+        <span>{nf(l.quantite)}</span>
+        <span>—</span>
+        <span className="besoins-etat">{MOT_COURT_LIVRAISON[l.etat]}</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * One open mother in the missions in progress (lot 2c): a card of its own, the mother as its header (its state in words),
+ * its child missions under it, indented, then its last task, the Livraison. When everything is gathered the card says so
+ * and gives the next step: check the chest, then close the mother (or deliver the missive).
+ */
+function BlocEnCours({ dm, ms, reg, icones, tab, stock }: { dm: Demande; ms: Mission[]; reg: CtxRegistre; icones: Record<string, string>; tab: number; stock: Stock }) {
+  const d = reg.m!.donnees!
   const peut = permis(reg, 'fermer')
   const pret = d.feuilletsActifs
   const aide = pret ? undefined : TEXTES_FEUILLETS.inactif
   const missive = dm.missive ? reg.r.calcul?.etats.find((e) => e.missive.numero === dm.missive)?.missive : undefined
-  const a = avancement(dm, ms, d.intendance)
+  const l = livraisonDu(reg, dm)
+  const etat = etatMere(l)
+  const geste = gesteLivraison(reg, dm, l)
+  const auCoffre = Math.max(0, enStock(stock, dm.article))
+  const prete = l.etat === 'prete'
   return (
-    <li className={`feuillet encours-feuillet ${clos ? 'clos' : ''}`}>
-      <div className="encours-tete">
+    <li className={`carte-mere ${etat.classe}`}>
+      <div className="mere-tete">
+        <span className="mere-surtitre">Mission mère{missive ? ' · missive' : ''}</span>
         <button type="button" className="feuillet-titre" tabIndex={tab} onClick={() => reg.allerA(idDemande(dm.numero))}>
           {titreFeuillet(dm)}
         </button>
         <span className="feuillet-meta">
           {missive ? <>missive de {missive.commanditaire || missive.titre}</> : <>pour la caravane</>}
-          {dm.membre && <> · écrit par {dm.membre}</>}
+          {dm.membre && <> · écrite par {dm.membre}</>}
           {dm.horodatage && <> le {dateTamrielique(dm.horodatage)}</>}
-          {' · '}
-          {a.comblees}/{a.total} comblées
-          {clos && <strong className="tampon-clos"> · clos</strong>}
         </span>
+        <p className={`mere-etat ${etat.classe}`}>{etat.texte}</p>
         {peut && (
           <span className="mission-gestes">
-            {!clos && (
-              <Action icone="corriger" tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'feuillet', numero: dm.numero })}>
-                corriger
-              </Action>
-            )}
-            <Action icone={clos ? 'rouvrir' : 'clore'} tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'feuillet', numero: dm.numero, ouvrir: clos })}>
-              {clos ? 'rouvrir le feuillet' : 'clore le feuillet'}
+            <Action icone="corriger" tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'feuillet', numero: dm.numero })}>
+              corriger
+            </Action>
+            <Action icone="clore" tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'feuillet', numero: dm.numero })}>
+              clore la mission mère
             </Action>
           </span>
         )}
       </div>
-      {!clos && (
-        <div className="besoins encours-besoins" role="table">
-          <div className="besoins-entete" role="row">
-            <span>Mission</span>
-            <span>Requis</span>
-            <span>Reçu</span>
-            <span>Manque</span>
-          </div>
-          {ms.map((m) => {
-            const e = etatMission(m, d.intendance)
-            const close = m.statut === 'close'
-            return (
-              <div key={m.numero} role="row" className={`besoins-ligne ${close ? 'close' : e.manque > 0 ? 'manquant' : 'reuni'}`}>
-                <span className="besoins-nom">
-                  <span className="besoins-mot">
-                    <GlypheType type={m.type} icones={icones} /> {VERBES[m.type]} {m.objet}
-                  </span>
-                  {close && <em>close : elle a quitté l’appel</em>}
-                  {e.attente > 0 && <em>{nf(e.attente)} en attente de confirmation</em>}
-                  {peut && (m.statut === 'ouverte' || close) && (
-                    <span className="encours-gestes">
-                      <Action icone={close ? 'rouvrir' : 'clore'} tabIndex={tab} disabled={!pret} title={aide} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'mission', numero: m.numero, ouvrir: close })}>
-                        {close ? 'rouvrir' : 'clore'}
-                      </Action>
-                    </span>
-                  )}
-                </span>
-                <span>{nf(e.requis)}</span>
-                <span>{nf(e.recu)}</span>
-                <span className="besoins-manque">{close ? '—' : e.manque > 0 ? nf(e.manque) : <Coche />}</span>
-              </div>
-            )
-          })}
+      {(prete || l.etat === 'livree' || l.etat === 'abandonnee') && (
+        <div className="mere-suite" role="status">
+          {prete ? (
+            <p>
+              <strong>Prochaine étape :</strong> vérifie de tes yeux qu’il y a bien au coffre {objetQ(dm.quantite, dm.article)} (le registre en compte {nf(auCoffre)}
+              {auCoffre < dm.quantite ? <>, <span className="a-fixer">il en manquerait {nf(dm.quantite - auCoffre)}</span></> : null}), puis{' '}
+              {l.missive ? <>livre la missive {destination(l)}.</> : <>clos la mission mère : c’est sa livraison {destination(l)}.</>}
+            </p>
+          ) : (
+            <p>
+              <strong>Prochaine étape :</strong> {l.etat === 'livree' ? 'la missive est livrée' : 'la missive est abandonnée'} ; clos la mission mère pour qu’elle quitte l’appel.
+            </p>
+          )}
+          {geste && (
+            <button type="button" className="geste-mere" tabIndex={tab} disabled={!geste.pret} title={geste.aide} onClick={geste.ouvrir}>
+              <Icone corps={icones[geste.texte === 'Livrer la missive' ? 'hand-truck' : 'padlock']} />
+              <span>{geste.texte}</span>
+            </button>
+          )}
         </div>
       )}
+      <div className="mere-enfants">
+        <p className="mere-enfants-titre">
+          {ms.length ? `Ses missions enfants (${ms.length}), puis la livraison` : 'Nulle mission enfant : la livraison seule'}
+        </p>
+        <TableEnfants dm={dm} ms={ms} l={l} reg={reg} icones={icones} tab={tab} gestes={peut} auCoffre={auCoffre} />
+      </div>
     </li>
   )
 }
 
-/** « Les missions en cours »: every open sheet, the standing missions, the closed sheets (to reopen). */
+/** The words of a closed mother's goods (lot 2c): delivered, given up, closed before being gathered. */
+function motObjetClos(l: Livraison) {
+  if (l.etat === 'livree') return l.missive ? 'missive livrée' : 'livraison faite'
+  if (l.etat === 'abandonnee') return 'missive abandonnée'
+  if (l.etat === 'close') return 'clos avant d’être réuni'
+  return 'missive pas encore livrée'
+}
+
+/** « 5 missions enfants » and their state, on one line. */
+function motEnfants(l: Livraison) {
+  if (!l.enfants) return { quoi: 'Nulle mission enfant', etat: 'tout venait du coffre', fait: true }
+  const quoi = `${l.enfants} mission${l.enfants > 1 ? 's' : ''} enfant${l.enfants > 1 ? 's' : ''}`
+  if (!l.closes && l.comblees === l.enfants) return { quoi, etat: l.enfants > 1 ? 'toutes comblées' : 'comblée', fait: true }
+  const parts = [`${l.comblees} comblée${l.comblees > 1 ? 's' : ''} sur ${l.enfants - l.closes}`]
+  if (l.closes) parts.push(`${l.closes} close${l.closes > 1 ? 's' : ''} à la main`)
+  return { quoi, etat: parts.join(', '), fait: false }
+}
+
+/**
+ * A closed mother, compact (lot 2c, Ludo: « [titre] [date] … [rouvrir] · [marchandise] [état] [à destination de…] ·
+ * [nb missions enfants] [état] »): no author.
+ */
+function BlocClos({ dm, reg, tab }: { dm: Demande; reg: CtxRegistre; tab: number }) {
+  const d = reg.m!.donnees!
+  const l = livraisonDu(reg, dm)
+  const le = fermeLe(dm)
+  const enfants = motEnfants(l)
+  return (
+    <li className="mere-close">
+      <div className="mere-close-tete">
+        <button type="button" className="feuillet-titre" tabIndex={tab} onClick={() => reg.allerA(idDemande(dm.numero))}>
+          {titreFeuillet(dm)}
+        </button>
+        <span className="mere-close-date">{le ? `close le ${dateTamrielique(le)}` : 'close'}</span>
+        {permis(reg, 'fermer') && (
+          <Action icone="rouvrir" tabIndex={tab} disabled={!d.feuilletsActifs} title={d.feuilletsActifs ? undefined : TEXTES_FEUILLETS.inactif} onClick={() => reg.ouvrir({ genre: 'fermer', cible: 'feuillet', numero: dm.numero, ouvrir: true })}>
+            rouvrir
+          </Action>
+        )}
+      </div>
+      <ul className="mere-close-lignes">
+        <li>
+          <span>{objetQ(l.quantite, l.objet)}</span>
+          <em className={l.etat === 'livree' ? 'fait' : ''}>{motObjetClos(l)}</em>
+          <span className="mere-close-dest">{destination(l)}</span>
+        </li>
+        <li>
+          <span>{enfants.quoi}</span>
+          <em className={enfants.fait ? 'fait' : ''}>{enfants.etat}</em>
+        </li>
+      </ul>
+    </li>
+  )
+}
+
+/** « Les missions en cours »: every open mother (a card each), the standing missions, the closed mothers (to reopen). */
 function EnCours({ reg, icones, tab, requetes }: { reg: CtxRegistre; icones: Record<string, string>; tab: number; requetes: string[] }) {
   const d = reg.m!.donnees!
   const dico = dicoAnglais(reg.r.donnees)
   const peut = permis(reg, 'fermer')
   const etats = reg.r.calcul?.etats ?? []
+  const stock = useMemo(() => rejouer(reg.r.donnees?.mouvements ?? []).stock, [reg.r.donnees?.mouvements])
   const missiveDe = (n: string) => etats.find((e) => e.missive.numero === n)?.missive
   const trouve = (dm: Demande, ms: Mission[]) =>
     requetes.every((q) => !q.trim() || nomsCorrespondent([titreFeuillet(dm), dm.membre, missiveDe(dm.missive)?.titre ?? '', missiveDe(dm.missive)?.commanditaire ?? '', ...avecAnglais([dm.article, ...ms.map((m) => m.objet)], dico)], q))
+  // Lot 2c: a mother without any child (everything was in the chest) is shown too: its only task is the delivery.
   const feuillets = [...d.demandes]
     .reverse()
     .map((dm) => ({ dm, ms: d.missions.filter((m) => m.demande === dm.numero) }))
-    .filter((x) => x.ms.length && trouve(x.dm, x.ms))
+    .filter((x) => trouve(x.dm, x.ms))
   const ouverts = feuillets.filter((x) => !feuilletClos(x.dm))
   const clos = feuillets.filter((x) => feuilletClos(x.dm))
   const permanentes = d.permanentes.filter((x) => requetes.every((q) => !q.trim() || nomsCorrespondent(avecAnglais([x.objet], dico), q)))
@@ -940,15 +1101,15 @@ function EnCours({ reg, icones, tab, requetes }: { reg: CtxRegistre; icones: Rec
   return (
     <div className="intendance-droite encours-droite">
       <AvisAllegement reg={reg} tab={tab} />
-      <h3 className="titre-section">Les feuillets ouverts</h3>
+      <h3 className="titre-section">Les missions mères ouvertes</h3>
       {ouverts.length ? (
-        <ul className="liste-feuillets">
+        <ul className="liste-meres">
           {ouverts.map((x) => (
-            <BlocEnCours key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} />
+            <BlocEnCours key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} stock={stock} />
           ))}
         </ul>
       ) : (
-        <p className="vide-encre">{cherche ? 'Nul feuillet ouvert ne répond à ce nom.' : 'Nul feuillet n’est ouvert : la caravane n’attend rien, pour l’heure.'}</p>
+        <p className="vide-encre">{cherche ? 'Nulle mission mère ouverte ne répond à ce nom.' : 'Nulle mission mère n’est ouverte : la caravane n’attend rien, pour l’heure.'}</p>
       )}
       {permanentes.length > 0 && (
         <>
@@ -993,16 +1154,16 @@ function EnCours({ reg, icones, tab, requetes }: { reg: CtxRegistre; icones: Rec
       )}
       {clos.length > 0 && (
         <>
-          <h3 className="titre-section">Feuillets clos</h3>
-          <p className="note-encre">Ils ont quitté l’appel ; ce qu’ils ont reçu reste compté. On peut les rouvrir.</p>
-          <ul className="liste-feuillets">
+          <h3 className="titre-section">Missions mères closes</h3>
+          <p className="note-encre">Elles ont quitté l’appel ; ce qu’elles ont reçu reste compté. On peut les rouvrir.</p>
+          <ul className="liste-meres-closes">
             {clos.map((x) => (
-              <BlocEnCours key={x.dm.numero} dm={x.dm} ms={x.ms} reg={reg} icones={icones} tab={tab} />
+              <BlocClos key={x.dm.numero} dm={x.dm} reg={reg} tab={tab} />
             ))}
           </ul>
         </>
       )}
-      {!peut && <p className="note-encre">Corriger ou clore un feuillet est réservé à qui écrit les missions.</p>}
+      {!peut && <p className="note-encre">Corriger ou clore une mission mère est réservé à qui écrit les missions.</p>}
     </div>
   )
 }
@@ -1024,7 +1185,7 @@ export function FicheFeuillet({ reg, articles, icones, fermer, numero }: EnvMiss
   const [lignes, setLignes] = useState<Record<string, LigneCorrigee>>({})
   const [ajouts, setAjouts] = useState<LigneSaisie[]>([{ ...LIGNE_VIDE, mission: '' }])
   const { etat, erreur, envoyer } = useScelle(fermer)
-  if (!dm) return <p className="fiche-aide">Ce feuillet est introuvable dans le registre.</p>
+  if (!dm) return <p className="fiche-aide">Cette mission mère est introuvable dans le registre.</p>
   const ligne = (m: Mission) => lignes[m.numero] ?? { q: String(m.quantite), retirer: false }
   const changer = (m: Mission, x: Partial<LigneCorrigee>) => setLignes({ ...lignes, [m.numero]: { ...ligne(m), ...x } })
   const ajoutes = lignesDons(ajouts, noms)
@@ -1051,8 +1212,8 @@ export function FicheFeuillet({ reg, articles, icones, fermer, numero }: EnvMiss
         <span>Titre</span>
         <input type="text" value={v.titre} maxLength={120} placeholder={`${nf(dm.quantite)} ${dm.article}`} onChange={(e) => setV({ ...v, titre: e.target.value })} />
       </label>
-      <h3 className="fiche-sous-titre">Les missions</h3>
-      <p className="fiche-aide">Change une quantité sur sa ligne. Ce qui a été reçu reste compté. Une mission qui a déjà reçu ne se retire pas : on la clôt depuis « En cours ».</p>
+      <h3 className="fiche-sous-titre">Ses missions enfants</h3>
+      <p className="fiche-aide">Change une quantité sur sa ligne. Ce qui a été reçu reste compté. Une mission enfant qui a déjà reçu ne se retire pas : on la clôt depuis « En cours ». Retirées toutes, il reste la livraison.</p>
       <div className="tri-missions corriger-missions" role="table">
         <div className="tri-entete" role="row">
           <span>Mission</span>
@@ -1085,7 +1246,7 @@ export function FicheFeuillet({ reg, articles, icones, fermer, numero }: EnvMiss
           )
         })}
       </div>
-      <h3 className="fiche-sous-titre">Ajouter une mission</h3>
+      <h3 className="fiche-sous-titre">Ajouter une mission enfant</h3>
       <LignesObjets lignes={ajouts} changer={setAjouts} noms={noms} cibles={[]} sansMission />
       <label className="fiche-champ">
         <span>Note (facultative)</span>
@@ -1101,17 +1262,23 @@ export function FicheFeuillet({ reg, articles, icones, fermer, numero }: EnvMiss
   )
 }
 
-/** Closing (or reopening) a mission or a whole sheet: said in character, then confirmed. */
+/**
+ * Closing (or reopening) a mission or a whole sheet: said in character, then confirmed. Closing a mother (lot 2c) lists
+ * each child (requis · reçu · manque / comblée) and what the register counts in the chest of what the mother asks for.
+ */
 export function FicheFermer({ reg, icones, fermer, cible, numero, ouvrir }: EnvMission & { cible: 'mission' | 'feuillet'; numero: string; ouvrir?: boolean }) {
   const d = reg.m!.donnees!
   const { etat, erreur, envoyer } = useScelle(fermer)
+  const stock = useMemo(() => rejouer(reg.r.donnees?.mouvements ?? []).stock, [reg.r.donnees?.mouvements])
   const m = cible === 'mission' ? d.missions.find((x) => x.numero === numero) : undefined
   const dm = cible === 'feuillet' ? d.demandes.find((x) => x.numero === numero) : undefined
   if (!m && !dm) return <p className="fiche-aide">Introuvable dans le registre.</p>
   const ms = dm ? d.missions.filter((x) => x.demande === dm.numero) : [m!]
   const attente = ms.reduce((t, x) => t + etatMission(x, d.intendance).attente, 0)
   const recu = ms.reduce((t, x) => t + etatMission(x, d.intendance).recu, 0)
-  const nom = m ? `« ${VERBES[m.type]} ${m.objet} »` : `le feuillet « ${titreFeuillet(dm!)} »`
+  const nom = m ? `« ${VERBES[m.type]} ${m.objet} »` : `la mission mère « ${titreFeuillet(dm!)} »`
+  const l = dm ? livraisonDu(reg, dm) : null
+  const auCoffre = dm ? Math.max(0, enStock(stock, dm.article)) : 0
   return (
     <form
       className="fiche-form intendance-form"
@@ -1122,23 +1289,71 @@ export function FicheFermer({ reg, icones, fermer, cible, numero, ouvrir }: EnvM
     >
       {!d.feuilletsActifs && <p className="fiche-aide">{TEXTES_FEUILLETS.inactif}</p>}
       {ouvrir ? (
-        <p className="fiche-aide">Rouvrir {nom} ? {m ? 'Elle revient' : 'Ses missions reviennent'} à l’appel aux missions, et chacun peut de nouveau y remettre.</p>
-      ) : (
+        <p className="fiche-aide">Rouvrir {nom} ? {m ? 'Elle revient' : 'Ses missions enfants reviennent'} à l’appel aux missions, et chacun peut de nouveau y remettre.</p>
+      ) : dm && l ? (
         <>
           <p className="fiche-aide">
-            Clore {nom} ? {m ? 'Elle quitte' : 'Ses missions quittent'} l’appel aux missions : nul n’y remettra plus rien.
+            Clore {nom} ? C’est sa livraison : ses missions enfants quittent l’appel aux missions, nul n’y remettra plus rien.
           </p>
+          <h3 className="fiche-sous-titre">Ce qui a été réuni</h3>
+          <div className="besoins fermer-enfants" role="table">
+            <div className="besoins-entete" role="row">
+              <span>Mission enfant</span>
+              <span>Requis</span>
+              <span>Reçu</span>
+              <span>État</span>
+            </div>
+            {ms.map((x) => {
+              const e = etatMission(x, d.intendance)
+              const t = etatEnfant(x, e)
+              return (
+                <div key={x.numero} role="row" className={`besoins-ligne ${t.classe}`}>
+                  <span className="besoins-nom">
+                    <span className="besoins-mot">
+                      {VERBES[x.type]} {x.objet}
+                    </span>
+                    {e.attente > 0 && <em>{nf(e.attente)} en attente de confirmation</em>}
+                  </span>
+                  <span>{nf(e.requis)}</span>
+                  <span>{nf(e.recu)}</span>
+                  <span className="besoins-etat">{t.mot}</span>
+                </div>
+              )
+            })}
+            {!ms.length && <p className="fiche-aide">Nulle mission enfant : tout était déjà au coffre.</p>}
+          </div>
+          <h3 className="fiche-sous-titre">Au coffre, selon le registre</h3>
+          <ul className="inventaire">
+            <li className={auCoffre < dm.quantite ? 'manquant' : ''}>
+              <span>{dm.article}</span>
+              <span className="points" />
+              <strong>{nf(auCoffre)}</strong>
+              <em className={auCoffre < dm.quantite ? 'a-fixer' : ''}>(il en faut {nf(dm.quantite)} {destination(l)})</em>
+            </li>
+          </ul>
+          <ul className="fiche-aide-liste">
+            {auCoffre < dm.quantite && <li className="a-fixer">Le registre n’en compte pas assez au coffre : vérifie le coffre lui-même avant de clore.</li>}
+            {l.etat === 'attend' && <li>Toutes ses missions enfants ne sont pas comblées : la clore maintenant, c’est la livrer incomplète.</li>}
+            {l.missive && (l.etat === 'attend' || l.etat === 'prete') && <li>La missive elle-même n’est pas encore livrée : on la livre depuis sa page (« Livrer la missive »).</li>}
+            <li>Ce qui a été reçu ({nf(recu)}) reste compté : le coffre et les points ne bougent pas.</li>
+            {attente > 0 && <li>Les {nf(attente)} encore en attente de confirmation pourront toujours être reçus (ou refusés) à la Réception.</li>}
+            <li>On peut la rouvrir à tout moment depuis « En cours ».</li>
+          </ul>
+        </>
+      ) : (
+        <>
+          <p className="fiche-aide">Clore {nom} ? Elle quitte l’appel aux missions : nul n’y remettra plus rien.</p>
           <ul className="fiche-aide-liste">
             <li>Ce qui a été reçu ({nf(recu)}) reste compté : le coffre et les points ne bougent pas.</li>
             {attente > 0 && <li>Les {nf(attente)} encore en attente de confirmation pourront toujours être reçus (ou refusés) à la Réception.</li>}
-            <li>On peut {m ? 'la' : 'le'} rouvrir à tout moment depuis « En cours ».</li>
+            <li>On peut la rouvrir à tout moment depuis « En cours ».</li>
           </ul>
         </>
       )}
       {erreur && <p className="message-encre erreur">{erreur}</p>}
       <div className="fiche-pied">
         <Sceller etat={etat} icones={icones} disabled={!d.feuilletsActifs}>
-          {ouvrir ? 'Rouvrir' : 'Clore'}
+          {ouvrir ? 'Rouvrir' : dm ? 'Clore la mission mère' : 'Clore'}
         </Sceller>
       </div>
     </form>
@@ -1188,8 +1403,8 @@ export function FicheAlleger({ reg, icones, fermer, numero }: EnvMission & { num
   const liste = useMemo(() => aAlleger(reg).find((x) => x.dm.numero === numero)?.liste ?? [], [reg, numero])
   const [non, setNon] = useState<Record<string, boolean>>({})
   const { etat, erreur, envoyer } = useScelle(fermer)
-  if (!dm) return <p className="fiche-aide">Ce feuillet est introuvable dans le registre.</p>
-  if (!liste.length) return <p className="fiche-aide">Rien n’est à alléger : chaque mission de ce feuillet sert encore.</p>
+  if (!dm) return <p className="fiche-aide">Cette mission mère est introuvable dans le registre.</p>
+  if (!liste.length) return <p className="fiche-aide">Rien n’est à alléger : chaque mission enfant sert encore.</p>
   const gardees = liste.filter((x) => !non[x.numero])
   const recus = d.missions
     .filter((m) => m.demande === numero && (m.type === 'fabrication' || cle(m.objet) === cle(dm.article)))

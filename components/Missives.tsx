@@ -11,8 +11,8 @@ import { anglaisDe, arbre, dicoAnglais, cle, coutMatieres, enStock, estClose, es
 import type { EtatRegistre } from './Registre'
 import type { EtatMissions, FicheMission } from './Missions'
 import { etatMission } from '@/lib/intendance'
-import { ChampRecherche } from './MissionsCommun'
-import { VERBES as VERBES_MISSION } from '@/lib/missions'
+import { ChampRecherche, MOT_COURT_LIVRAISON } from './MissionsCommun'
+import { livraisonDe, VERBES as VERBES_MISSION } from '@/lib/missions'
 import type { EtatTresor, FicheTresor } from './Tresor'
 import { Action, En, Icone, Plume, Septims } from './Ornements'
 
@@ -548,7 +548,7 @@ export function DroiteMissive({ page, reg, interactif, icones }: { page: PageMis
   )
 }
 
-/** The missions this missive spawned (Missions v2, lot 2): each sheet linked to it, its missions and what they lack. */
+/** The missions this missive spawned (Missions v2, lot 2): each mother linked to it, its child missions and what they lack, then its Livraison (lot 2c). */
 function MissionsDeLaMissive({ numero, reg, interactif }: { numero: string; reg: CtxRegistre; interactif: boolean }) {
   const d = reg.m?.donnees
   const feuillets = (d?.demandes ?? []).filter((x) => x.missive === numero)
@@ -557,8 +557,8 @@ function MissionsDeLaMissive({ numero, reg, interactif }: { numero: string; reg:
     <>
       <h3 className="titre-section">Les missions de la missive</h3>
       <ul className="inventaire missions-missive">
-        {feuillets.flatMap((x) =>
-          d.missions
+        {feuillets.flatMap((x) => [
+          ...d.missions
             .filter((m) => m.demande === x.numero)
             .map((m) => {
               const e = etatMission(m, d.intendance)
@@ -568,11 +568,24 @@ function MissionsDeLaMissive({ numero, reg, interactif }: { numero: string; reg:
                     {VERBES_MISSION[m.type]} {m.objet}
                   </button>
                   <span className="points" />
-                  {m.statut === 'close' || /^clos/i.test(x.statut) ? <em>close</em> : e.comblee ? <Coche titre="comblée" /> : <strong>{quantite(e.recu)} / {quantite(e.requis)}</strong>}
+                  {m.statut === 'close' || /^clos/i.test(x.statut) ? <em>close</em> : e.comblee ? <em className="fait">comblée</em> : <strong>{quantite(e.recu)} / {quantite(e.requis)}</strong>}
                 </li>
               )
             }),
-        )}
+          // Lot 2c: every mother's last task, its Livraison (derived: it follows this missive's delivery).
+          (() => {
+            const l = livraisonDe(x, d.missions, d.intendance, reg.r.calcul?.etats.find((e) => e.missive.numero === numero)?.missive)
+            return (
+              <li key={`${x.numero}-livraison`} className="livraison">
+                <button type="button" className="lien-encre" tabIndex={interactif ? 0 : -1} onClick={() => reg.allerA(`demande-${x.numero}`)}>
+                  Livraison : {quantite(l.quantite)} {l.objet}
+                </button>
+                <span className="points" />
+                <em className={l.etat === 'livree' ? 'fait' : ''}>{MOT_COURT_LIVRAISON[l.etat]}</em>
+              </li>
+            )
+          })(),
+        ])}
       </ul>
     </>
   )

@@ -36,5 +36,7 @@ export const ICONES_ACTIONS = {
   clore: 'padlock',
   rouvrir: 'padlock-open',
   pause: 'pause-button',
+  // Lot 2c: a sheet's Livraison.
+  livrer: 'hand-truck',
 } as const
 

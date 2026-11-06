@@ -9,7 +9,7 @@
 // by the Apps Script from v3m on; with an older script the tabs are not read (`actif` false): the pages show the
 // defaults and every write is refused in character.
 
-import { cle, Cycle, recetteUsage, repartir, type Onglets, type Recette } from './missives'
+import { cle, Cycle, recetteUsage, repartir, type Missive, type Onglets, type Recette } from './missives'
 import { etatMission, type LigneIntendance } from './intendance'
 
 /* ───────────────────────── Types ───────────────────────── */
@@ -748,6 +748,58 @@ export function lireMissions(o: Onglets): MissionsLues {
 
 /** A sheet closed by hand (« close »): it leaves the call with all its missions; it can be reopened. */
 export const feuilletClos = (d: Pick<Demande, 'statut'> | undefined) => Boolean(d && cle(d.statut).startsWith('clos'))
+
+/**
+ * Lot 2c: when a sheet was closed. From lot 2c on, closing writes « close le 2026-11-06 14:20 » (Tokyo time) in the
+ * Demandes « Statut » (still read as closed: it starts with « clos »); a sheet closed before (« close ») has no date: ''.
+ */
+export function fermeLe(d: Pick<Demande, 'statut'>): string {
+  const x = /(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(d.statut ?? '')
+  if (!x || !feuilletClos(d)) return ''
+  const t = new Date(`${x[1]}T${x[2] ?? '12'}:${x[3] ?? '00'}:00+09:00`)
+  return Number.isNaN(t.getTime()) ? '' : t.toISOString()
+}
+
+/** « close le 2026-11-06 14:20 » (Tokyo time): the « Statut » a sheet closed by hand gets (lot 2c). */
+export function statutClos(quand = new Date()): string {
+  const t = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(quand)
+  return `close le ${t}`
+}
+
+/**
+ * The « Livraison », every sheet's last task (lot 2c, Ludo: « une ligne Livraison, qui sera là pour toutes les missions,
+ * comme dernière tâche »). Derived, never stored: the asked goods to their destination (the missive's client, else who
+ * wrote the sheet). For a missive's sheet it follows the missive (delivered, or given up); for the caravan's own, the
+ * sheet's closing (closing it is delivering it). Before that: `prete` once every child mission still open is filled
+ * (none at all: everything was already in the chest), else `attend`.
+ */
+export type EtatLivraison = 'attend' | 'prete' | 'livree' | 'abandonnee' | 'close'
+export type Livraison = { etat: EtatLivraison; objet: string; quantite: number; destination: string; missive: boolean; enfants: number; comblees: number; closes: number }
+export function livraisonDe(
+  dm: Pick<Demande, 'numero' | 'article' | 'quantite' | 'membre' | 'statut'>,
+  missions: Mission[],
+  intendance: LigneIntendance[],
+  missive?: Pick<Missive, 'statut' | 'commanditaire' | 'titre'>,
+): Livraison {
+  const ms = missions.filter((m) => m.demande === dm.numero)
+  const closes = ms.filter((m) => m.statut === 'close').length
+  const comblees = ms.filter((m) => m.statut !== 'close' && etatMission(m, intendance).comblee).length
+  const reunis = comblees === ms.length - closes
+  let etat: EtatLivraison
+  if (missive) etat = missive.statut === 'livrée' ? 'livree' : missive.statut === 'inachevée' ? 'abandonnee' : reunis ? 'prete' : 'attend'
+  else if (feuilletClos(dm)) etat = reunis ? 'livree' : 'close'
+  else etat = reunis ? 'prete' : 'attend'
+  return { etat, objet: dm.article, quantite: dm.quantite, destination: missive ? missive.commanditaire || missive.titre : dm.membre, missive: Boolean(missive), enfants: ms.length, comblees, closes }
+}
+
+/** The Livraison's state in words. */
+export const MOTS_LIVRAISON: Record<EtatLivraison, string> = {
+  attend: 'à faire, quand tout sera réuni',
+  prete: 'prête : tout est réuni',
+  livree: 'livrée',
+  abandonnee: 'abandonnée',
+  close: 'close avant d’être réunie',
+}
 
 /** Whether a mission still stands in the call: not closed by hand, nor its sheet. */
 export function missionOuverte(m: Pick<Mission, 'statut' | 'demande'>, demandes: Pick<Demande, 'numero' | 'statut'>[]): boolean {

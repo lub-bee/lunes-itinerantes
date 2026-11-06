@@ -3,8 +3,8 @@
 import { useEffect, useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import type { Article } from '@/lib/types'
 import { cle, dicoAnglais } from '@/lib/missives'
-import { etatMission, TEXTES_INTENDANCE } from '@/lib/intendance'
-import { ICONES_TYPES, missionOuverte, TEXTES, VERBES, type DonneesMissions, type Mission, type TypeMission } from '@/lib/missions'
+import { etatMission, TEXTES_FEUILLETS, TEXTES_INTENDANCE } from '@/lib/intendance'
+import { feuilletClos, ICONES_TYPES, livraisonDe, missionOuverte, TEXTES, VERBES, type Demande, type DonneesMissions, type Livraison, type Mission, type TypeMission } from '@/lib/missions'
 import { Action, Icone, Plume } from './Ornements'
 import type { CtxRegistre, RechercheLocale } from './Missives'
 
@@ -66,7 +66,46 @@ export function GlypheType({ type, icones }: { type: TypeMission; icones: Record
   )
 }
 
-export const pts = (n: number) => `${new Intl.NumberFormat('fr-FR').format(n)} pt${Math.abs(n) > 1 ? 's' : ''}`
+/* ───────────────────────── The Livraison, every sheet's last task (lot 2c) ───────────────────────── */
+
+/** A sheet's Livraison (lib/missions.ts `livraisonDe`), its missive found among the computed ones. */
+export function livraisonDu(reg: CtxRegistre, dm: Demande): Livraison {
+  const d = reg.m!.donnees!
+  const missive = dm.missive ? reg.r.calcul?.etats.find((e) => e.missive.numero === dm.missive)?.missive : undefined
+  return livraisonDe(dm, d.missions, d.intendance, missive)
+}
+
+/** « à destination de Kesha » (who wrote the sheet, or the missive's client). */
+export const destination = (l: Livraison) => (l.destination ? `à destination de ${l.destination}` : 'pour la caravane')
+
+/** The Livraison's state in one or two words (a table cell). */
+export const MOT_COURT_LIVRAISON: Record<Livraison['etat'], string> = { attend: 'à faire', prete: 'prête', livree: 'livrée', abandonnee: 'abandonnée', close: 'close' }
+
+export function GlypheLivraison({ icones }: { icones: Record<string, string> }) {
+  return (
+    <span className="glyphe-mission glyphe-livraison" title="livraison">
+      <Icone corps={icones['hand-truck']} />
+    </span>
+  )
+}
+
+/**
+ * The gesture that does the Livraison: « Livrer la missive » for a missive not yet delivered (its own form, Fiche.tsx),
+ * else « Clore la mission mère » (closing the caravan's own sheet is delivering it). Null when the reader may not, or
+ * when the sheet is already closed.
+ */
+export function gesteLivraison(reg: CtxRegistre, dm: Demande, l: Livraison): { texte: string; ouvrir: () => void; pret: boolean; aide?: string } | null {
+  const d = reg.m!.donnees!
+  if (feuilletClos(dm)) return null
+  if (l.missive && (l.etat === 'attend' || l.etat === 'prete')) {
+    if (!permis(reg, 'cloture')) return null
+    return { texte: 'Livrer la missive', ouvrir: () => reg.ouvrir({ genre: 'livrer', numero: dm.missive }), pret: true }
+  }
+  if (!permis(reg, 'fermer')) return null
+  return { texte: 'Clore la mission mère', ouvrir: () => reg.ouvrir({ genre: 'fermer', cible: 'feuillet', numero: dm.numero }), pret: d.feuilletsActifs, aide: d.feuilletsActifs ? undefined : TEXTES_FEUILLETS.inactif }
+}
+
+export const pts = (n: number) =>`${new Intl.NumberFormat('fr-FR').format(n)} pt${Math.abs(n) > 1 ? 's' : ''}`
 /** Points are internal (Missions v2): shown only to who opens the Trésor (lib/droits.ts « tresor »). */
 export const voitPoints = (reg?: CtxRegistre) => reg?.r.marchand?.droits?.tresor === true
 /** A mission's points, or nothing for a member who may not see them. */

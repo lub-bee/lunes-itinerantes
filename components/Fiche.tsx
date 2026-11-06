@@ -1620,6 +1620,9 @@ function FormCloture({ env, numero, livrer }: { env: Env; numero: string; livrer
   const r = Math.max(0, entier(recompense) || 0)
   const p = partager(r, Math.min(100, Math.max(0, entier(pc) || 0)), nb, e.contributions)
   const autres = Math.max(0, nb - p.parts.length)
+  // Lot 2c: nobody brought anything (everything came from the chest): `partager` gives it all in equal parts, whatever
+  // the « Part commune » typed (the field is then greyed); the septims that do not divide evenly stay with the caravan.
+  const personne = !p.parts.length
   return (
     <form
       className="fiche-form"
@@ -1669,19 +1672,46 @@ function FormCloture({ env, numero, livrer }: { env: Env; numero: string; livrer
         <label className="fiche-champ">
           <span>Part commune</span>
           <span className="fiche-unite">
-            <input type="text" inputMode="numeric" value={pc} onChange={(ev) => setPc(ev.target.value.replace(/\D/g, '').slice(0, 3))} aria-label="Part commune, en centièmes" />%
+            <input
+              type="text"
+              inputMode="numeric"
+              value={personne ? '100' : pc}
+              disabled={personne}
+              title={personne ? 'Personne n’a rien apporté : tout est partagé à parts égales' : undefined}
+              onChange={(ev) => setPc(ev.target.value.replace(/\D/g, '').slice(0, 3))}
+              aria-label="Part commune, en centièmes"
+            />
+            %
           </span>
         </label>
       </div>
+      {personne && (
+        <p className="fiche-note fiche-personne">
+          Personne n’a rien apporté pour cette missive : tout venait du coffre. La récompense entière est partagée à parts égales entre les {p.nbMembres} membres{livrer ? '' : ', si récompense il y a'}.
+        </p>
+      )}
       {r > 0 && (
         <div className="fiche-partage">
-          <p>
-            Part commune : <strong>{prix(p.base * p.nbMembres)}</strong> septims, soit <strong>{prix(p.base)}</strong> à chacun des {p.nbMembres} membres.
-          </p>
-          <p>
-            Au mérite : <strong>{prix(p.merite)}</strong> septims, selon la valeur apportée.
-          </p>
-          {p.parts.length > 0 ? (
+          {personne ? (
+            <p>
+              À parts égales : <strong>{prix(p.base)}</strong> septims à chacun des {p.nbMembres} membres, soit <strong>{prix(p.base * p.nbMembres)}</strong> en tout.
+            </p>
+          ) : (
+            <>
+              <p>
+                Part commune ({p.partCommune} %) : <strong>{prix(p.base)}</strong> septims à chacun des {p.nbMembres} membres, soit <strong>{prix(p.base * p.nbMembres)}</strong> en tout.
+              </p>
+              <p>
+                Au mérite : <strong>{prix(p.merite)}</strong> septims, selon la valeur apportée.
+              </p>
+            </>
+          )}
+          {p.reste > 0 && (
+            <p className="fiche-reste">
+              <strong>{prix(p.reste)}</strong> septim{p.reste > 1 ? 's' : ''} ne se partage{p.reste > 1 ? 'nt' : ''} pas également : {p.reste > 1 ? 'ils restent' : 'il reste'} à la caravane.
+            </p>
+          )}
+          {p.parts.length > 0 && (
             <div className="fiche-parts">
               {p.parts.map((x) => (
                 <div key={x.membre} className="fiche-part">
@@ -1700,10 +1730,6 @@ function FormCloture({ env, numero, livrer }: { env: Env; numero: string; livrer
                 </div>
               )}
             </div>
-          ) : (
-            <p>
-              <em>Nulle patte n&apos;a porté cette missive : tout ira en parts égales.</em>
-            </p>
           )}
         </div>
       )}

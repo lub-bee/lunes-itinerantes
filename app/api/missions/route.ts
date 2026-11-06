@@ -10,6 +10,7 @@ import {
   cleLigne,
   feuilletClos,
   missionOuverte,
+  statutClos,
   partager,
   peser,
   prixDon,
@@ -254,7 +255,8 @@ function raisonDe(l: LigneLue): string {
 
 /* ───────────────────────── Writes ───────────────────────── */
 
-type Ecriture = { action: string; charge: Record<string, unknown>; message: string; numero?: string }
+/** `puis`: a second write made right after the first succeeded (lot 2c: the placeholder of a sheet without missions removed). */
+type Ecriture = { action: string; charge: Record<string, unknown>; message: string; numero?: string; puis?: { action: string; charge: Record<string, unknown> } }
 /** The v3r payload: Intendance rows to add / update, chest rows, points, names to reserve. */
 type Coffre = { lignes?: Partial<LigneIntendance>[]; maj?: { id: string; si: string[]; champs: Record<string, unknown> }[]; mouvements?: Record<string, unknown>[]; points?: Record<string, unknown>[]; reserver?: { nom: string; role: string }[] }
 const coffre = (c: Coffre): Record<string, unknown> => ({ coffre: c })
@@ -284,16 +286,20 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
       const choisies = Array.isArray(b.lignes) ? (b.lignes as Record<string, unknown>[]).slice(0, 200) : null
       const gardees = choisies
         ? choisies.map((c) => {
-            const l = p.lignes.find((x) => x.cle === mot(c?.cle, 160)) ?? non('Une ligne du feuillet ne correspond plus à la recette : relis l’arbre et réessaie.')
+            const l = p.lignes.find((x) => x.cle === mot(c?.cle, 160)) ?? non('Une ligne de la mission mère ne correspond plus à la recette : relis l’arbre et réessaie.')
             const q = entier(c?.quantite, 1, 1000000, `La quantité de ${l.objet}`)
             // Lot 2b: a line may be split into several missions (`parts`, 1 by default), never more than its units.
             const parts = c?.parts === undefined || c?.parts === null || c?.parts === '' ? 1 : entier(c.parts, 1, Math.min(MAX_PARTS, q), `Le nombre de missions de ${l.objet}`)
             return { l, q, parts }
           })
         : p.lignes.map((l) => ({ l, q: l.total, parts: 1 }))
-      if (!gardees.length) non('Garde au moins une mission avant de publier.')
+      // Lot 2c: every line unticked is allowed (everything is already in the chest): the sheet's only task is then its
+      // delivery. The script (v3m) refuses a sheet without missions, so one placeholder mission is written with it, then
+      // « retirée » at once by the 'feuillet' action (v3s): no row is deleted, the reader leaves a removed line out.
+      const seule = !gardees.length
+      if (seule && !lu.feuillets) non(TEXTES_FEUILLETS.refus)
       const nbMissions = gardees.reduce((t, x) => t + x.parts, 0)
-      if (nbMissions > MAX_MISSIONS) non(`Ce feuillet ferait ${nbMissions} missions : c’est trop pour un seul (${MAX_MISSIONS} au plus).`)
+      if (nbMissions > MAX_MISSIONS) non(`Cette mission mère ferait ${nbMissions} missions enfants : c’est trop pour une seule (${MAX_MISSIONS} au plus).`)
       // A missive: a new one (« C'est une missive »: its client), or one already written (its number). Needs v3r.
       const lien = typeof b.missive === 'string' ? mot(b.missive, 40) : ''
       const neuve = b.missive && typeof b.missive === 'object' ? (b.missive as Record<string, unknown>) : null
@@ -321,6 +327,7 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
         points,
         note: l.aFixer ? TEXTES.aFixer : '',
       }))
+      const placeholder = { numero: `${n}-01`, type: 'fabrication' as const, objet: p.article, quantite, poids: '', effort: 0, points: 0, note: 'livraison seule (retirée aussitôt)' }
       const amont = missions.filter((x, i) => x.type === 'récolte' || parLigne[i].l.intermediaire).reduce((t, x) => t + x.points, 0)
       const nomFeuillet = titre || objetQ(quantite, p.article)
       return {
@@ -339,14 +346,19 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
             note: lu.intendance.actif ? note : [titre, note].filter(Boolean).join(' — '),
             titre,
             missive: mNum,
-            missions,
+            missions: seule ? [placeholder] : missions,
           },
           ...(neuve ? { missive: { numero: mNum, horodatage: quand, titre: nomFeuillet, commanditaire, echeance: mot(neuve.echeance, 40), membre: qui.nom, lignes: [{ produit: p.article, quantite }] } } : {}),
           // A first sheet seeds the Pondération tab with what it was computed with (the defaults).
           ...(m.ponderation.source === 'defaut' ? { ponderation: ponderationEnLignes(m.ponderation) } : {}),
         },
-        message: `${neuve ? `La missive « ${nomFeuillet} » est écrite, et ses` : 'Les'} ${missions.length} mission${missions.length > 1 ? 's' : ''} ${missions.length > 1 ? 'sont publiées' : 'est publiée'} à la caravane (feuillet n° ${n}).`,
+        message: seule
+          ? `${neuve ? `La missive « ${nomFeuillet} » est écrite, et sa` : 'La'} mission mère est publiée (n° ${n}) : nulle mission enfant, tout est déjà au coffre ; il ne reste que la livraison.`
+          : missions.length > 1
+            ? `${neuve ? `La missive « ${nomFeuillet} » est écrite, et ses` : 'Les'} ${missions.length} missions enfants sont publiées à la caravane (mission mère n° ${n}), la livraison pour dernière tâche.`
+            : `${neuve ? `La missive « ${nomFeuillet} » est écrite, et sa` : 'La'} mission enfant est publiée à la caravane (mission mère n° ${n}), la livraison pour dernière tâche.`,
         numero: n,
+        ...(seule ? { puis: { action: 'feuillet', charge: { feuillet: { numero: n, missions: [{ numero: placeholder.numero, si: ['ouverte', ''], champs: { statut: 'retirée' }, journal: `retirée : livraison seule ${journalDe(qui.nom)}` }] } } } } : {}),
       }
     }
 
@@ -548,8 +560,8 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
       // Lot 2b: a sheet corrected from the Intendance: its title and note, a line's quantity (its rate per unit kept, so
       // what was received and credited never moves), a line removed (only when nothing was received nor declared for
       // it: else it is closed), a line added (the rate the sheet's tree gives that item, else the standing missions').
-      const dm = m.demandes.find((x) => x.numero === mot(b.numero, 40)) ?? non('Ce feuillet est introuvable dans le registre.')
-      if (feuilletClos(dm)) non('Ce feuillet est clos : rouvre-le avant de le corriger.')
+      const dm = m.demandes.find((x) => x.numero === mot(b.numero, 40)) ?? non('Cette mission mère est introuvable dans le registre.')
+      if (feuilletClos(dm)) non('Cette mission mère est close : rouvre-la avant de la corriger.')
       const articles = await articlesJour(lu)
       const jour = journalDe(qui.nom)
       // Why (the lightening after a hand-over), written in each mission's journal.
@@ -561,7 +573,7 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
       const majs: { numero: string; si: string[]; quantite?: number; champs: Record<string, unknown>; journal: string }[] = []
       const dits: string[] = []
       for (const l of (Array.isArray(b.lignes) ? (b.lignes as Record<string, unknown>[]) : []).slice(0, MAX_MISSIONS)) {
-        const x = ms.find((y) => y.numero === mot(l?.numero, 40)) ?? non('Une ligne de ce feuillet est introuvable : relis le feuillet et réessaie.')
+        const x = ms.find((y) => y.numero === mot(l?.numero, 40)) ?? non('Une mission enfant est introuvable : relis la mission mère et réessaie.')
         if (x.statut !== 'ouverte' && x.statut !== 'close') non(`« ${VERBES[x.type]} ${x.objet} » a été prise à l’ancienne manière : réponds d’abord à sa remise.`)
         const e = etatMission(x, lu.intendance.lignes)
         // Lot 2b: an upstream mission no longer needed (`allegements`), closed with the rest of the correction.
@@ -601,15 +613,14 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
         dits.push(`+ ${objetQ(q, objet)}`)
         return { numero: `${dm.numero}-${String(++suivant).padStart(2, '0')}`, type: ligne?.type ?? type, objet, quantite: q, poids: poids ?? '', effort: Math.round(w * q * 100) / 100, points, note: poids === null && type === 'récolte' ? TEXTES.aFixer : '', journal: `ajoutée ${jour}` }
       })
-      if (!Object.keys(champs).length && !majs.length && !ajouts.length) non('Rien n’a changé sur ce feuillet.')
-      const restantes = ms.length - majs.filter((x) => x.champs.statut === 'retirée').length + ajouts.length
-      if (restantes < 1) non('Un feuillet garde au moins une mission : pour l’arrêter, clos-le.')
+      if (!Object.keys(champs).length && !majs.length && !ajouts.length) non('Rien n’a changé sur cette mission mère.')
+      // Lot 2c: every child may be removed: the mother keeps its last task, the delivery.
       if (champs.titre !== undefined) dits.unshift('titre')
       if (champs.note !== undefined) dits.push('note')
       return {
         action,
         charge: { feuillet: { numero: dm.numero, si: siDe(dm.statut), champs, missions: majs, ajouts } },
-        message: `Le feuillet « ${champs.titre || dm.titre || objetQ(dm.quantite, dm.article)} » est corrigé (${dits.join(', ')}). Ce qui a été reçu reste compté.`,
+        message: `La mission mère « ${champs.titre || dm.titre || objetQ(dm.quantite, dm.article)} » est corrigée (${dits.join(', ')}). Ce qui a été reçu reste compté.`,
       }
     }
 
@@ -619,13 +630,16 @@ async function preparer(action: ActionMission, b: Record<string, unknown>, lu: L
       const ouvrir = b.ouvrir === true
       const jour = journalDe(qui.nom)
       if (b.cible === 'feuillet') {
-        const dm = m.demandes.find((x) => x.numero === mot(b.numero, 40)) ?? non('Ce feuillet est introuvable dans le registre.')
-        if (feuilletClos(dm) === !ouvrir) non(ouvrir ? 'Ce feuillet est déjà ouvert.' : 'Ce feuillet est déjà clos.')
+        const dm = m.demandes.find((x) => x.numero === mot(b.numero, 40)) ?? non('Cette mission mère est introuvable dans le registre.')
+        if (feuilletClos(dm) === !ouvrir) non(ouvrir ? 'Cette mission mère est déjà ouverte.' : 'Cette mission mère est déjà close.')
         const nom = dm.titre || objetQ(dm.quantite, dm.article)
         return {
           action: 'feuillet',
-          charge: { feuillet: { numero: dm.numero, si: siDe(dm.statut), champs: { statut: ouvrir ? 'ouverte' : 'close' } } },
-          message: ouvrir ? `Le feuillet « ${nom} » est rouvert : ses missions reviennent à l’appel.` : `Le feuillet « ${nom} » est clos : ses missions quittent l’appel. Ce qui a été reçu reste compté ; on peut le rouvrir.`,
+          // Lot 2c: the closing date kept in the « Statut » itself (« close le 2026-11-06 14:20 »): no new column.
+          charge: { feuillet: { numero: dm.numero, si: siDe(dm.statut), champs: { statut: ouvrir ? 'ouverte' : statutClos() } } },
+          message: ouvrir
+            ? `La mission mère « ${nom} » est rouverte : ses missions enfants reviennent à l’appel.`
+            : `La mission mère « ${nom} » est close${dm.missive ? '' : ', sa livraison faite'} : ses missions enfants quittent l’appel. Ce qui a été reçu reste compté ; on peut la rouvrir.`,
         }
       }
       const x = m.missions.find((y) => y.numero === mot(b.numero, 40)) ?? non('Cette mission est introuvable dans le registre.')
@@ -665,7 +679,7 @@ function journalDe(nom: string): string {
 function refusScript(s: string): string {
   if (s.includes('unknown action feuillet')) return TEXTES_FEUILLETS.refus
   if (s.includes('sheet changed')) return TEXTES_FEUILLETS.change
-  if (s.includes('unknown sheet')) return 'Ce feuillet est introuvable dans le registre.'
+  if (s.includes('unknown sheet')) return 'Cette mission mère est introuvable dans le registre.'
   if (s.includes('unknown action intendance')) return TEXTES_INTENDANCE.refus
   if (s.includes('unknown action')) return TEXTES.refus
   if (s.includes('already answered')) return TEXTES_INTENDANCE.dejaRepondu
@@ -674,7 +688,7 @@ function refusScript(s: string): string {
   if (s.includes('own mission')) return TEXTES.soiMeme
   if (s.includes('unknown gesture')) return TEXTES.refusV3n
   if (s.includes('unknown mission') || s.includes('unknown row')) return 'Cette ligne est introuvable dans le registre.'
-  return "Le registre a refusé le feuillet. Rien n'a été consigné : réessaie plus tard."
+  return "Le registre a refusé l'écrit. Rien n'a été consigné : réessaie plus tard."
 }
 
 export async function POST(req: NextRequest) {
@@ -714,8 +728,18 @@ export async function POST(req: NextRequest) {
     console.error(`[missions] ${action} refused by the script`, err)
     return refus(refusScript(String(err)), 502)
   }
+  let message = e.message
+  if (e.puis) {
+    try {
+      const ensuite = await ecrireRegistre(e.puis.action, e.puis.charge)
+      if (ensuite.lu) ecrit = { ...ecrit, lu: ensuite.lu }
+    } catch (err) {
+      console.error(`[missions] ${action}: the second write (${e.puis.action}) refused by the script`, err)
+      message = `${e.message} Mais le scribe n’a pu retirer la ligne d’attente qu’il avait dû écrire avec : retire-la avec « corriger » depuis l’Intendance (onglet En cours).`
+    }
+  }
   console.log(`[missions] ${action}: read ${(t1 - t0).toFixed(0)} ms, write ${(performance.now() - t1).toFixed(0)} ms, tabs in answer: ${ecrit.lu ? 'yes' : 'no'}`)
   // `reserves`: names just written in Membres (the page reads the register's names again).
   const reserves = (ecrit as { reserves?: unknown }).reserves
-  return NextResponse.json({ ok: true, message: e.message, numero: e.numero, reserves: Array.isArray(reserves) ? reserves : [], donnees: ecrit.lu ? vue(ecrit.lu, qui) : null })
+  return NextResponse.json({ ok: true, message, numero: e.numero, reserves: Array.isArray(reserves) ? reserves : [], donnees: ecrit.lu ? vue(ecrit.lu, qui) : null })
 }
