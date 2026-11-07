@@ -690,16 +690,24 @@ own gesture: `remise` (record an entry, answer a declaration), `sortie` (new in 
 - **« Livrer la missive »**: when nobody brought anything, the form says so, greys the « Part commune » (everything is shared in
   equal parts, `partager`) and shows the septims that do not divide evenly (« restent à la caravane »).
 
-### The renaming of 2026-11-06 (script v3t, run once from the editor)
+### The renaming of 2026-11-06 (`scripts/apps-script/import.gs`, run once from the editor)
 
 The items' names brought to the official French names of the game (decisions in `_atelier/caravane/noms/`: `renommages.csv`,
-`revue-noms.md`, normalized in `plan-renommage.json`, embedded in grimoire.gs as `RENOMMAGE`). No web call reaches it; every
-answer is v3s's. In the editor: `grimoireRenommerSimuler` (writes nothing, logs every cell old → new, the rows deleted and added,
-the duplicates, the free text citing an old name), then `grimoireRenommer` (under the lock, once: the property `RENOMMAGE_FAIT`
-refuses a second run; refused too while a duplicate is not settled; each tab touched copied first to a hidden « Sauvegarde <tab>
-2026-11-06 »; the cache dropped and the version moved on). Name columns: Catalogues, Recettes, Ressources, Commandes, Pondération
-(not the levels), Missives, Mouvements, Demandes, Missions, Missions permanentes, Intendance, Écritures événements. Free text is
-never rewritten. `content/marchandises.csv` and the pondération's defaults (`lib/missions.ts`) carry the new names.
+`revue-noms.md`, normalized in `plan-renommage.json`, embedded as `RENOMMAGE`). The one-shot lives in its own file,
+**`import.gs`**, a third file of the sheet's Apps Script project beside `grimoire.gs` (v3s, unchanged: cache key
+`registre-v3s`) and the Table's `conseil.gs`. It defines no `doGet` / `doPost` / `onEdit`, so no web call reaches it and adding
+it needs no new deployment; its only globals are the namespace `ImportNoms` and two editor functions. In the editor:
+`importRenommerSimuler` (writes nothing; logs every cell old → new, the rows deleted and added, the duplicates, every fusion's
+two rows in full with, in Pondération, both levels side by side, the free text citing an old name), then `importRenommer`
+(under the script lock, once: the property `RENOMMAGE_FAIT` refuses a second run; refused too while a duplicate is not settled
+or when `grimoire.gs` is missing; each tab touched copied first to a hidden « Sauvegarde <tab> 2026-11-06 »; then
+`Grimoire.onEdit()`, the grimoire's own hand-edit handler: its cache dropped, its `VERSION` moved on). A fusion keeps the row
+already bearing the new name as it is (Pondération: Myrrhe givrée → Hivernelle, Morelle noire → Obscurcine, Baies de genièvre →
+Genièvres). The tab mappings are copied from grimoire.gs v3s (it keeps them private); the bench `import-renommage.js` checks they
+are identical. Name columns: Catalogues, Recettes, Ressources, Commandes, Pondération (not the levels), Missives, Mouvements,
+Demandes, Missions, Missions permanentes, Intendance, Écritures événements. Free text is never rewritten.
+`content/marchandises.csv` and the pondération's defaults (`lib/missions.ts`) carry the new names. Once run, `import.gs` may be
+deleted from the project (nothing calls it).
 
 Sheet tabs (Apps Script, created hidden when missing, editable by hand): `Pondération`, `Réglages missions`, `Demandes` (v3r adds
 `Titre` and `N° missive`), `Missions`, `Points`, `Missions permanentes`, and **`Intendance`** (v3r: `N°`, `Date`, `Genre` remise /
