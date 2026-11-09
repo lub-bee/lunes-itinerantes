@@ -64,6 +64,11 @@ export type PageExLibris = Base & { type: 'exlibris' }
 export type PageColophon = Base & { type: 'colophon' }
 /** The shadow book's first spread: the section « Caravane de l'Ombre » and its « Enseignements » (lib/ombre.ts). */
 export type PageOmbre = Base & { type: 'ombre' }
+/**
+ * The shadow book's secrets (Livre d'ombre v2, lib/secrets.ts): `transmettre` (the letter and « Mes secrets »), `tri` (the
+ * sealed envelopes and the notes), `archives` (everything, searched and filtered).
+ */
+export type PageSecrets = Base & { type: 'secrets'; vue: 'transmettre' | 'tri' | 'archives'; intro: string }
 /** The signed member's sales (sealed orders whose seller is them), in the Marchandises part, after the chapters. */
 export type PageVentes = Base & { type: 'ventes'; intro: string }
 
@@ -85,7 +90,7 @@ export type PageTresor = Base & { type: 'tresor'; vue: 'semaine' | 'factures' | 
 export type PageDivinite = Base & { type: 'divinite'; divinite: string }
 export type PagePoemes = Base & { type: 'poemes'; divinite: string }
 
-export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre | PageMissions | PageCarnet | PageDemande | PageIntendance | PagePatriarche | PageTresor
+export type Page = PageExLibris | PageSommaire | PageChapitre | PageNote | PageAvenir | PageMissives | PageMissive | PageMetier | PageCaravane | PageCoffre | PageAtelier | PageDivinite | PagePoemes | PageColophon | PageVentes | PageOmbre | PageSecrets | PageMissions | PageCarnet | PageDemande | PageIntendance | PagePatriarche | PageTresor
 
 /**
  * `caches`: the articles of hidden chapters (content/chapitres.json « masque »), with their chapter id.

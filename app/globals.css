@@ -4214,3 +4214,167 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
   .missions-enfants { margin-left: 2px; padding-left: 6px; }
   .tampon.tampon-terminee { font-size: 22px; padding: 3px 12px 1px; }
 }
+
+/* ═══════════════════════════ Livre d'ombre v2 (components/Secrets.tsx) ═══════════════════════════ */
+
+/* The opening page's right side: the shadow members' presentation (Elijah's words). */
+.presentation-ombre .sous-titre { text-transform: lowercase; }
+.devise-ombres { margin: 4px 0 12px; text-align: center; font-style: italic; font-size: 19px; line-height: 1.35; color: var(--encre); }
+.toujours { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0 0 14px; padding: 0; list-style: none; font-family: var(--f-capitales); font-size: 17px; letter-spacing: 0.12em; color: var(--encre-rouge); }
+.presentation-ombre .intro { text-align: justify; }
+.presentation-ombre .signature { text-align: right; }
+
+/* The letter (« Transmettre un secret »), after the Table's « création d'affaire » billet: a head block (who, when, the
+   number given at the seal), the fields on ruled lines, two rows of inked stamps, the wax button. */
+.lettre-ombre { position: relative; display: flex; flex-direction: column; min-width: 0; margin-top: 6px; padding: 4px 2px 6px; text-align: left; }
+.lettre-entete { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; padding-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--encre-rouge) 40%, transparent); }
+.lettre-tete { flex: 1; display: grid; gap: 2px; min-width: 0; margin: 0; }
+.lettre-tete > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.lettre-tete dt { flex: none; font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.06em; color: var(--encre-rouge); }
+.lettre-tete dd { min-width: 0; margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.lettre-auteur { font-style: italic; }
+.lettre-numero { color: var(--encre-rouge); }
+.sig-vide { font-style: italic; font-size: 14px; color: var(--encre-pale); }
+.lettre-verdict { flex: none; display: grid; place-items: center; min-width: 96px; min-height: 52px; }
+.tampon-lettre {
+  padding: 4px 12px 2px;
+  font-family: var(--f-gothique);
+  font-size: 30px;
+  line-height: 1;
+  color: #1d1a1c;
+  border: 3px double currentColor;
+  border-radius: 4px;
+  rotate: -7deg;
+  opacity: 0.86;
+  animation: tampon-lettre 520ms cubic-bezier(.3, 1.5, .5, 1) both;
+}
+@keyframes tampon-lettre { from { opacity: 0; transform: translateY(-24px) scale(2.1); } 55% { opacity: 0.9; transform: scale(0.94); } to { opacity: 0.86; transform: none; } }
+.lettre-adresse { margin: 0 0 4px; text-align: center; font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.08em; color: var(--encre-douce); }
+.lettre-rubrique { display: block; margin: 10px 0 2px; font-family: var(--f-capitales); font-size: 13px; letter-spacing: 0.08em; color: var(--encre-rouge); }
+.lettre-rubrique.centre { text-align: center; margin-top: 8px; }
+.lettre-choix { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px; margin: 2px 0 2px; }
+.lettre-tampon {
+  padding: 3px 11px 2px;
+  font-family: var(--f-capitales);
+  font-size: 14.5px;
+  letter-spacing: 0.08em;
+  color: #6b4a2a;
+  background: none;
+  border: 3px double currentColor;
+  rotate: -2deg;
+  opacity: 0.38;
+  cursor: pointer;
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.lettre-tampon:nth-child(even) { rotate: 2deg; }
+.lettre-tampon.urgente { color: var(--encre-rouge); }
+.lettre-tampon:hover:not(:disabled), .lettre-tampon:focus-visible { outline: none; opacity: 0.65; }
+.lettre-tampon.choisi { opacity: 0.92; transform: scale(1.06); }
+.lettre-tampon:disabled { cursor: default; }
+.lettre-champs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+.lettre-champ { display: flex; flex-direction: column; min-width: 0; }
+.lettre-ligne, .lettre-titre {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 4px 3px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--encre-rouge) 55%, transparent);
+  border-radius: 0;
+  background: none;
+  font-family: var(--f-texte);
+  font-size: 17px;
+  color: var(--encre);
+}
+.lettre-titre { font-size: 20px; line-height: 1.3; }
+.lettre-contenu {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 150px;
+  padding: 0 4px;
+  resize: vertical;
+  border: 0;
+  border-radius: 0;
+  background: repeating-linear-gradient(180deg, transparent 0 27px, rgba(110, 78, 40, 0.28) 27px 28px);
+  background-position: 0 -3px;
+  font-family: var(--f-texte);
+  font-size: 17px;
+  line-height: 28px;
+  color: var(--encre);
+}
+.lettre-ligne:focus, .lettre-titre:focus, .lettre-contenu:focus { outline: none; background-color: rgba(201, 162, 78, 0.1); }
+.lettre-ligne::placeholder, .lettre-titre::placeholder, .lettre-contenu::placeholder { color: var(--encre-pale); font-style: italic; }
+.lettre-ligne:disabled, .lettre-titre:disabled, .lettre-contenu:disabled { opacity: 1; -webkit-text-fill-color: var(--encre); }
+.lettre-pied { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 12px; }
+.lettre-pied .message-encre { text-align: center; }
+.lettre-ombre.scellee .lettre-contenu, .lettre-ombre.scellee .lettre-titre, .lettre-ombre.scellee .lettre-ligne { opacity: 0.75; }
+
+/* The notes: one card each, folded (title, urgency, who, when) or unfolded (the text, the gestures). */
+.secrets-liste { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; padding: 0; list-style: none; }
+.secret-carte { min-width: 0; padding: 5px 8px 6px; border: 1px solid rgba(110, 78, 40, 0.28); border-radius: 3px; background: rgba(255, 250, 232, 0.22); text-align: left; }
+.secret-carte.urgente { border-color: color-mix(in srgb, var(--encre-rouge) 55%, transparent); }
+.secret-carte.etat-scellee { border-style: dashed; }
+.secret-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.secret-tete.fige { cursor: default; }
+.secret-titre { flex: 1 1 60%; min-width: 0; font-size: 17px; font-weight: 600; color: var(--encre); overflow-wrap: anywhere; }
+.secret-urgence { flex: none; padding: 0 6px; font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.06em; color: var(--encre-douce); border: 1px solid currentColor; border-radius: 2px; }
+.secret-urgence.urgente { color: var(--encre-rouge); }
+.secret-faction { flex: none; font-family: var(--f-capitales); font-size: 12.5px; letter-spacing: 0.04em; color: var(--encre-pale); }
+.secret-meta { flex: 1 1 100%; min-width: 0; font-size: 13.5px; font-style: italic; color: var(--encre-pale); overflow-wrap: anywhere; }
+.secret-etat { color: var(--encre-douce); }
+.secret-corps { margin-top: 6px; padding-top: 6px; border-top: 1px dotted rgba(110, 78, 40, 0.4); }
+.secret-champs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 12px; margin: 0 0 6px; }
+.secret-champs > div { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.secret-champs dt { flex: none; font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.05em; color: var(--encre-rouge); }
+.secret-champs dd { min-width: 0; margin: 0; font-size: 14.5px; overflow-wrap: anywhere; }
+.secret-texte { display: flex; flex-direction: column; gap: 6px; }
+.secret-apport-tete { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 0; font-family: var(--f-capitales); font-size: 13.5px; letter-spacing: 0.04em; color: var(--encre-rouge); }
+.apport-auteur { flex: none; max-width: 60%; overflow-wrap: anywhere; }
+.apport-filet { flex: 1; min-width: 16px; border-bottom: 1px dashed currentColor; opacity: 0.6; }
+.apport-jour { flex: none; font-variant-numeric: tabular-nums lining-nums; }
+.secret-apport-texte { margin: 0; font-size: 16px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; color: var(--encre); }
+.secret-trace { margin: 6px 0 0; font-size: 12.5px; font-style: italic; color: var(--encre-pale); overflow-wrap: anywhere; }
+.secret-gestes { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.secret-form { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; min-width: 0; }
+.secret-form-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; }
+.secret-aide { margin: 2px 0 0; font-size: 13px; }
+
+/* « Le tri »: the sealed envelopes, a drop of wax each, urgent first. */
+.compte-plis { font-family: var(--f-texte); font-size: 0.8em; color: var(--encre-pale); }
+.plis-liste { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; padding: 0; list-style: none; text-align: left; }
+.pli-scelle { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 6px 8px; border: 1px dashed rgba(110, 78, 40, 0.4); border-radius: 3px; background: rgba(255, 250, 232, 0.2); }
+.pli-scelle.urgente { border-color: color-mix(in srgb, var(--encre-rouge) 60%, transparent); }
+.pli-scelle > .action { grid-column: 2; justify-self: start; }
+.pli-cire { width: 24px; height: 24px; border-radius: 48% 52% 46% 54% / 53% 47% 53% 47%; background: radial-gradient(circle at 34% 30%, #e0604c, #a52618 50%, #5c0d06 100%); box-shadow: inset 0 0 0 3px rgba(80, 8, 2, 0.35), 0 1px 2px rgba(20, 4, 0, 0.6); }
+.pli-texte { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.pli-texte strong { flex: 1 1 60%; min-width: 0; font-size: 16.5px; overflow-wrap: anywhere; }
+
+/* « Archives »: the search, the filters (two columns, one on a phone). */
+.archives-filtres { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; text-align: left; }
+.archives-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
+.archives-filtres .fiche-champ input, .archives-filtres .fiche-champ select { width: 100%; }
+.archives-filtres .decompte { margin: 4px 0 0; }
+.secrets-liste.retirees .secret-carte { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; opacity: 0.8; }
+
+/* « Gestion de la contrebande », where goods and resources are listed: the notice to all, the list to who holds it. */
+.avis-contrebande { margin: 6px 0 4px; padding: 4px 8px; text-align: center; font-style: italic; font-size: 14.5px; line-height: 1.35; color: var(--encre-rouge); border-top: 1px dotted currentColor; border-bottom: 1px dotted currentColor; }
+.contrebande { margin: 6px 0; text-align: left; }
+.contrebande-bloc { margin-top: 6px; }
+.contrebande-bloc > summary { cursor: pointer; font-family: var(--f-capitales); font-size: 14.5px; letter-spacing: 0.06em; color: var(--encre-rouge); }
+.titre-contrebande { margin: 8px 0 2px; font-family: var(--f-capitales); font-size: 15px; font-weight: normal; letter-spacing: 0.08em; color: var(--encre-rouge); text-align: center; }
+.contrebande-lignes { margin: 2px 0 6px; padding-left: 20px; font-size: 16px; line-height: 1.45; color: var(--encre); }
+.contrebande-lignes li { overflow-wrap: anywhere; }
+.contrebande-texte { min-height: 120px; }
+
+@media (max-width: 520px) {
+  .lettre-champs, .archives-grille, .secret-champs { grid-template-columns: minmax(0, 1fr); }
+  .lettre-entete { gap: 6px; }
+  .lettre-verdict { min-width: 70px; }
+  .tampon-lettre { font-size: 24px; padding: 3px 8px 1px; }
+  .lettre-tampon { font-size: 13.5px; padding: 3px 8px 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tampon-lettre { animation: none; }
+}
+.sans-coupure { white-space: nowrap; }

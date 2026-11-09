@@ -17,6 +17,7 @@ import { ArbreRangs } from './Caravane'
 import { DroiteTresor, GaucheTresor } from './Tresor'
 import { DroiteCarnet, DroiteDemande, DroiteMissions, DroitePatriarche, GaucheCarnet, GaucheDemande, GaucheMissions, GauchePatriarche } from './Missions'
 import { DroiteIntendance, GaucheIntendance } from './Intendance'
+import { DroiteSecrets, GaucheSecrets, Contrebande } from './Secrets'
 import { Geste, DroiteVentes, GaucheVentes, DroiteAtelier, DroiteMetier, GaucheMetier, DroiteCoffre, DroiteMissive, DroiteMissives, GaucheAtelier, GaucheCoffre, GaucheMissive, GaucheMissives, type CtxRegistre } from './Missives'
 
 export type Ctx = {
@@ -139,6 +140,13 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return null
       case 'ombre':
         return <SectionOmbre compact={compact} />
+      case 'secrets':
+        return (
+          <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
+            {!compact && <p className="intro lettrine">{page.intro}</p>}
+            <GaucheSecrets page={page} reg={ctx.registre} interactif={ctx.interactif} compact={compact} />
+          </EnTete>
+        )
       case 'ventes':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
@@ -248,6 +256,8 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             <GaucheAtelier page={page} reg={ctx.registre} icones={ctx.livre.icones} compact={compact} recherche={rechercheLocale(ctx)} />
+            {/* The raw materials' ledger lists resources too: the contraband notice and list (Livre d'ombre v2). */}
+            {page.vue === 'matieres' && <Contrebande reg={ctx.registre} interactif={ctx.interactif} ombre={false} compact={compact} />}
           </EnTete>
         )
       case 'caravane':
@@ -417,8 +427,10 @@ function TeteChapitre({ page, ctx, compact }: { page: PageChapitre; ctx: Ctx; co
           </div>
         </>
       )}
+      {/* Livre d'ombre v2: where goods are listed, the contraband notice (to all) and, to who holds it, the list. */}
+      <Contrebande reg={ctx.registre} interactif={ctx.interactif} ombre={page.partie === 'ombre'} compact={compact} />
       {/* The chapter's primary action, as every book's: on the left page, after its search and legends. */}
-      {ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.vente !== false && (
+      {ctx.registre?.r.donnees?.relie && ctx.registre.r.marchand?.droits?.[page.partie === 'ombre' ? 'ombreMarchandise' : 'vente'] !== false && (
         <div className="gestes">
           <Geste icone={ctx.livre.icones['wooden-crate']} onClick={() => ctx.registre!.ouvrir(page.partie === 'ombre' ? { genre: 'vente', nom: '', ombre: true } : { genre: 'vente', nom: '', chapitre: page.id })}>
             Inscrire une marchandise
@@ -444,7 +456,9 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'ventes':
         return <DroiteVentes reg={ctx.registre} />
       case 'ombre':
-        return <Enseignements />
+        return <Presentation />
+      case 'secrets':
+        return <DroiteSecrets page={page} reg={ctx.registre} interactif={ctx.interactif} />
       case 'colophon':
         return (
           <div className="credits">
@@ -786,20 +800,25 @@ function SectionOmbre({ compact }: { compact: boolean }) {
   )
 }
 
-function Enseignements() {
+/** The shadow members' presentation (Elijah's words), opposite « Caravane de l'Ombre ». */
+function Presentation() {
+  const t = OMBRE.presentation
   return (
-    <div className="enseignements">
+    <div className="enseignements presentation-ombre">
       <header className="en-tete">
-        <div className="surtitre">{OMBRE.surtitre}</div>
-        <h3 className="titre-section">{OMBRE.enseignements.titre}</h3>
+        <div className="surtitre">{t.surtitre}</div>
+        <h3 className="titre-section">{t.titre}</h3>
+        <div className="sous-titre">{t.sousTitre}</div>
         <Fleuron />
       </header>
-      <p className="intro lettrine">{OMBRE.enseignements.intro}</p>
-      <ol className="lecons">
-        {OMBRE.enseignements.lecons.map((l) => (
+      <p className="devise-ombres">« {t.devise} »</p>
+      <ul className="toujours">
+        {t.toujours.map((l) => (
           <li key={l}>{l}</li>
         ))}
-      </ol>
+      </ul>
+      <p className="intro lettrine">{t.texte}</p>
+      <p className="signature">{t.signature}</p>
     </div>
   )
 }

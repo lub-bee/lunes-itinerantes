@@ -38,5 +38,9 @@ export const ICONES_ACTIONS = {
   pause: 'pause-button',
   // Lot 2c: a sheet's Livraison.
   livrer: 'hand-truck',
+  // Livre d'ombre v2: a note joined to another, the shadow book, a closer look.
+  fusionner: 'join',
+  ombre: 'hood',
+  lire: 'magnifying-glass',
 } as const
 

@@ -14,6 +14,7 @@ import { lireMissions } from './missions'
 import { lirePaie } from './paie'
 import { lirePermissions, MEMBRE, semis, semisNouveaux } from './droits'
 import { lireIntendance } from './intendance'
+import { lireSecrets } from './secrets'
 
 export const ETIQUETTE_REGISTRE = 'registre'
 /** Seconds a read of the sheet is reused. */
@@ -61,7 +62,9 @@ export let dernierScript: { ms: number | null; cache: boolean | null } = { ms: n
 // Intendance's gestures are refused in character).
 // `feuillets: true` (lot 2b) a v3s script for the 'feuillet' action (a sheet edited, closed, reopened); it answers
 // `feuillets: true` back, so the page knows those gestures will be written (an older script: refused in character).
-const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true, intendance: true, feuillets: true }
+// `ombre: true` (Livre d'ombre v2) a v3u script for the shadow book's tabs (« Secrets », « Contrebande », lib/secrets.ts), its
+// actions ('secret', 'secretTri', 'contrebande', 'prix') and its own check of every shadow gesture (`qui`, lib/droits.ts).
+const DRAPEAUX = { missions: true, paie: true, discord: true, rangs: true, intendance: true, feuillets: true, ombre: true }
 
 async function lireScript(): Promise<Lecture> {
   const r = await appelerScript<ReponseLire>({ action: 'lire', ...DRAPEAUX })
@@ -69,7 +72,7 @@ async function lireScript(): Promise<Lecture> {
   return { onglets: r.onglets, version: r.version ?? 0, feuillets: r.feuillets === true }
 }
 
-const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3s'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
+const lirePartage = unstable_cache(lireScript, ['registre-onglets-v3u'], { revalidate: FRAICHEUR, tags: [ETIQUETTE_REGISTRE] })
 
 /** This instance's newest copy (from its own writes or fresh reads). */
 let frais: (Lecture & { le: number }) | null = null
@@ -139,7 +142,7 @@ function lu(l: Lecture) {
   const paie = lirePaie(l.onglets)
   const missions = lireMissions(l.onglets)
   if (paie.actif) missions.ponderation = { ...missions.ponderation, reglages: { ...missions.ponderation.reglages, partRessources: paie.reglages.ressources, partFabrication: paie.reglages.fabrication } }
-  return { ...lireOnglets(l.onglets), missions, paie, intendance: lireIntendance(l.onglets), droits: lirePermissions(l.onglets), feuillets: l.feuillets === true, version: l.version }
+  return { ...lireOnglets(l.onglets), missions, paie, intendance: lireIntendance(l.onglets), droits: lirePermissions(l.onglets), ombre: lireSecrets(l.onglets), feuillets: l.feuillets === true, version: l.version }
 }
 
 /** A write action of the script; its answer carries the tabs as they now are (null with an older script). */

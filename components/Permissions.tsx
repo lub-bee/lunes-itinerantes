@@ -104,8 +104,8 @@ export default function Permissions() {
                 Geste
               </th>
               {d.colonnes.map((c) => (
-                <th key={c.cle} scope="col" className={`perm-role ${c.cle === 'membre' ? 'perm-tous' : ''}`} title={c.dansFeuille ? c.nom : `${c.nom} — colonne à graver`}>
-                  <span>{c.nom}</span>
+                <th key={c.cle} scope="col" className={`perm-role ${c.cle === 'membre' ? 'perm-tous' : ''}`} title={`${c.cle === 'ombre' ? '« . » : les ombres des lunes' : c.nom}${c.dansFeuille ? '' : ' — colonne à graver'}`}>
+                  <span>{c.cle === 'ombre' ? '« . »' : c.nom}</span>
                 </th>
               ))}
             </tr>
@@ -200,7 +200,8 @@ export default function Permissions() {
           <ul>
             {d.roles.map((r) => (
               <li key={`${r.nom}-${r.id}`}>
-                <strong>{r.nom}</strong> · {r.id ? <code>{r.id}</code> : <em>{r.illisible ? 'ID illisible : tape-le comme texte, précédé d’une apostrophe' : 'ID à inscrire'}</em>}
+                <strong>{r.cle === 'ombre' ? '« . » (les ombres des lunes)' : r.nom}</strong> · {r.id ? <code>{r.id}</code> : <em>{r.illisible ? 'ID illisible : tape-le comme texte, précédé d’une apostrophe' : 'ID à inscrire'}</em>}
+                {r.ajoute && <em className="perm-note"> — absent de l’onglet « Rôles » : le grimoire le tient de lui-même ; qu’on l’y inscrive (« . » | ’{r.id}) pour le régler à la main</em>}
                 {d.lu && !d.colonnes.find((c) => c.cle === r.cle)?.dansFeuille && <em className="perm-note"> — sa colonne naîtra au bout de l’onglet au prochain « Graver »</em>}
               </li>
             ))}

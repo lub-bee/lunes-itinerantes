@@ -2,7 +2,7 @@
 // Every text of the shadow book lives here (easy to replace); its goods and recipes are the catalogue's
 // and the recipes' rows whose « Livre » column says « Ombre ».
 
-import type { Article, PageChapitre, PageMetier, PageOmbre, Partie } from './types'
+import type { Article, PageChapitre, PageMetier, PageOmbre, PageSecrets, Partie } from './types'
 
 /** The motto, by day, then in the shadow (each word in its slot). */
 export const DEVISE_JOUR = ['Fidélité', 'Honnêteté', 'Septims'] as const
@@ -33,16 +33,48 @@ export const TEXTES = {
     'Ce que le jour achète au prix du marché, l’ombre le revend au prix du silence. Ce livre ne s’ouvre qu’à qui a su lire la devise à l’envers.',
   /** The way out of the shadow book (a link at the foot of its first page and above the book; the inverted emblem too). */
   sortir: 'Quitter les ombres',
-  enseignements: {
-    titre: 'Ombre',
-    intro:
-      'Ne demande jamais d’où vient la marchandise ; demande seulement ce qu’elle vaut, et à qui elle manque. Ce qui s’écrit ici ne se répète pas au grand jour.',
-    // Placeholder maxims: replace freely.
-    lecons: [
-      'Le vrai prix se dit à voix basse.',
-      'Une dette rappelée deux fois se paie double.',
-      'Ce que la garde n’a pas vu, la caravane ne l’a pas vendu.',
-    ],
+  /** The opening page's right side: the shadow members' presentation, as Elijah gave it (v2, 2026-11-08). */
+  presentation: {
+    surtitre: 'Ombre',
+    titre: 'Les ombres des lunes',
+    sousTitre: 'itinérantes',
+    devise: 'Une caravane informée est une caravane sauvée.',
+    toujours: ['Toujours masqué', 'Toujours sauvage', 'Toujours plusieurs'],
+    texte: 'Les ombres vont là où personne ne va, entendre et vendre sont leur apanage. Le savoir est une clé que l’on possédera.',
+    signature: 'Elijah, Voix de la sécurité',
+  },
+  secrets: {
+    titre: 'Transmettre un secret',
+    titreEn: 'Whisper a Secret',
+    court: 'Ombres',
+    intro: 'Ce que tu as vu, entendu ou volé, couche-le sur cette lettre et scelle-la. Seuls la Voix de la sécurité et les Patriarches en briseront le sceau ; toi seul relis ce que tu as transmis.',
+    lettre: 'Lettre à la Voix de la sécurité',
+    miens: 'Mes secrets',
+    miensVide: 'Tu n’as encore rien transmis à l’ombre.',
+  },
+  tri: {
+    titre: 'Le tri',
+    titreEn: 'The Sorting',
+    court: 'Le tri',
+    intro: 'Les plis arrivent scellés. Brise le sceau, lis, classe ; joins ensemble ce qui parle de la même chose, corrige, ou retire ce qui ne doit plus se lire. Les plus brûlants passent devant.',
+    scelles: 'Plis scellés',
+    scellesVide: 'Nul pli ne t’attend : l’ombre se tait pour l’heure.',
+    notes: 'Les notes',
+    notesVide: 'Aucune note ouverte pour l’heure.',
+  },
+  archives: {
+    titre: 'Archives',
+    titreEn: 'The Archives',
+    court: 'Archives',
+    intro: 'Tout ce que l’ombre a recueilli, dans l’ordre où elle l’a reçu. Cherche par un mot, une faction, une provenance, un informateur ou une date.',
+    vide: 'Rien ne répond à ces filtres.',
+    retirees: 'Notes retirées',
+  },
+  contrebande: {
+    titre: 'Gestion de la contrebande',
+    intro: 'Les ressources et marchandises interdites, une par ligne.',
+    vide: 'La liste de la contrebande est vierge.',
+    avis: 'Toutes les ressources et marchandises interdites doivent être remises à la Voix de la sécurité pour être détruites.',
   },
   marchandises: {
     titre: 'Marchandises de l’ombre',
@@ -57,12 +89,20 @@ export const TEXTES = {
     vide: 'Aucune recette de l’ombre n’est encore consignée.',
   },
   refus: 'Le scribe de l’ombre n’a pas encore d’encre pour ce registre : qu’on recopie le script du grimoire qui connaît le livre d’ombre.',
+  /** The secrets' pages before the sheet's script holds them (v3u). */
+  pasPret: 'Le registre de l’ombre n’est pas encore relié : qu’on colle la v3u du script dans la feuille. D’ici là, nul secret ne s’y écrit.',
 }
 
 export const PARTIE_OMBRE: Partie = { id: 'ombre', titre: 'Livre d’ombre', court: 'Ombre', couleur: '#c8101c', icone: 'hood' }
 
-/** The shadow book's three pages, in tab order: « Caravane de l'Ombre » and its « Ombre » section first (it opens there), then Marchandises, Recettes. */
-export function pagesOmbre(articles: Article[]): [PageOmbre, PageChapitre, PageMetier] {
+/** Which of the secrets' pages the reader may open (lib/droits.ts: `secret`, `secretTri`, `secretArchives`). */
+export type AccesOmbre = { secret: boolean; tri: boolean; archives: boolean }
+
+/**
+ * The shadow book's pages, in tab order: « Caravane de l'Ombre » and its « Ombre » section first (it opens there), then
+ * « Transmettre un secret », « Le tri », « Archives » (each to who may), then Marchandises, Recettes.
+ */
+export function pagesOmbre(articles: Article[], acces: AccesOmbre = { secret: false, tri: false, archives: false }): (PageOmbre | PageSecrets | PageChapitre | PageMetier)[] {
   const marchandises: PageChapitre = {
     type: 'chapitre',
     id: 'ombre-marchandises',
@@ -88,7 +128,25 @@ export function pagesOmbre(articles: Article[]): [PageOmbre, PageChapitre, PageM
     icone: 'poison-bottle',
   }
   const enseignements: PageOmbre = { type: 'ombre', id: 'ombre', partie: 'ombre', titre: TEXTES.titre, titreEn: TEXTES.titreEn, court: 'Ombre', icone: 'evil-eyes' }
-  return [enseignements, marchandises, recettes]
+  const secret = (vue: PageSecrets['vue'], t: { titre: string; titreEn: string; court: string; intro: string }, icone: string): PageSecrets => ({
+    type: 'secrets',
+    id: `ombre-${vue}`,
+    partie: 'ombre',
+    vue,
+    titre: t.titre,
+    titreEn: t.titreEn,
+    court: t.court,
+    icone,
+    intro: t.intro,
+  })
+  return [
+    enseignements,
+    ...(acces.secret ? [secret('transmettre', TEXTES.secrets, 'envelope')] : []),
+    ...(acces.tri ? [secret('tri', TEXTES.tri, 'wax-seal')] : []),
+    ...(acces.archives ? [secret('archives', TEXTES.archives, 'archive-research')] : []),
+    marchandises,
+    recettes,
+  ]
 }
 
-export const ICONES_OMBRE = ['hood', 'evil-eyes', 'swap-bag', 'poison-bottle']
+export const ICONES_OMBRE = ['hood', 'evil-eyes', 'swap-bag', 'poison-bottle', 'envelope', 'wax-seal', 'archive-research', 'cancel']

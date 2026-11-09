@@ -257,17 +257,28 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
         surtitre: f.nouvelle ? 'Ajouter une variante' : f.nom ? 'Corriger la recette' : 'Consigner une recette',
         titre: f.nom || 'Nouvelle recette',
         corps: (
-          <Signe env={env} action={f.nom && (env.reg.r.donnees?.recettes ?? []).some((r) => cle(r.produit) === cle(f.nom)) ? 'recetteCorriger' : 'recette'}>
+          <Signe
+            env={env}
+            action={
+              f.ombre || (env.reg.r.donnees?.recettes ?? []).some((r) => r.ombre && cle(r.produit) === cle(f.nom))
+                ? 'ombreRecette'
+                : f.nom && (env.reg.r.donnees?.recettes ?? []).some((r) => cle(r.produit) === cle(f.nom))
+                  ? 'recetteCorriger'
+                  : 'recette'
+            }
+          >
             <FormRecette nom={f.nom} variante={f.variante} nouvelle={f.nouvelle} artisanPropose={f.artisan} ombre={f.ombre} env={env} />
           </Signe>
         ),
       }
     case 'vente':
       return {
-        surtitre: 'Livre des Marchandises',
+        surtitre: f.ombre ? 'Livre d’ombre' : 'Livre des Marchandises',
         titre: f.nom ? 'Mettre en vente' : 'Inscrire une marchandise',
-        corps: <Signe env={env} action="vente"><FormVente nom={f.nom} chapitre={f.chapitre} ombre={f.ombre} env={env} /></Signe>,
+        corps: <Signe env={env} action={f.ombre ? 'ombreMarchandise' : 'vente'}><FormVente nom={f.nom} chapitre={f.chapitre} ombre={f.ombre} env={env} /></Signe>,
       }
+    case 'prix-ombre':
+      return { surtitre: 'Livre d’ombre · Corriger les prix', titre: f.nom, corps: <Signe env={env} action="ombreMarchandise"><FormPrix nom={f.nom} env={env} /></Signe> }
     case 'ressource':
       return { surtitre: f.nom ? 'Corriger la matière' : 'Inscrire une matière', titre: f.nom || 'Nouvelle matière', corps: <Signe env={env} action="ressource"><FormRessource nom={f.nom} env={env} /></Signe> }
     case 'missive':
@@ -729,6 +740,10 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
   const article = env.articles.find((a) => cle(a.fr) === cle(nom) || (a.en && cle(a.en) === cle(nom)))
   if (!c || !d?.relie) return <p className="registre-ferme">Le livre des recettes n&apos;est pas encore relié au grimoire.</p>
   const droits = env.reg.r.marchand?.droits
+  // Livre d'ombre v2: a shadow recipe or article is written under the shadow gestures.
+  const ombre = Boolean(recette?.ombre || article?.ombre)
+  const peutCorriger = (ombre ? droits?.ombreRecette : droits?.recetteCorriger) !== false
+  const peutConsigner = (ombre ? droits?.ombreRecette : vs.length ? droits?.recetteCorriger : droits?.recette) !== false
   const plusieurs = vs.length > 1
   const couts = coutsParRecette(vs, env)
   const moinsChere = plusieurs ? moinsChereDe(couts) : undefined
@@ -755,12 +770,12 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
       {/* Every action of the note in one block at its foot: the recipe's first, then the material's, then
           the catalogue's, taking out last. */}
       <div className="fiche-actions">
-        {droits?.recetteCorriger !== false && recette && (
+        {peutCorriger && recette && (
           <Action icone="corriger" onClick={() => env.changer({ genre: 'edition-recette', nom: recette.produit, variante: recette.variante })}>
             corriger{plusieurs ? ` la recette ${recette.variante}` : ' la recette'}
           </Action>
         )}
-        {plusieurs && recette && recette !== usage && droits?.usage !== false && (
+        {plusieurs && recette && recette !== usage && (ombre ? droits?.ombreRecette : droits?.usage) !== false && (
           <Action
             icone="usage"
             onClick={() =>
@@ -773,8 +788,8 @@ function VueRecette({ nom, variante: voulue, depuis, env }: { nom: string; varia
             en faire la recette d&apos;usage
           </Action>
         )}
-        {(vs.length ? droits?.recetteCorriger : droits?.recette) !== false && (
-          <Action icone="consigner" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0 })}>
+        {peutConsigner && (
+          <Action icone="consigner" onClick={() => env.changer({ genre: 'edition-recette', nom: recette?.produit ?? ressource?.nom ?? nom, nouvelle: vs.length > 0, ombre })}>
             {vs.length ? 'ajouter une variante' : 'consigner la recette'}
           </Action>
         )}
@@ -883,24 +898,129 @@ function CasePrix({ mot, sous, children }: { mot: string; sous?: string; childre
 
 /** The catalogue's actions of a note: see it in its chapter, put it up for sale, take it out (last). */
 function ActionsCatalogue({ produit, article, depuis, env }: { produit: string; article?: Article; depuis?: 'catalogue'; env: Env }) {
+  const droits = env.reg.r.marchand?.droits
+  const ombre = Boolean(article?.ombre || (env.reg.r.donnees?.recettes ?? []).some((r) => r.ombre && cle(r.produit) === cle(produit)))
   if (!article)
-    return env.reg.r.marchand?.droits?.vente !== false ? (
-      <Action icone="vendre" onClick={() => env.changer({ genre: 'vente', nom: produit })}>
-        le mettre en vente
-      </Action>
-    ) : null
+    return (
+      <>
+        {!ombre && droits?.vente !== false && (
+          <Action icone="vendre" onClick={() => env.changer({ genre: 'vente', nom: produit })}>
+            le mettre en vente
+          </Action>
+        )}
+        {ombre && droits?.ombreMarchandise !== false && (
+          <Action icone="vendre" onClick={() => env.changer({ genre: 'vente', nom: produit, ombre: true })}>
+            le mettre en vente dans l’ombre
+          </Action>
+        )}
+        {droits?.ombreLivre !== false && <PasserLivre fr={produit} ombre={ombre} env={env} />}
+      </>
+    )
   const chapitre = chapitreDeArticle(article, env)
   const titre = chapitre ? env.chapitres.find((c) => c.id === chapitre)?.titre : undefined
   return (
     <>
       {/* Opened from the catalogue, the reader is already on the article's chapter. */}
       {depuis !== 'catalogue' && (
-        <Action icone="catalogue" onClick={() => env.reg.allerA(chapitre ?? '')}>
+        <Action icone="catalogue" onClick={() => env.reg.allerA(ombre ? 'ombre-marchandises' : (chapitre ?? ''))}>
           voir au catalogue{titre ? ` · ${titre}` : ''}
         </Action>
       )}
-      <RetirerDuCatalogue fr={article.fr} recette={variantesDe(env.reg.r.donnees?.recettes ?? [], produit).length > 0} env={env} />
+      {/* Livre d'ombre v2: a shadow article's prices, and the way between the two books (`ombreLivre`). */}
+      {ombre && droits?.ombreMarchandise !== false && (
+        <Action icone="corriger" onClick={() => env.changer({ genre: 'prix-ombre', nom: article.fr })}>
+          corriger les prix
+        </Action>
+      )}
+      {droits?.ombreLivre !== false && <PasserLivre fr={article.fr} ombre={ombre} env={env} />}
+      <RetirerDuCatalogue fr={article.fr} recette={variantesDe(env.reg.r.donnees?.recettes ?? [], produit).length > 0} ombre={ombre} env={env} />
     </>
+  )
+}
+
+/**
+ * Livre d'ombre v2: an article and its recipe(s) sent to the shadow book, or back to the day book (« Livre » column, the
+ * `livre` action, gesture `ombreLivre`), asked twice in character. The book shows the move at once.
+ */
+function PasserLivre({ fr, ombre, env }: { fr: string; ombre: boolean; env: Env }) {
+  const [demande, setDemande] = useState(false)
+  const article = env.articles.find((a) => cle(a.fr) === cle(fr))
+  if (!demande)
+    return (
+      <Action icone={ombre ? 'lumiere' : 'ombre'} className="action-discrete" onClick={() => setDemande(true)}>
+        {ombre ? 'rendre au grand jour' : 'passer au Livre d’ombre'}
+      </Action>
+    )
+  const passer = () => {
+    const valeur = ombre ? '' : 'Ombre'
+    env.reg.r.agir('livre', { fr, valeur }, (d) => {
+      const dans = (d.catalogue ?? []).some((a) => cle(a.fr) === cle(fr))
+      const catalogue = dans
+        ? (d.catalogue ?? []).map((a) => (cle(a.fr) === cle(fr) ? { ...a, ombre: !ombre } : a))
+        : article
+          ? [...(d.catalogue ?? []), { chapitre: '', fr: article.fr, en: article.en, prod: article.prod, min: article.min, max: article.max, artisan: article.artisan, note: article.note, lot: article.lot ?? null, ombre: !ombre }]
+          : d.catalogue
+      return { ...d, catalogue, recettes: d.recettes.map((r) => (cle(r.produit) === cle(fr) ? { ...r, ombre: !ombre } : r)) }
+    })
+    env.fermer()
+  }
+  return (
+    <p className="confirmer-retrait" role="alert">
+      {ombre ? `Rendre ${fr} au grand jour ? L’article et sa recette quittent le Livre d’ombre pour le livre du jour.` : `Passer ${fr} au Livre d’ombre ? L’article et sa recette quittent le livre du jour.`}{' '}
+      <Action icone={ombre ? 'lumiere' : 'ombre'} onClick={passer}>
+        oui
+      </Action>{' '}
+      <Action icone="annuler" onClick={() => setDemande(false)}>
+        non
+      </Action>
+    </p>
+  )
+}
+
+/** Livre d'ombre v2: a shadow article's cost, floor and ceiling corrected in its Catalogues row (script v3u 'prix'). */
+function FormPrix({ nom, env }: { nom: string; env: Env }) {
+  const article = env.articles.find((a) => cle(a.fr) === cle(nom))
+  const ecrit = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v).replace('.', ','))
+  const [v, setV] = useState({ prod: ecrit(article?.prod), min: ecrit(article?.min), max: ecrit(article?.max), note: article?.note ?? '' })
+  const { message, setMessage, confier } = useEnvoi(env)
+  const champ = (k: 'prod' | 'min' | 'max', mot: string) => (
+    <label className="fiche-champ">
+      <span>{mot}</span>
+      <input type="text" inputMode="decimal" value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} maxLength={12} placeholder="septims" />
+    </label>
+  )
+  if (!article) return <p className="message-encre erreur">Cet article n’est plus au catalogue de l’ombre.</p>
+  return (
+    <form
+      className="fiche-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const lu = (s: string) => (s.trim() ? entier(s) : null)
+        const prod = lu(v.prod)
+        const min = lu(v.min)
+        const max = lu(v.max)
+        if ([prod, min, max].some((x) => x !== null && !(x >= 0))) return setMessage({ ok: false, texte: 'Un prix est illisible : un nombre de septims est attendu.' })
+        if (min !== null && max !== null && min > max) return setMessage({ ok: false, texte: 'Le plancher ne peut dépasser le plafond.' })
+        const note = v.note.trim()
+        confier('prix', { fr: article.fr, prod, min, max, note }, (d) => ({
+          ...d,
+          catalogue: (d.catalogue ?? []).map((a) => (cle(a.fr) === cle(article.fr) ? { ...a, prod, min, max, note } : a)),
+        }))
+      }}
+    >
+      <p className="fiche-note">Les prix de l’ombre se disent à voix basse : ils ne paraissent qu’en ce livre.</p>
+      <div className="fiche-prix-ligne">
+        {champ('prod', 'Coût')}
+        {champ('min', 'Plancher')}
+        {champ('max', 'Plafond')}
+      </div>
+      <label className="fiche-champ">
+        <span>Note</span>
+        <input type="text" value={v.note} onChange={(e) => setV({ ...v, note: e.target.value })} maxLength={200} placeholder="facultatif" />
+      </label>
+      <Message m={message} />
+      <Sceller icones={env.icones}>Consigner les prix</Sceller>
+    </form>
   )
 }
 
@@ -921,9 +1041,9 @@ function PrixArticle({ article }: { article: Article }) {
  * « retirer du catalogue », asked twice in character: the article leaves the catalogue at once (the
  * sheet's copy wins over the published one); a recipe, if any, stays in the Livre des Recettes.
  */
-function RetirerDuCatalogue({ fr, recette = true, env }: { fr: string; recette?: boolean; env: Env }) {
+function RetirerDuCatalogue({ fr, recette = true, ombre = false, env }: { fr: string; recette?: boolean; ombre?: boolean; env: Env }) {
   const [demande, setDemande] = useState(false)
-  if (env.reg.r.marchand?.droits?.retirer === false) return null
+  if (env.reg.r.marchand?.droits?.[ombre ? 'ombreMarchandise' : 'retirer'] === false) return null
   if (!demande)
     return (
       <Action icone="retirer" className="action-discrete" onClick={() => setDemande(true)}>

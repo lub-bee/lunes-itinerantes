@@ -26,7 +26,7 @@ async function reprendre() {
   window.location.assign('/')
 }
 
-const listeRangs = (noms: string[]) => (noms.length ? noms.join(', ') : 'aucun rang')
+const listeRangs = (noms: string[]) => (noms.length ? noms.map((n) => (n === '.' ? '« . »' : n)).join(', ') : 'aucun rang')
 
 export function BandeauQualite() {
   const chemin = usePathname()
@@ -174,7 +174,7 @@ export function ChoixQualite() {
         {rangs.map((r) => (
           <label key={r.cle} className={`qualite-rang ${r.cle === 'membre' ? 'qualite-membre' : ''}`}>
             <input type="checkbox" checked={coches.has(r.cle)} onChange={() => basculer(r.cle)} />
-            <span>{r.nom}</span>
+            <span>{r.cle === 'ombre' ? '« . » (ombres des lunes)' : r.nom}</span>
           </label>
         ))}
         <label className="qualite-rang qualite-aucun">

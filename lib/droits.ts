@@ -21,9 +21,10 @@ import { cle } from './missives'
 import type { ActionRegistre } from './missives'
 import type { ActionMission } from './missions'
 import type { ActionPaie } from './paie'
+import type { ActionSecret } from './secrets'
 
-/** Every action a member can take: the registre's, the missions' and the pay's. */
-export type Action = ActionRegistre | ActionMission | ActionPaie
+/** Every action a member can take: the registre's, the missions', the pay's and the shadow book's secrets. */
+export type Action = ActionRegistre | ActionMission | ActionPaie | ActionSecret
 
 /** A rank's key: a known rank's `cle` below, or the letters of any other label (`cle` of lib/missives.ts). */
 export type Role = string
@@ -47,16 +48,26 @@ export const ROLES: DefRole[] = [
   { cle: 'marchand-de-lune', nom: 'Marchand de lune', alias: ['Marchands de lune', 'Marchande de lune'] },
   { cle: 'petites-lunes', nom: 'Petites lunes', alias: ['Petite lune'] },
   { cle: 'ami-des-lunes', nom: 'Ami des Lunes', alias: ['Amie des Lunes', 'Amis des Lunes'] },
+  // Livre d'ombre v2: the shadow members, the Discord role named « . » (a label with no letter: its key is set by hand).
+  { cle: 'ombre', nom: '.', alias: ['Ombre des lunes', 'Ombres des lunes'] },
 ]
 
 export const MEMBRE: Role = 'membre'
+/** The shadow members (Discord role « . »): they deposit secrets and read only their own (lib/secrets.ts). */
+export const OMBRE: Role = 'ombre'
+/**
+ * The rank « . » and its Discord role (Ludo, 2026-11-09): read from the Rôles tab like any rank; while that tab holds no
+ * « . » row, the grimoire adds it with this ID (`ajoute`), so the shadow members are recognised without a hand edit.
+ */
+export const RANG_OMBRE = { nom: '.', id: '1565167239097749725' }
 /** « Ami des Lunes »: a rank that never links nor signs (lib/identite.ts), whatever its boxes. */
 export const AMI: Role = 'ami-des-lunes'
 
 /** A rank's key from any spelling of its label (case, accents, punctuation ignored; a known alias counts). */
 export function cleRole(nom: string): Role {
   const k = cle(nom)
-  if (!k) return ''
+  // « . » has no letter: cle() would erase it.
+  if (!k) return String(nom ?? '').trim() === RANG_OMBRE.nom ? OMBRE : ''
   const r = ROLES.find((x) => cle(x.nom) === k || (x.alias ?? []).some((a) => cle(a) === k))
   return r ? r.cle : k
 }
@@ -69,7 +80,6 @@ export type Geste =
   | 'prix'
   | 'retirer'
   | 'deplacer'
-  | 'livre'
   | 'versement'
   | 'recette'
   | 'recetteCorriger'
@@ -94,6 +104,13 @@ export type Geste =
   | 'ecriture'
   | 'clotureSemaine'
   | 'paiement'
+  | 'ombreLivre'
+  | 'ombreMarchandise'
+  | 'ombreRecette'
+  | 'secret'
+  | 'secretTri'
+  | 'secretArchives'
+  | 'contrebande'
 
 /**
  * `defaut`: the ranks whose box the seed checks; 'tous' = the « Membre » box (every caravan member holds it).
@@ -111,6 +128,9 @@ const MARCHAND = 'marchand-de-lune'
 /** Everyone but the Petites lunes. */
 const SAUF_PETITES = [P, A, ADC, ...VOIX, MARCHAND]
 const TRESOR = [P, A]
+/** Livre d'ombre v2: every shadow gesture defaults to the Patriarchs, the shadow members and the Voix de la sécurité. */
+const VS = 'voix-de-la-securite'
+const OMBRES = [P, OMBRE, VS]
 
 export const GESTES: DefGeste[] = [
   { cle: 'entrer', groupe: 'Grimoire', libelle: 'Entrer dans le grimoire', defaut: 'tous', note: 'vérifié au sceau Discord' },
@@ -118,7 +138,6 @@ export const GESTES: DefGeste[] = [
   { cle: 'prix', groupe: 'Marchandises', libelle: 'Changer un prix (vente ou achat)', defaut: SAUF_PETITES, note: 'avec la page Achat, à venir' },
   { cle: 'retirer', groupe: 'Marchandises', libelle: 'Retirer un article du catalogue', defaut: [P, A, ADC, ...VOIX] },
   { cle: 'deplacer', groupe: 'Marchandises', libelle: 'Déplacer un article vers un autre chapitre', defaut: 'tous' },
-  { cle: 'livre', groupe: 'Marchandises', libelle: 'Passer un article au Livre d’ombre (ou l’en sortir)', defaut: 'tous' },
   { cle: 'versement', groupe: 'Marchandises', libelle: 'Marquer versée la part d’une vente', defaut: TRESOR },
   { cle: 'recette', groupe: 'Recettes', libelle: 'Consigner une recette', defaut: SAUF_PETITES },
   { cle: 'recetteCorriger', groupe: 'Recettes', libelle: 'Corriger une recette / ajouter une variante', defaut: SAUF_PETITES },
@@ -143,6 +162,15 @@ export const GESTES: DefGeste[] = [
   { cle: 'ecriture', groupe: 'Trésor', libelle: 'Tenir le registre d’un événement', defaut: TRESOR },
   { cle: 'clotureSemaine', groupe: 'Trésor', libelle: 'Clore la période', defaut: TRESOR },
   { cle: 'paiement', groupe: 'Trésor', libelle: 'Marquer une paie payée', defaut: TRESOR },
+  // Livre d'ombre v2 (2026-11-09): every gesture of the shadow book, seeded once with its defaults (`semee`). The former
+  // `livre` row (« Passer un article au Livre d’ombre », open to all) is no longer read: `ombreLivre` replaces it.
+  { cle: 'ombreLivre', groupe: 'Livre d’ombre', libelle: 'Passer un article au Livre d’ombre (ou l’en sortir)', defaut: OMBRES, note: 'l’article et sa recette', semee: true },
+  { cle: 'ombreMarchandise', groupe: 'Livre d’ombre', libelle: 'Inscrire, corriger ou retirer une marchandise de l’ombre', defaut: OMBRES, note: 'ses prix compris', semee: true },
+  { cle: 'ombreRecette', groupe: 'Livre d’ombre', libelle: 'Consigner ou corriger une recette de l’ombre', defaut: OMBRES, semee: true },
+  { cle: 'secret', groupe: 'Livre d’ombre', libelle: 'Transmettre un secret (et relire les siens)', defaut: OMBRES, note: 'chacun ne voit que ceux qu’il a lui-même transmis', semee: true },
+  { cle: 'secretTri', groupe: 'Livre d’ombre', libelle: 'Trier les secrets', defaut: [P, VS], note: 'ouvrir, classer, fusionner, corriger, retirer', semee: true },
+  { cle: 'secretArchives', groupe: 'Livre d’ombre', libelle: 'Lire toutes les archives (et rendre une note retirée)', defaut: [P, VS], semee: true },
+  { cle: 'contrebande', groupe: 'Livre d’ombre', libelle: 'Tenir la liste de la contrebande', defaut: [P, VS, 'voix-du-commerce'], note: 'la lire et la corriger, au grand jour comme dans l’ombre', semee: true },
 ]
 
 /** The gesture each action needs ('recette' becomes 'recetteCorriger' when the product already has a recipe: the route decides). */
@@ -158,8 +186,10 @@ export const GESTE_DE: Record<Action, Geste> = {
   usage: 'usage',
   choix: 'choix',
   deplacer: 'deplacer',
-  livre: 'livre',
+  livre: 'ombreLivre',
   retirer: 'retirer',
+  // A shadow article's prices (Livre d'ombre v2): the route asks `ombreMarchandise` (a day article's: `prix`).
+  prix: 'prix',
   versement: 'versement',
   demande: 'ecrire',
   entree: 'remise',
@@ -182,6 +212,14 @@ export const GESTE_DE: Record<Action, Geste> = {
   ecriture: 'ecriture',
   clotureSemaine: 'clotureSemaine',
   paiement: 'paiement',
+  secret: 'secret',
+  ouvrir: 'secretTri',
+  classer: 'secretTri',
+  corriger: 'secretTri',
+  fusionner: 'secretTri',
+  retirerSecret: 'secretTri',
+  rendre: 'secretArchives',
+  contrebande: 'contrebande',
 }
 
 /* ───────────────────────── The table, read from the sheet ───────────────────────── */
@@ -189,8 +227,11 @@ export const GESTE_DE: Record<Action, Geste> = {
 /** A rank column: a label of the Rôles tab (`dansFeuille`: the Permissions tab already has its column). */
 export type Colonne = { cle: Role; nom: string; dansFeuille: boolean }
 
-/** A rank of the « Rôles » tab: its Discord role ID ('' when not filled; `illisible`: a number the sheet rounded). */
-export type RoleDiscord = { nom: string; cle: Role; id: string; illisible: boolean }
+/**
+ * A rank of the « Rôles » tab: its Discord role ID ('' when not filled; `illisible`: a number the sheet rounded). `ajoute`: not in
+ * the tab, added by the grimoire (the rank « . », RANG_OMBRE).
+ */
+export type RoleDiscord = { nom: string; cle: Role; id: string; illisible: boolean; ajoute?: boolean }
 
 export type TablePermissions = {
   /** The script answered the Rôles and Permissions tabs (v3p, asked with `rangs: true`); false: nothing is granted. */
@@ -208,6 +249,8 @@ export type TablePermissions = {
   /** Headers of the tab's rank columns that no Rôles label names (never written, never removed). */
   orphelines: string[]
   roles: RoleDiscord[]
+  /** The tab's row 1 as the script read it (trimmed, blanks dropped): the headers the script's own checks use (v3u). */
+  entete: string[]
 }
 
 /** A checked cell, read leniently: TRUE, « oui », ✓, x… */
@@ -235,6 +278,8 @@ export function lirePermissions(o: { roles?: Record<string, unknown>[]; permissi
     const id = illisible ? '' : String(r.id ?? '').replace(/\D/g, '')
     return [{ nom, cle: cleRole(nom), id, illisible }]
   })
+  // The rank « . » with its Discord role when the Rôles tab does not name it yet (Livre d'ombre v2).
+  if (lu && !roles.some((r) => r.cle === OMBRE)) roles.push({ nom: RANG_OMBRE.nom, cle: OMBRE, id: RANG_OMBRE.id, illisible: false, ajoute: true })
   const entete = (Array.isArray(o.permissionsEntete) ? o.permissionsEntete : []).map((h) => String(h ?? '').trim()).filter(Boolean)
   const enTete = new Set(entete.map(cleRole))
   const colonnes: Colonne[] = []
@@ -254,7 +299,7 @@ export function lirePermissions(o: { roles?: Record<string, unknown>[]; permissi
     cases[g.cle] = Object.fromEntries(colonnes.map((c) => [c.cle, lu && cellules.has(c.cle) ? coche(cellules.get(c.cle)) : false]))
   }
   const inconnues = lignes.filter((l) => !prises.has(l)).map((l) => ({ geste: String(l.geste ?? ''), cle: String(l.cle ?? '') }))
-  return { lu, colonnes, cases, ecrites, semees: lignes.length > 0, inconnues, orphelines, roles }
+  return { lu, colonnes, cases, ecrites, semees: lignes.length > 0, inconnues, orphelines, roles, entete }
 }
 
 /** The seed of the Grimoire's rows: every gesture, its defaults checked for the ranks of the Rôles tab. */
@@ -298,6 +343,18 @@ export function droitsDe(qui: Qualites, table: TablePermissions): Droits {
   return Object.fromEntries(cles.map((k) => [k, peut(k, qui, table)])) as Droits
 }
 
+/**
+ * The Permissions tab's headers of these ranks (Livre d'ombre v2): the script checks a shadow gesture again on the sheet's
+ * own boxes (grimoire.gs v3u `qui`), by these exact headers (an alias such as « Patriarches » is resolved here).
+ */
+export function entetesDe(roles: Role[], entete: unknown[] | undefined): string[] {
+  const h = (Array.isArray(entete) ? entete : []).map((x) => String(x ?? '').trim()).filter(Boolean)
+  return h.filter((x) => !FIXES.includes(cle(x)) && roles.includes(cleRole(x)))
+}
+
+/** Who writes, as the script checks a shadow gesture again (grimoire.gs v3u `qui`). */
+export const quiPourScript = (q: { nom: string; roles: Role[]; testeur: boolean }, t: TablePermissions) => ({ nom: q.nom, entetes: entetesDe(q.roles, t.entete), testeur: q.testeur })
+
 /* ───────────────────────── Ranks of a seal ───────────────────────── */
 
 /** The ranks (Rôles rows, in the tab's order, one per key) whose Discord role ID is among `discord`. */
@@ -313,6 +370,8 @@ export function rangsDuSceau(discord: string[] | null | undefined, table: TableP
  * without « Membre » keeps whatever it holds; none: empty, read « Sans rang » by lib/rangs.ts).
  */
 export function rangsEcrits(rangs: RoleDiscord[]): string[] {
+  // « . » is never written there (a secret rank: the Membres tab is read by other members' listings).
+  rangs = rangs.filter((r) => r.cle !== OMBRE)
   const autres = rangs.filter((r) => r.cle !== MEMBRE)
   return (autres.length ? autres : rangs).map((r) => r.nom)
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { identite, type Identite } from '@/lib/identite'
-import { peut } from '@/lib/droits'
+import { peut, quiPourScript, type Action, type Geste } from '@/lib/droits'
 import { chargerArticles } from '@/lib/livre'
 import chapitres from '@/content/chapitres.json'
 import { estOmbre, OMBRE_ECRITURE, TEXTES as TEXTES_OMBRE } from '@/lib/ombre'
@@ -366,10 +366,12 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       ;[...autres, nouvelle].forEach((r) => (connaitre(r.produit), connaitre(r.en)))
       ;[...articles, ...lu.catalogue].forEach((a) => (connaitre(a.fr), connaitre(a.en)))
       const nouvellesRessources = ingredients.map((i) => i.ingredient).filter((n) => !connus.has(cle(n)))
+      // A recipe of the shadow book stays there (a new variant or a correction of a shadow product, whatever the page sends).
+      const ombre = estOmbre(b.livre) || lu.recettes.some((r) => r.ombre && (cle(r.produit) === cle(produit) || (ancien && cle(r.produit) === cle(ancien))))
       return {
         action,
         charge: {
-          recette: { livre: estOmbre(b.livre) ? 'Ombre' : '', produit, variante, usage, ancienProduit: editee ? ancien : undefined, ancienneVariante: editee ? ancienneVariante : undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources },
+          recette: { livre: ombre ? 'Ombre' : '', produit, variante, usage, ancienProduit: editee ? ancien : undefined, ancienneVariante: editee ? ancienneVariante : undefined, en: nouvelle.en, rendement, artisan: nouvelle.artisan, note: nouvelle.note, ingredients, nouvellesRessources },
         },
         message: ingredients.length
           ? `La recette${variante > 1 || soeurs.length ? ` n° ${variante}` : ''} de ${produit} est consignée.${nouvellesRessources.length ? ` ${nouvellesRessources.join(', ')} ${nouvellesRessources.length > 1 ? 'rejoignent' : 'rejoint'} les matières premières, prix à inscrire.` : ''}`
@@ -481,6 +483,18 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
       return { action, charge: { retrait: { fr: article!.fr } }, message: `${article!.fr} quitte le catalogue de la caravane.` }
     }
 
+    case 'prix': {
+      // Livre d'ombre v2 (script v3u): an article's prices corrected in its own Catalogues row.
+      const fr = mot(b.fr, 120) || non('Le nom de l’ouvrage manque.')
+      const article = lu.catalogue.find((a) => cle(a.fr) === cle(fr))
+      if (!article) non(`« ${fr} » n’est pas dans l’onglet Catalogues de la feuille : ses prix ne s’y corrigent pas d’ici.`)
+      const prod = nombreOuVide(b.prod, 1e7, 'Le coût')
+      const min = nombreOuVide(b.min, 1e7, 'Le plancher')
+      const max = nombreOuVide(b.max, 1e7, 'Le plafond')
+      if (min !== null && max !== null && min > max) non('Le plancher ne peut dépasser le plafond.')
+      return { action, charge: { tarif: { fr: article!.fr, prod, min, max, note: mot(b.note, 200) } }, message: `Les prix de ${article!.fr} sont consignés.` }
+    }
+
     case 'vente': {
       // A product put up for sale: one row added to the Catalogues tab (the book shows it at once,
       // the published CSV a few minutes later).
@@ -503,7 +517,39 @@ async function preparer(action: ActionRegistre, b: Record<string, unknown>, lu: 
   }
 }
 
-const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement', 'deplacer', 'retirer', 'livre']
+const ACTIONS: ActionRegistre[] = ['missive', 'releve', 'depot', 'fabrication', 'cloture', 'recette', 'ressource', 'vente', 'usage', 'choix', 'versement', 'deplacer', 'retirer', 'livre', 'prix']
+
+/**
+ * The gesture a write needs (lib/droits.ts). Livre d'ombre v2: a write that touches the shadow book is checked on the shadow
+ * gestures (Patriarches, « . », Voix de la sécurité by default), whatever the day book's gesture says.
+ */
+async function gesteDe(action: ActionRegistre, b: Record<string, unknown>, lu: Lu): Promise<Action | Geste> {
+  const nom = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
+  const articleOmbre = async (v: unknown) => {
+    const k = cle(nom(v))
+    if (!k) return false
+    const ligne = lu.catalogue.find((a) => cle(a.fr) === k)
+    return ligne ? Boolean(ligne.ombre) : (await chargerArticles()).some((a) => a.ombre && cle(a.fr) === k)
+  }
+  const recetteOmbre = (v: unknown) => lu.recettes.some((r) => r.ombre && cle(r.produit) === cle(nom(v)))
+  switch (action) {
+    case 'recette': {
+      if (estOmbre(b.livre) || recetteOmbre(b.ancienProduit) || recetteOmbre(b.produit)) return 'ombreRecette'
+      // A recipe of a product that already has one (an edit, a moved recipe, a new variant) is a correction.
+      return nom(b.ancienProduit) || variantesDe(lu.recettes, nom(b.produit)).length ? 'recetteCorriger' : 'recette'
+    }
+    case 'usage':
+      return recetteOmbre(b.produit) ? 'ombreRecette' : 'usage'
+    case 'vente':
+      return estOmbre(b.livre) ? 'ombreMarchandise' : 'vente'
+    case 'retirer':
+      return (await articleOmbre(b.fr)) ? 'ombreMarchandise' : 'retirer'
+    case 'prix':
+      return (await articleOmbre(b.fr)) ? 'ombreMarchandise' : 'prix'
+    default:
+      return action
+  }
+}
 
 export async function POST(req: NextRequest) {
   if (!registreRelie()) return refus("Le registre des missives n'est pas encore relié au grimoire.", 503)
@@ -524,11 +570,7 @@ export async function POST(req: NextRequest) {
   const tLire = performance.now() - t0
   const qui = await identite(req.cookies, lu)
   if (!qui) return refus("Signe d'abord de ton nom : seul un membre inscrit au registre de la caravane peut y écrire.", 401)
-  // A recipe of a product that already has one (an edit, a moved recipe, a new variant) is a correction.
-  const corrige =
-    action === 'recette' &&
-    Boolean(String(b.ancienProduit ?? '').trim() || variantesDe(lu.recettes, String(b.produit ?? '').replace(/\s+/g, ' ').trim()).length)
-  if (!peut(corrige ? 'recetteCorriger' : action, qui, lu.droits)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
+  if (!peut(await gesteDe(action, b, lu), qui, lu.droits)) return refus("Cette page du registre est réservée à d'autres pattes que les tiennes.", 403)
 
   let e: Ecriture
   try {
@@ -540,7 +582,8 @@ export async function POST(req: NextRequest) {
   const t1 = performance.now()
   let ecrit: Awaited<ReturnType<typeof ecrireRegistre>>
   try {
-    ecrit = await ecrireRegistre(e.action, e.charge)
+    // `qui`: the script v3u checks a shadow gesture again on the sheet's own boxes (an older script ignores it).
+    ecrit = await ecrireRegistre(e.action, { ...e.charge, qui: quiPourScript(qui, lu.droits) })
   } catch (err) {
     console.error(`[registre] ${action} refused by the script`, err)
     const s = String(err)
@@ -549,7 +592,9 @@ export async function POST(req: NextRequest) {
         ? 'Cette missive est déjà close : son registre ne bouge plus.'
         : s.includes('unknown action')
           ? 'Le scribe du registre ne connaît pas encore ce feuillet-là : qu’on recopie le dernier script du grimoire dans la feuille, puis qu’on réessaie.'
-          : s.includes('no catalogue')
+          : s.includes('forbidden')
+            ? 'Le registre a vérifié tes rangs sur la feuille : ce geste ne t’y est pas ouvert. Rien n’a été consigné.'
+            : s.includes('no catalogue')
             ? 'Le registre ne trouve pas son onglet Catalogues : rien n’a été inscrit.'
             : s.includes('already in catalogue')
               ? 'Cet ouvrage est déjà au catalogue de la caravane.'

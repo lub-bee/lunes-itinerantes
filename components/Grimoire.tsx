@@ -22,6 +22,7 @@ import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from '
 import { FicheVolante } from './Fiche'
 import { idDemande, titreDemande, useMissions } from './Missions'
 import { useTresor } from './Tresor'
+import { useSecrets } from './Secrets'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 import { Annule, blocsTexte, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
 import { PAGE_DEVISE, PARTIE_OMBRE, pagesOmbre, TEXTES as OMBRE_TEXTES } from '@/lib/ombre'
@@ -121,6 +122,10 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   const missions = useMissions(registre.marchand?.identite ?? null, apresMission)
   // The pay (prototype): the Livre du Trésor's data and the week shown (read only when it opens).
   const tresor = useTresor(registre.marchand?.identite ?? null, tresorOuvert)
+  // The Livre d'ombre v2: the secrets and the contraband list (read once signed; the server sends only what the reader may see).
+  const secrets = useSecrets(registre.marchand?.identite ?? null)
+  const droits = registre.marchand?.droits
+  const accesOmbre = useMemo(() => ({ secret: droits?.secret === true, tri: droits?.secretTri === true, archives: droits?.secretArchives === true }), [droits?.secret, droits?.secretTri, droits?.secretArchives])
 
   // The ex-libris first (when the registre is linked), and one page per missive after the list of
   // missives: open ones (oldest first), then closed ones.
@@ -221,8 +226,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     for (const a of registre.donnees?.catalogue ?? [])
       if (a.ombre) parNom.set(cle(a.fr), { id: slug(a.fr), fr: a.fr, en: a.en, prod: a.prod, min: a.min, max: a.max, artisan: artisanDe(a.artisan), note: a.note, lot: a.lot ?? null, ombre: true })
     const retires = new Set((registre.donnees?.retires ?? []).map(cle))
-    return { ...livreJour, parties: [PARTIE_OMBRE], pages: pagesOmbre([...parNom.values()].filter((a) => !retires.has(cle(a.fr)))) }
-  }, [ombre, livreJour, livreServeur.ombre, registre.donnees?.catalogue, registre.donnees?.retires])
+    return { ...livreJour, parties: [PARTIE_OMBRE], pages: pagesOmbre([...parNom.values()].filter((a) => !retires.has(cle(a.fr))), accesOmbre) }
+  }, [ombre, livreJour, livreServeur.ombre, registre.donnees?.catalogue, registre.donnees?.retires, accesOmbre])
   const { pages } = livre
   // Every article the book shows (the CSV's and those just put up for sale), and the chapters, for the slips.
   const articlesLivre = useMemo(() => pages.flatMap((p) => (p.type === 'chapitre' ? p.articles : [])), [pages])
@@ -858,7 +863,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
     ficheApres.current = null
   }, [destinationFiche])
 
-  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, m: missions, t: tresor, ouvrir: setFiche, allerA: setVersId }), [registre, missions, tresor])
+  const ctxRegistre = useMemo((): CtxRegistre => ({ r: registre, m: missions, t: tresor, o: secrets, ouvrir: setFiche, allerA: setVersId }), [registre, missions, tresor, secrets])
 
   const refermer = async () => {
     await fetch('/api/sceau', { method: 'DELETE' })

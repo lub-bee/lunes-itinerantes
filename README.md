@@ -511,6 +511,7 @@ refused by the script itself (`already closed`), under the lock.
 | `feuillet` (v3s, only with `feuillets: true`) | `{ feuillet: { numero, si?, champs?: { titre, note, statut }, missions?: [{ numero, si?, quantite?, champs: { quantite, points, effort, statut, note }, journal? }], ajouts?: [rows] } }` | A sheet edited, closed or reopened: every check first (the Demandes row, its « Statut » one of `si`; each mission on that sheet, its « Statut » one of `si`, its « Quantité » still `quantite`: else 'sheet changed'; added numbers free), then the Demandes row, the Missions rows in place (`journal` appended), the rows added. No row is deleted (« retirée », « close »). Every answer to a `feuillets: true` caller carries `feuillets: true`. Without the flag, v3r's answers byte for byte. Cache key `registre-v3s` |
 | `intendance` (v3r, only with `intendance: true`) | `{ coffre: { lignes, maj: [{ id, si, champs }], mouvements, points, reserver: [{ nom, role }] } }` | The Livre de l'Intendance: Intendance rows appended or updated (each update checked first: its « Statut » one of `si`, else nothing is written, 'already answered'), Mouvements rows (`dépôt` / `livraison` only), Points rows, and a Membres row (Nom, Rôle) for each name to reserve that no row holds. `lire` with the flag also sends `intendance` (the tab) and the Demandes' `titre` / `missive`; `demande` then also writes them, and a top-level `missive` first (a sheet written as a missive). Without the flag, v3q's answers and sheet writes byte for byte. Cache key `registre-v3r` |
 | `membre` / `permissions` (v3p, only with `rangs: true`) | `{ membre: { nom, discord, pseudo, creer, rangs } }`; `{ droits: { rangs, lignes: [{ cle, geste, valeurs }], semer? } }` | `membre`: v3n's linking, plus the member's ranks written in `Rôle` (never refuses a creation for a missing `Rôle` column; « Ami des Lunes » among the ranks → 'friend'). `permissions`: the Grimoire's rows of the shared Permissions tab (cells by header, missing rows appended, missing rank columns appended at the end of row 1; other Outils' rows never touched). `lire` with `rangs: true` also sends `roles`, `permissions` (Grimoire rows) and `permissionsEntete`. Without the flag, v3n's answers byte for byte. File renamed `grimoire.gs`; cache key `registre-v3p` |
+| `secret`, `secretTri`, `contrebande`, `prix` (v3u, only with `ombre: true`) | `{ secret: { id, depose, informateur, titre, contenu, urgence, prix, provenance, destinataire, faction, portee } }`; `{ tri: { id, geste: ouvrir / classer / corriger / fusionner / retirer / rendre, si?, champs?, cible?, par, quand } }`; `{ contrebande: { lignes, par, quand } }`; `{ tarif: { fr, prod, min, max, note } }` | The Livre d'ombre v2 (see *The Livre d'ombre*). Every shadow gesture (these, `livre`, a shadow `vente` / `recette` / `retirer`) is checked again by the script on the Permissions boxes of `qui: { nom, entetes, testeur }` (refused: `forbidden <clé>`). `lire` with the flag also sends `secrets` and `contrebande`; every answer carries `ombre: true`. Without the flag, v3s's answers byte for byte. A hidden « Journal de l'ombre » tab logs each shadow write and refusal (never a secret's text). Cache key `registre-v3u` |
 | `retirer` (v3k) | `{ retrait: { fr } }` | The article's Catalogues row deleted (« retirer du catalogue » on an article's slip; the « Ingrédients » migration). The book hides it at once: the published CSV's articles missing from the sheet's Catalogues tab are hidden (only when the tab is clearly the one the CSV publishes) |
 | `vente` (v3f) | `{ article: { chapitre, fr, en, prod, min, max, artisan, note } }` | A recipe's product put up for sale: one row appended to Catalogues (refused with `already in catalogue` if the French or English name is there). The book shows it at once (the registre's copy of the tab, until the published CSV, re-read every 5 minutes, holds it). An older script answers `unknown action`: the page says, in character, that the sheet's script must be updated |
 
@@ -709,6 +710,10 @@ Demandes, Missions, Missions permanentes, Intendance, Écritures événements. F
 `content/marchandises.csv` and the pondération's defaults (`lib/missions.ts`) carry the new names. Once run, `import.gs` may be
 deleted from the project (nothing calls it).
 
+The Livre d'ombre v2 adds three hidden tabs (v3u, created on their first write): `Secrets` (N°, Déposé le, Informateur, Titre,
+Contenu, Urgence, Prix, Provenance, Destinataire, Faction, Interne / externe, État, Ouvert par / le, Fusionnée dans, État avant,
+Corrigée par / le, Retirée par / le), `Contrebande` (Ligne, Écrite par, Écrite le) and `Journal de l'ombre`.
+
 Sheet tabs (Apps Script, created hidden when missing, editable by hand): `Pondération`, `Réglages missions`, `Demandes` (v3r adds
 `Titre` and `N° missive`), `Missions`, `Points`, `Missions permanentes`, and **`Intendance`** (v3r: `N°`, `Date`, `Genre` remise /
 don / rentrée / façonnage / vente / perte, `Statut` en attente / reçue / refusée / en cours / close / sortie, `Membre`, `Objet`,
@@ -764,7 +769,25 @@ sign before the fifth). Three beats, ~6–7 s (`components/Ombre.tsx`, run by `G
    page writes itself in: « Caravane de l'Ombre », « Celui qui voit dans l'ombre est puissant à la
    lumière. », and the « Ombre » section opposite.
 
-The shadow book opens on « Caravane de l'Ombre » and its « Ombre » section (texts in `lib/ombre.ts`, easy to replace), then holds only Marchandises (the shadow goods) and Recettes (the shadow recipes). Touching the inverted emblem closes it (the
+The shadow book opens on « Caravane de l'Ombre » and, opposite, the shadow members' presentation (Elijah's words; texts in
+`lib/ombre.ts`, easy to replace), then (v2, 2026-11-09, `lib/secrets.ts`, `components/Secrets.tsx`, `app/api/ombre`, script v3u):
+« Transmettre un secret » (a letter after the Table's « création d'affaire » billet: Urgence · Prix · Interne/externe ·
+Provenance · Destinataire · Faction · Titre · Contenu, sealed when sent; below, « Mes secrets », only one's own with their state),
+« Le tri » (the sealed envelopes, urgent first; the notes: open, classify, correct the whole text, join one note to another —
+one plain text, each contribution under « Auteur ----------- jj/mm/aaaa » —, remove: hidden everywhere, the row kept
+« retirée »), « Archives » (every note, search and filters by faction, provenance, urgency, informant, days; the removed ones
+given back), then Marchandises (the shadow goods, their prices corrected from an article's slip: « corriger les prix »; « rendre
+au grand jour » / « passer au Livre d'ombre » moves an article and its recipe) and Recettes. Each page shows to who holds its
+gesture. « Gestion de la contrebande », a free list (hidden tab « Contrebande », one row per line), is held on the shadow goods
+page and, in the day book, folded under each Marchandises chapter and on « Matières premières », beside the notice to all:
+« Toutes les ressources et marchandises interdites doivent être remises à la Voix de la sécurité pour être détruites. »
+
+Rights (lib/droits.ts, group « Livre d’ombre », seeded once at the next seal): `secret` (Patriarches, « . », Voix de la
+sécurité: send, read one's own), `secretTri` and `secretArchives` (Patriarches, Voix de la sécurité), `contrebande` (Patriarches,
+Voix de la sécurité, Voix du commerce), `ombreLivre` (replaces `livre`, formerly open to all), `ombreMarchandise`, `ombreRecette`
+(Patriarches, « . », Voix de la sécurité). The rank « . » is the Discord role of that name (ID 1565167239097749725, `RANG_OMBRE`):
+read from the Rôles tab like any rank, and added by the grimoire while that tab does not name it; it is never written in the
+Membres « Rôle » cell. The route (`/api/ombre`, `/api/registre`) checks every write, the script checks it again. Touching the inverted emblem closes it (the
 reverse). Never in the address, never kept across a reload. Reduced motion: one ~0.75 s fade.
 
 Which book shows a row: an optional **`Livre`** column (« Régulier » or empty / « Ombre ») in the

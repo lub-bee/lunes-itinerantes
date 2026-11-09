@@ -137,7 +137,8 @@ export type DonneesRegistre = {
 /** `vente`: a recipe's product put up for sale (a row added to the Catalogues tab). */
 /** `usage`: a product's usual recipe chosen; `choix`: a missive's recipe for one of its items. */
 /** `versement`: the caravan's share of a sealed order marked as handed over (or taken back). */
-export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix' | 'versement' | 'deplacer' | 'retirer' | 'livre'
+/** `prix` (Livre d'ombre v2, script v3u): an article's prices corrected in its Catalogues row (the shadow book's goods). */
+export type ActionRegistre = 'missive' | 'releve' | 'depot' | 'fabrication' | 'cloture' | 'recette' | 'ressource' | 'vente' | 'usage' | 'choix' | 'versement' | 'deplacer' | 'retirer' | 'livre' | 'prix'
 
 /* ───────────────────────── Lookups ───────────────────────── */
 
@@ -592,6 +593,9 @@ export type Onglets = {
   clotures?: Record<string, unknown>[]
   /** The Livre de l'Intendance (lib/intendance.ts), from a v3r script asked with `intendance: true`. */
   intendance?: Record<string, unknown>[]
+  /** The Livre d'ombre v2 (lib/secrets.ts), from a v3u script asked with `ombre: true`: the secrets and the contraband list. */
+  secrets?: Record<string, unknown>[]
+  contrebande?: Record<string, unknown>[]
 }
 
 /** Typed data from the script's raw rows (lenient: blank or unreadable rows are dropped). */

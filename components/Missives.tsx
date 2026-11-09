@@ -14,6 +14,7 @@ import { etatMission } from '@/lib/intendance'
 import { ChampRecherche, MOT_COURT_LIVRAISON } from './MissionsCommun'
 import { livraisonDe, VERBES as VERBES_MISSION } from '@/lib/missions'
 import type { EtatTresor, FicheTresor } from './Tresor'
+import type { EtatSecrets } from './Secrets'
 import { Action, En, Icone, Plume, Septims } from './Ornements'
 
 /*
@@ -37,6 +38,8 @@ export type Fiche =
   | { genre: 'rang'; cle: string }
   /** `chapitre`: the chapter page it is added from (a merchandise with no recipe yet). */
   | { genre: 'vente'; nom: string; chapitre?: string; ombre?: boolean }
+  /** Livre d'ombre v2: a shadow article's prices corrected (script v3u 'prix'). */
+  | { genre: 'prix-ombre'; nom: string }
   | { genre: 'poeme'; divinite: string; n: number }
   /** The missions' notes (components/Missions.tsx): a demand, the pondération's settings, classes, one item. */
   | FicheMission
@@ -49,6 +52,8 @@ export type CtxRegistre = {
   m?: EtatMissions
   /** The pay (prototype, components/Tresor.tsx). */
   t?: EtatTresor
+  /** The Livre d'ombre's secrets and contraband list (components/Secrets.tsx). */
+  o?: EtatSecrets
   ouvrir: (f: Fiche) => void
   /** Turns to the page of that id. */
   allerA: (id: string) => void
@@ -959,7 +964,7 @@ export function GaucheMetier({ page, reg, icones, compact, recherche }: { page: 
       {!compact && intro && <p className="intro lettrine">{intro}</p>}
       {r?.donnees?.relie && <ChampRecette recherche={recherche} />}
       {r && <Ferme r={r} />}
-      {r && reg && ouvert(r) && r.marchand?.droits?.recette !== false && (
+      {r && reg && ouvert(r) && r.marchand?.droits?.[page.ombre ? 'ombreRecette' : 'recette'] !== false && (
         <div className="gestes">
           <Geste icone={icones['cauldron']} onClick={() => reg.ouvrir({ genre: 'edition-recette', nom: '', artisan: page.ombre || m.cle === SANS_METIER.cle ? '' : m.nom, ombre: page.ombre })}>
             Consigner une recette

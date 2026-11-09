@@ -134,7 +134,7 @@ const encreDe = (el: Element, a: number) => {
   return `rgba(${r},${g},${b},${a})`
 }
 /** Wet ink soaking in: a tight halo in the text's own colour (≤ ~5 px), peaking at 30–55 %, then thinning. */
-function haloEncre(el: HTMLElement, duree: number) {
+function haloEncre(el: HTMLElement | SVGElement, duree: number) {
   const c = (a: number) => encreDe(el, a)
   return el.animate(
     [
@@ -220,7 +220,7 @@ export async function encrerDevise(c: Course, devise: HTMLElement, calme: boolea
  * All the text of a page diffuses at once in its own ink (ink A): a dense halo soaks out around the glyphs
  * while the letters feather, then the residue fades. Nothing grows past the text by more than ~5 px.
  */
-export async function dissoudre(c: Course, els: HTMLElement[], duree = 1700) {
+export async function dissoudre(c: Course, els: (HTMLElement | SVGElement)[], duree = 1700) {
   const anims = els.flatMap((e) => [
     haloEncre(e, duree),
     e.animate([{ opacity: 1 }, { offset: 0.3, opacity: 0.92 }, { offset: 0.55, opacity: 0.6 }, { opacity: 0 }], { duration: duree, easing: 'linear', fill: 'forwards' }),
@@ -241,7 +241,7 @@ export async function dissoudre(c: Course, els: HTMLElement[], duree = 1700) {
 }
 
 /** A page's text written in, every block at the same moment (a pen stroke from the left). */
-export function ecrire(c: Course, els: HTMLElement[], duree: number) {
+export function ecrire(c: Course, els: (HTMLElement | SVGElement)[], duree: number) {
   return fin(
     c,
     els.map((e) =>
@@ -257,10 +257,15 @@ export function ecrire(c: Course, els: HTMLElement[], duree: number) {
   )
 }
 
-/** The text blocks of the pages on display (headings, paragraphs, lists, folios…). */
-export function blocsTexte(racine: Element): HTMLElement[] {
+/**
+ * The blocks of the pages on display (headings, paragraphs, lists, folios…), the separators (fleurons) and the chapters'
+ * medallions included: they fade and write in with the rest (bug 7e, 2026-11-09: a fleuron is an <svg> holding no text
+ * and no nested <svg>, and the medallion sat in the title line, so both stayed visible while everything else faded).
+ */
+export function blocsTexte(racine: Element): (HTMLElement | SVGElement)[] {
   const sel = [
     '.en-tete > .surtitre',
+    '.en-tete .medaillon',
     '.en-tete .titre-page',
     '.en-tete > .sous-titre',
     '.en-tete > .fleuron',
@@ -271,7 +276,7 @@ export function blocsTexte(racine: Element): HTMLElement[] {
     '.defile > :not(.en-tete)',
     '.folio',
   ].join(', ')
-  const tous = Array.from(racine.querySelectorAll<HTMLElement>(sel)).filter((e) => !e.closest('.fiche') && (e.textContent?.trim() || e.querySelector('svg')))
+  const tous = Array.from(racine.querySelectorAll<HTMLElement | SVGElement>(sel)).filter((e) => !e.closest('.fiche') && (e.textContent?.trim() || e instanceof SVGElement || e.querySelector('svg')))
   // Each block once: none inside another one already taken.
   return tous.filter((e) => !tous.some((x) => x !== e && x.contains(e)))
 }

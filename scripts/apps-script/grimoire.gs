@@ -194,6 +194,40 @@
  *                                                                              « Statut » (« close » / « ouverte »), a line
  *                                                                              removed by « retirée »; no row is deleted.
  *    Cache key registre-v3s.
+ *
+ *  v3u (2026-11-09) — the Livre d'ombre v2 (built on v3s; v3t's renaming lives in import.gs). Everything new is behind the
+ *  caller flag `ombre: true`; without it, every answer and every sheet write is exactly v3s's.
+ *    - Every answer to such a caller carries `ombre: true`; 'lire' and every write also send two hidden tabs (created on
+ *      their first write): « Secrets » (`onglets.secrets`, one row per note: N°, Déposé le, Informateur, Titre, Contenu,
+ *      Urgence, Prix, Provenance, Destinataire, Faction, Interne / externe, État scellée / ouverte / classée / fusionnée /
+ *      retirée, Ouvert par / le, Fusionnée dans, État avant, Corrigée par / le, Retirée par / le) and « Contrebande »
+ *      (`onglets.contrebande`, one row per line of the list: Ligne, Écrite par, Écrite le). No row is ever deleted.
+ *    - Every shadow gesture is checked again here, on the sheet's own Permissions boxes: the caller sends
+ *      `qui: { nom, entetes: [the Permissions headers of the member's ranks], testeur }`; the gesture's Grimoire row (by
+ *      « Clé ») must hold a checked box under one of those headers, and « Membre » must be among them (a tester: always).
+ *      Refused: { ok: false, erreur: 'forbidden <clé>' }, nothing written. Checked: 'secret' (secret), 'secretTri'
+ *      (secretTri; 'rendre': secretArchives), 'contrebande' (contrebande), 'livre' (ombreLivre), 'vente' and 'prix' of a
+ *      shadow article (ombreMarchandise; 'prix' of a day article: prix), 'recette' of a shadow recipe (ombreRecette),
+ *      'retirer' of a shadow article (ombreMarchandise).
+ *    - 'secret'     { secret: { id, depose, informateur, titre, contenu, urgence, prix, provenance, destinataire, faction,
+ *                               portee } }                                   → one Secrets row, « scellée » (the id free)
+ *    - 'secretTri'  { tri: { id, geste ('ouvrir' | 'classer' | 'corriger' | 'fusionner' | 'retirer' | 'rendre'), si?: [état],
+ *                            champs?: { titre, contenu, urgence, prix, provenance, destinataire, faction, portee },
+ *                            cible?, par, quand } }                         → under the lock, the row checked first (its
+ *                                                                              « État » one of `si`), then: opened, classed
+ *                                                                              (and opened), corrected, merged into `cible`
+ *                                                                              (the target's text gets both contributions,
+ *                                                                              each under « Auteur ----------- jj/mm/aaaa »;
+ *                                                                              the merged row « fusionnée »), removed
+ *                                                                              (« retirée », its state kept in « État avant »)
+ *                                                                              or given back (that state again)
+ *    - 'contrebande' { contrebande: { lignes: [texte], par, quand } }        → the Contrebande rows replaced by the list
+ *    - 'prix'       { tarif: { fr, prod?, min?, max?, en?, note? } }        → that article's Catalogues cells (only the
+ *                                                                              columns the tab has; nothing added)
+ *    - The Permissions write ('permissions') reads a rank label without letters (« . ») by its own text.
+ *    - Everything worth reading lands in a hidden tab « Journal de l'ombre » (Horodatage, Geste, Par, N°, Détail): each
+ *      shadow write and each refusal; never a secret's text.
+ *    Cache key registre-v3u.
  */
 
 /* ───────────────────────── Entry points (shared with conseil.gs) ───────────────────────── */
@@ -478,6 +512,31 @@ var ONGLETS_INTENDANCE = {
     ],
   },
 };
+/**
+ * THE LIVRE D'OMBRE v2 (v3u) — read and sent only to a caller that asks for it (`ombre: true`). Created hidden on the first
+ * write, editable by hand. `id` is each note's key (« S-261109-AB12 »). The journal is written, never read.
+ */
+var ONGLETS_OMBRE = {
+  secrets: {
+    nom: 'Secrets',
+    colonnes: [
+      ['N°', 'id'], ['Déposé le', 'depose'], ['Informateur', 'informateur'], ['Titre', 'titre'], ['Contenu', 'contenu'],
+      ['Urgence', 'urgence'], ['Prix', 'prix'], ['Provenance', 'provenance'], ['Destinataire', 'destinataire'], ['Faction', 'faction'],
+      ['Interne / externe', 'portee', ['Interne/externe', 'Portée']], ['État', 'etat'], ['Ouvert par', 'ouvertPar'], ['Ouvert le', 'ouvertLe'],
+      ['Fusionnée dans', 'fusionneeDans'], ['État avant', 'etatAvant'], ['Corrigée par', 'corrigeePar'], ['Corrigée le', 'corrigeeLe'],
+      ['Retirée par', 'retireePar'], ['Retirée le', 'retireeLe'],
+    ],
+  },
+  contrebande: {
+    nom: 'Contrebande',
+    colonnes: [['Ligne', 'ligne'], ['Écrite par', 'par'], ['Écrite le', 'le']],
+  },
+};
+var JOURNAL_OMBRE = {
+  nom: "Journal de l'ombre",
+  colonnes: [['Horodatage', 'horodatage'], ['Geste', 'geste'], ['Par', 'par'], ['N°', 'id'], ['Détail', 'detail']],
+};
+
 /** v3r: the Demandes tab with its two new columns (read for the cache; written so only for `intendance: true`). */
 var CHAMPS_DEMANDES_V3R = ['titre', 'missive'];
 var DEMANDES_V3R = {
@@ -499,6 +558,8 @@ var AVEC_RANGS = false;
 var AVEC_INTENDANCE = false;
 /** v3s: the 'feuillet' action and the `feuillets` mark on every answer (`feuillets: true`). */
 var AVEC_FEUILLETS = false;
+/** v3u: the Livre d'ombre's tabs, its actions, its checks and the `ombre` mark on every answer (`ombre: true`). */
+var AVEC_OMBRE = false;
 
 /**
  * RANKS AND PERMISSIONS (v3p) — read and sent only to a caller that asks for them (`rangs: true`).
@@ -520,9 +581,11 @@ var ONGLETS_RANGS = { roles: true, permissions: true, permissionsEntete: true };
 
 /** The tabs as the caller asked for them: without the missions' and the pay's ones, exactly v3l's answer. */
 function pourAppelant(onglets) {
-  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD && AVEC_RANGS && AVEC_INTENDANCE) || !onglets) return onglets;
+  if ((AVEC_MISSIONS && AVEC_PAIE && AVEC_DISCORD && AVEC_RANGS && AVEC_INTENDANCE && AVEC_OMBRE) || !onglets) return onglets;
   var res = {};
   Object.keys(onglets).forEach(function (k) {
+    // v3u: the Livre d'ombre's tabs only to who asks `ombre: true`.
+    if (ONGLETS_OMBRE[k] && !AVEC_OMBRE) return;
     // v3r: the Intendance tab only to who asks `intendance: true`.
     if (ONGLETS_INTENDANCE[k] && !AVEC_INTENDANCE) return;
     // v3r: the Demandes rows without their two new fields (v3q's rows, key for key).
@@ -584,6 +647,7 @@ function doPost(e) {
   AVEC_RANGS = corps.rangs === true;
   AVEC_INTENDANCE = corps.intendance === true;
   AVEC_FEUILLETS = corps.feuillets === true;
+  AVEC_OMBRE = corps.ombre === true;
   if (action === 'lire') {
     try {
       // Served from the script's cache when it holds the tabs (kept up to date by every write).
@@ -609,12 +673,27 @@ function doPost(e) {
   if (action === 'intendance' && !AVEC_INTENDANCE) return repondre({ ok: false, erreur: 'unknown action ' + action });
   // 'feuillet' (v3s) exists only for a caller that asks `feuillets: true`: any other gets v3r's answer.
   if (action === 'feuillet' && !AVEC_FEUILLETS) return repondre({ ok: false, erreur: 'unknown action ' + action });
+  // The Livre d'ombre's actions (v3u) exist only for a caller that asks `ombre: true`: any other gets v3s's answer.
+  if (ACTIONS_OMBRE.indexOf(action) >= 0 && !AVEC_OMBRE) return repondre({ ok: false, erreur: 'unknown action ' + action });
+  // v3u: a shadow gesture is checked again on the sheet's own boxes, under the lock (`ombre: true` callers only).
+  if (AVEC_OMBRE) {
+    return avecVerrou(function () {
+      var geste = gesteOmbre(action, corps);
+      if (geste && !autorise(corps, geste)) {
+        journal(action, corps, idOmbre(action, corps), 'refusé : ' + geste);
+        return { ok: false, erreur: 'forbidden ' + geste };
+      }
+      return ecrire(corps, action);
+    }, true);
+  }
   return avecVerrou(function () { return ecrire(corps, action); }, true);
 }
 
 /** v3s: a `feuillets: true` caller's answer says the script knows the 'feuillet' action (any other: untouched). */
 function marquer(res) {
   if (AVEC_FEUILLETS) res.feuillets = true;
+  // v3u: the caller knows the script holds the Livre d'ombre.
+  if (AVEC_OMBRE) res.ombre = true;
   return res;
 }
 
@@ -704,6 +783,8 @@ function toutLire() {
   res.permissionsEntete = perms.entete;
   // The Livre de l'Intendance (v3r), last (sent only with `intendance: true`).
   Object.keys(ONGLETS_INTENDANCE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_INTENDANCE[cle]); });
+  // The Livre d'ombre (v3u), after it (sent only with `ombre: true`).
+  Object.keys(ONGLETS_OMBRE).forEach(function (cle) { res[cle] = lireOnglet(ONGLETS_OMBRE[cle]); });
   return res;
 }
 
@@ -857,7 +938,7 @@ function nouvelleVersion() {
  * run `grimoireViderCache` from the editor, or wait 10 minutes.
  */
 // The cache key carries the script's version: a new version never serves an older version's tabs.
-var CACHE = 'registre-v3s';
+var CACHE = 'registre-v3u';
 var CACHE_DUREE = 600;
 var CACHE_PART = 90000;
 
@@ -1832,7 +1913,7 @@ ECRITURES.permissions = function (corps) {
   var rangs = [];
   (d.rangs || []).forEach(function (x) {
     var t = String(x).trim().slice(0, 60);
-    if (t && !rangs.some(function (y) { return cleEntete(y) === cleEntete(t); })) rangs.push(t);
+    if (t && !rangs.some(function (y) { return clePerm(y) === clePerm(t); })) rangs.push(t);
   });
   var tout = feuille.getLastRow() > 0 ? feuille.getDataRange().getValues() : [];
   var entete = tout.length ? tout[0].map(function (v) { return String(v).trim(); }) : [];
@@ -1844,8 +1925,8 @@ ECRITURES.permissions = function (corps) {
   } else {
     var fixes0 = indexColonnes(entete, { colonnes: COLONNES_PERMISSIONS });
     COLONNES_PERMISSIONS.forEach(function (col) { if (fixes0[col[1]] < 0) ajout.push(col[0]); });
-    var noms = entete.map(cleEntete);
-    rangs.forEach(function (x) { if (noms.indexOf(cleEntete(x)) < 0) ajout.push(x); });
+    var noms = entete.map(clePerm);
+    rangs.forEach(function (x) { if (noms.indexOf(clePerm(x)) < 0) ajout.push(x); });
   }
   var fixes = indexColonnes(entete.concat(ajout), { colonnes: COLONNES_PERMISSIONS });
   // The Grimoire's rows (0-based row index in `tout`) by key.
@@ -1864,10 +1945,10 @@ ECRITURES.permissions = function (corps) {
   }
   entete = entete.concat(ajout);
   var largeur = entete.length;
-  var nomsEntete = entete.map(cleEntete);
+  var nomsEntete = entete.map(clePerm);
   var pris = [fixes.outil, fixes.geste, fixes.cle];
   var colonneDe = function (h) {
-    var i = nomsEntete.indexOf(cleEntete(h));
+    var i = nomsEntete.indexOf(clePerm(h));
     return i >= 0 && pris.indexOf(i) < 0 ? i : -1;
   };
   var modifiees = {};
@@ -1933,6 +2014,15 @@ ECRITURES.permissions = function (corps) {
   // No `maj`: the tabs are read again (a rare write).
   return { ok: true, seme: Boolean(d.semer), lignes: rangees.length, ajoutees: nouvelles.length, colonnes: ajout, cree: cree };
 };
+
+/**
+ * A rank column's key in the Permissions tab: its header compared like any header; v3u (`ombre: true` callers) reads a label
+ * without letters (the rank « . ») by its own text, so it gets one column of its own (v3s compared it as an empty name).
+ */
+function clePerm(h) {
+  var k = cleEntete(h);
+  return k || !AVEC_OMBRE ? k : '#' + String(h || '').trim();
+}
 
 /** v3r: the Intendance rows' dates (an ISO text becomes a date cell). */
 function daterIntendance(o) {
@@ -2148,6 +2238,264 @@ ECRITURES.clotureSemaine = function (corps) {
   if (deja) return { ok: false, erreur: 'week already sealed ' + c.semaine };
   ajouter(def, c.lignes.map(daterPaie), preparerMasque(def));
   return { ok: true, semaine: c.semaine, lignes: c.lignes.length };
+};
+
+/* ───────────────────────── The Livre d'ombre v2 (v3u) ───────────────────────── */
+
+/** The actions that exist only for `ombre: true` callers. */
+var ACTIONS_OMBRE = ['secret', 'secretTri', 'contrebande', 'prix'];
+
+/** A checked box, read leniently (the grimoire's own reading, lib/droits.ts `coche`). */
+function coche(v) {
+  if (v === true) return true;
+  if (typeof v === 'number') return v !== 0;
+  var t = String(v === undefined || v === null ? '' : v).trim().toLowerCase();
+  return ['true', 'vrai', 'oui', 'o', 'yes', 'y', 'x', '1', '\u2713', '\u2714', '\u2611', '\u2705', 'v'].indexOf(t) >= 0;
+}
+
+/**
+ * Whether the caller (`qui`) may take this gesture, on the sheet's own boxes: a tester always; else « Membre » among their
+ * headers and a checked box under one of them on the gesture's Grimoire row (a missing row: no).
+ */
+function autorise(corps, geste) {
+  var q = corps.qui;
+  if (!q || typeof q !== 'object') return false;
+  if (q.testeur === true) return true;
+  var entetes = (q.entetes || []).map(function (h) { return String(h).trim(); }).filter(function (h) { return h; });
+  if (!entetes.some(function (h) { return /^membres?$/.test(cleEntete(h)); })) return false;
+  var ligne = lirePermissions().lignes.filter(function (l) { return cleEntete(l.cle) === cleEntete(geste); })[0];
+  if (!ligne) return false;
+  return entetes.some(function (h) { return Object.prototype.hasOwnProperty.call(ligne.cases, h) && coche(ligne.cases[h]); });
+}
+
+/** The Catalogues row of an article (by its French name), as an object, or null. */
+function articleCatalogue(fr) {
+  var def = ONGLETS.catalogue;
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  if (!feuille || feuille.getLastRow() < 2 || !fr) return null;
+  var tout = feuille.getDataRange().getValues();
+  var idx = indexColonnes(tout[0], def);
+  if (idx.fr < 0) return null;
+  for (var r = 1; r < tout.length; r++) {
+    if (cleEntete(tout[r][idx.fr]) !== cleEntete(fr)) continue;
+    return { r: r, livre: idx.livre >= 0 ? tout[r][idx.livre] : '' };
+  }
+  return null;
+}
+var estOmbre = function (v) { return /ombre|shadow/i.test(String(v === undefined || v === null ? '' : v)); };
+
+/** Whether a product has a shadow recipe row (Recettes « Livre » = Ombre). */
+function recetteOmbre(produit) {
+  if (!produit) return false;
+  return lireOnglet(ONGLETS.recettes).some(function (x) { return cleEntete(x.produit) === cleEntete(produit) && estOmbre(x.livre); });
+}
+
+/** The shadow gesture an action needs (lib/droits.ts keys), or null when it is not one. */
+function gesteOmbre(action, corps) {
+  if (action === 'secret') return 'secret';
+  if (action === 'secretTri') return corps.tri && corps.tri.geste === 'rendre' ? 'secretArchives' : 'secretTri';
+  if (action === 'contrebande') return 'contrebande';
+  if (action === 'livre') return 'ombreLivre';
+  if (action === 'prix') {
+    var a = articleCatalogue(corps.tarif && corps.tarif.fr);
+    return a && estOmbre(a.livre) ? 'ombreMarchandise' : 'prix';
+  }
+  if (action === 'vente') return corps.article && estOmbre(corps.article.livre) ? 'ombreMarchandise' : null;
+  if (action === 'retirer') {
+    var b = articleCatalogue(corps.retrait && corps.retrait.fr);
+    return b && estOmbre(b.livre) ? 'ombreMarchandise' : null;
+  }
+  if (action === 'recette') {
+    var r = corps.recette || {};
+    return estOmbre(r.livre) || recetteOmbre(r.ancienProduit || r.produit) ? 'ombreRecette' : null;
+  }
+  return null;
+}
+
+/** The note or article a shadow action is about (for the journal). */
+function idOmbre(action, corps) {
+  var x = corps.secret || corps.tri || corps.tarif || corps.article || corps.retrait || corps.livre || corps.recette || {};
+  return String(x.id || x.fr || x.produit || '').slice(0, 120);
+}
+
+/** One line of the hidden « Journal de l'ombre » (what happened, never a secret's text); a failure there stops nothing. */
+function journal(geste, corps, id, detail) {
+  try {
+    var par = corps.qui && corps.qui.nom ? String(corps.qui.nom).slice(0, 80) : '';
+    ajouter(JOURNAL_OMBRE, [{ horodatage: new Date(), geste: geste, par: par, id: id || '', detail: String(detail || '').slice(0, 300) }], preparerMasque(JOURNAL_OMBRE));
+  } catch (err) {
+    // The journal is a courtesy to the owner: the gesture itself stands.
+  }
+}
+
+/** A contribution's heading in a merged note: « Elijah ----------- 12/11/2026 » (lib/secrets.ts enteteContribution). */
+var RE_ENTETE_FUSION = /^(.+?)\s+-{3,}\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*$/;
+function enteteFusion(auteur, quand) {
+  var d = quand instanceof Date ? quand : new Date(quand || Date.now());
+  if (isNaN(d.getTime())) d = new Date();
+  return (String(auteur || '').trim() || 'Anonyme') + ' ----------- ' + Utilities.formatDate(d, 'Asia/Tokyo', 'dd/MM/yyyy');
+}
+function avecEntete(contenu, auteur, quand) {
+  var t = String(contenu || '').replace(/\r\n?/g, '\n').trim();
+  return RE_ENTETE_FUSION.test(t.split('\n')[0] || '') ? t : enteteFusion(auteur, quand) + '\n' + t;
+}
+
+/** The note's fields a sorter may set (classify) or correct (with its title and text). */
+var CHAMPS_CLASSER = ['urgence', 'prix', 'provenance', 'destinataire', 'faction', 'portee'];
+var CHAMPS_CORRIGER = ['titre', 'contenu'].concat(CHAMPS_CLASSER);
+var LONGUEURS = { titre: 120, contenu: 45000, urgence: 40, prix: 80, provenance: 120, destinataire: 120, faction: 120, portee: 20 };
+function borner(champ, v) { return String(v === undefined || v === null ? '' : v).slice(0, LONGUEURS[champ] || 120); }
+
+ECRITURES.secret = function (corps) {
+  var s = corps.secret;
+  if (!s || !s.id || !String(s.contenu || '').trim()) return { ok: false, erreur: 'empty secret' };
+  var def = ONGLETS_OMBRE.secrets;
+  var o = ouvrirMasque(def);
+  var p = o.p;
+  for (var k = 0; k < o.lignes.length; k++) if (cleEntete(o.lignes[k][p.cols.id - 1]) === cleEntete(s.id)) return { ok: false, erreur: 'row exists ' + s.id };
+  var rang = { id: String(s.id).slice(0, 40), depose: new Date(s.depose || Date.now()), informateur: String(s.informateur || '').slice(0, 80), etat: 'scellée' };
+  CHAMPS_CORRIGER.forEach(function (c) { rang[c] = borner(c, s[c]); });
+  ajouter(def, [rang], p);
+  journal('secret', corps, rang.id, 'transmis, scellé');
+  return {
+    ok: true, id: rang.id,
+    maj: function (oc) { (oc.secrets = oc.secrets || []).push(complet(def, rang)); },
+  };
+};
+
+ECRITURES.secretTri = function (corps) {
+  var t = corps.tri;
+  if (!t || !t.id || !t.geste) return { ok: false, erreur: 'empty sorting' };
+  var def = ONGLETS_OMBRE.secrets;
+  if (!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom)) return { ok: false, erreur: 'unknown note ' + t.id };
+  var o = ouvrirMasque(def);
+  var p = o.p;
+  var cel = function (l, c) { return p.cols[c] ? l[p.cols[c] - 1] : ''; };
+  var rangDe = function (id) {
+    for (var k = 0; k < o.lignes.length; k++) if (cleEntete(cel(o.lignes[k], 'id')) === cleEntete(id)) return k;
+    return -1;
+  };
+  // 1. Every check, before anything is written.
+  var i = rangDe(t.id);
+  if (i < 0) return { ok: false, erreur: 'unknown note ' + t.id };
+  var etat = String(cel(o.lignes[i], 'etat') || 'scellée');
+  var ke = cleEntete(etat) || 'scellee';
+  if (t.si && t.si.length && !t.si.some(function (x) { return cleEntete(x) === ke; })) return { ok: false, erreur: 'note changed ' + t.id };
+  var quand = new Date(t.quand || Date.now());
+  var par = String(t.par || '').slice(0, 80);
+  var champs = t.champs || {};
+  var ouvre = function (v) {
+    if (!String(cel(o.lignes[i], 'ouvertPar') || '').trim()) { v.ouvertPar = par; v.ouvertLe = quand; }
+    return v;
+  };
+  var vivante = ke !== 'fusionnee' && ke !== 'retiree';
+  var valeurs;
+  var autre = null;
+  if (t.geste === 'ouvrir') {
+    if (ke !== 'scellee') return { ok: false, erreur: 'already opened ' + t.id };
+    valeurs = ouvre({ etat: 'ouverte' });
+  } else if (t.geste === 'classer') {
+    if (!vivante) return { ok: false, erreur: 'note changed ' + t.id };
+    valeurs = ouvre({ etat: 'classée' });
+    CHAMPS_CLASSER.forEach(function (c) { if (champs[c] !== undefined && champs[c] !== null) valeurs[c] = borner(c, champs[c]); });
+  } else if (t.geste === 'corriger') {
+    if (!vivante) return { ok: false, erreur: 'note changed ' + t.id };
+    valeurs = ouvre({ corrigeePar: par, corrigeeLe: quand });
+    if (ke === 'scellee') valeurs.etat = 'ouverte';
+    CHAMPS_CORRIGER.forEach(function (c) { if (champs[c] !== undefined && champs[c] !== null) valeurs[c] = borner(c, champs[c]); });
+    if (valeurs.contenu !== undefined && !String(valeurs.contenu).trim()) return { ok: false, erreur: 'empty secret' };
+  } else if (t.geste === 'fusionner') {
+    if (!vivante) return { ok: false, erreur: 'note changed ' + t.id };
+    var j = t.cible ? rangDe(t.cible) : -1;
+    if (j < 0 || j === i) return { ok: false, erreur: 'unknown note ' + t.cible };
+    var kc = cleEntete(cel(o.lignes[j], 'etat'));
+    if (kc === 'fusionnee' || kc === 'retiree') return { ok: false, erreur: 'note changed ' + t.cible };
+    var texte = avecEntete(cel(o.lignes[j], 'contenu'), cel(o.lignes[j], 'informateur'), cel(o.lignes[j], 'depose')) + '\n\n' +
+      avecEntete(cel(o.lignes[i], 'contenu'), cel(o.lignes[i], 'informateur'), cel(o.lignes[i], 'depose'));
+    var vc = { contenu: borner('contenu', texte), corrigeePar: par, corrigeeLe: quand };
+    if (!kc || kc === 'scellee') { vc.etat = 'ouverte'; vc.ouvertPar = par; vc.ouvertLe = quand; }
+    autre = { k: j, id: cel(o.lignes[j], 'id'), valeurs: vc };
+    valeurs = ouvre({ etat: 'fusionnée', fusionneeDans: cel(o.lignes[j], 'id') });
+  } else if (t.geste === 'retirer') {
+    if (ke === 'retiree') return { ok: false, erreur: 'note changed ' + t.id };
+    valeurs = { etat: 'retirée', etatAvant: etat, retireePar: par, retireeLe: quand };
+  } else if (t.geste === 'rendre') {
+    if (ke !== 'retiree') return { ok: false, erreur: 'note changed ' + t.id };
+    var avant = String(cel(o.lignes[i], 'etatAvant') || '').trim();
+    valeurs = { etat: avant && cleEntete(avant) !== 'retiree' ? avant : 'ouverte', etatAvant: '', retireePar: '', retireeLe: '' };
+  } else {
+    return { ok: false, erreur: 'unknown gesture ' + t.geste };
+  }
+  // 2. The writes.
+  var ecrireRang = function (k, v) {
+    o.lignes[k] = enLigne(p, v, o.lignes[k]).slice(0, p.largeur);
+    p.feuille.getRange(k + 2, 1, 1, p.largeur).setValues([o.lignes[k]]);
+  };
+  ecrireRang(i, valeurs);
+  if (autre) ecrireRang(autre.k, autre.valeurs);
+  journal('secretTri', corps, t.id, t.geste + (autre ? ' dans ' + autre.id : ''));
+  return {
+    ok: true, id: t.id, geste: t.geste, cible: autre ? autre.id : '',
+    maj: function (oc) {
+      oc.secrets = oc.secrets || [];
+      var poser = function (id, v) {
+        oc.secrets.forEach(function (x) {
+          if (cleEntete(x.id) !== cleEntete(id)) return;
+          Object.keys(v).forEach(function (c) { if (p.cols[c]) x[c] = v[c]; });
+        });
+      };
+      poser(t.id, valeurs);
+      if (autre) poser(autre.id, autre.valeurs);
+    },
+  };
+};
+
+ECRITURES.contrebande = function (corps) {
+  var c = corps.contrebande;
+  if (!c || Object.prototype.toString.call(c.lignes) !== '[object Array]') return { ok: false, erreur: 'empty list' };
+  var quand = new Date(c.quand || Date.now());
+  var par = String(c.par || '').slice(0, 80);
+  var lignes = c.lignes.map(function (l) { return String(l === undefined || l === null ? '' : l).replace(/\s+/g, ' ').trim().slice(0, 200); })
+    .filter(function (l) { return l; }).slice(0, 300)
+    .map(function (l) { return { ligne: l, par: par, le: quand }; });
+  remplacer(ONGLETS_OMBRE.contrebande, lignes);
+  journal('contrebande', corps, '', lignes.length + ' ligne(s)');
+  return {
+    ok: true, lignes: lignes.length,
+    maj: function (oc) { oc.contrebande = lignes.map(function (x) { return complet(ONGLETS_OMBRE.contrebande, x); }); },
+  };
+};
+
+/** An article's prices (and English name, note) in its Catalogues row: only the cells of the columns the tab has. */
+ECRITURES.prix = function (corps) {
+  var a = corps.tarif;
+  if (!a || !a.fr) return { ok: false, erreur: 'no article' };
+  var def = ONGLETS.catalogue;
+  var feuille = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(def.nom);
+  if (!feuille || feuille.getLastRow() < 2) return { ok: false, erreur: 'no catalogue tab' };
+  var tout = feuille.getDataRange().getValues();
+  var idx = indexColonnes(tout[0], def);
+  if (idx.fr < 0) return { ok: false, erreur: 'no catalogue article column' };
+  var k = cleEntete(a.fr);
+  var nombre = function (v) { return v === null || v === undefined ? '' : v; };
+  var valeurs = {};
+  ['prod', 'min', 'max'].forEach(function (c) { if (c in a) valeurs[c] = nombre(a[c]); });
+  ['en', 'note'].forEach(function (c) { if (c in a) valeurs[c] = String(a[c] || '').slice(0, 200); });
+  for (var r = 1; r < tout.length; r++) {
+    if (cleEntete(tout[r][idx.fr]) !== k) continue;
+    Object.keys(valeurs).forEach(function (c) { if (idx[c] >= 0) feuille.getRange(r + 1, idx[c] + 1).setValue(valeurs[c]); });
+    journal('prix', corps, a.fr, Object.keys(valeurs).join(', '));
+    return {
+      ok: true, article: a.fr,
+      maj: function (o) {
+        (o.catalogue || []).forEach(function (x) {
+          if (cleEntete(x.fr) !== k) return;
+          Object.keys(valeurs).forEach(function (c) { if (idx[c] >= 0) x[c] = valeurs[c]; });
+        });
+      },
+    };
+  }
+  return { ok: false, erreur: 'unknown article ' + a.fr };
 };
 
 /* ───────────────────────── The missions' helpers (v3m) ───────────────────────── */
