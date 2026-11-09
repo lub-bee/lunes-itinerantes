@@ -15,7 +15,7 @@ import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
 import { Action, CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
-import { ICONE_COPIE } from '@/lib/copie'
+import { COPIE_VISIBLE, ICONE_COPIE } from '@/lib/copie'
 import { BandeCommande, BarreCommande, FeuilleCommande, useCommande } from './Commande'
 import { useRegistre } from './Registre'
 import { idMissive, metiersDe, produitsDe, type CtxRegistre, type Fiche } from './Missives'
@@ -1029,7 +1029,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
               ✕
             </button>
           )}
-          {/* Out of the layout flow (absolute): opens the printable copy of the whole register in a new tab. */}
+          {/* Out of the layout flow (absolute): opens the printable copy of the whole register in a new tab (hidden: COPIE_VISIBLE). */}
+          {COPIE_VISIBLE && (
           <a
             className="copie-registre"
             href="/copie"
@@ -1050,6 +1051,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
             </svg>
             <Icone corps={icones[ICONE_COPIE]} />
           </a>
+          )}
           {/* Order mode: a rolled scroll on the table under the field (absolute, desktop only). */}
           {etroit === false && <BandeCommande c={commande} bande={bande} icones={icones} />}
           {indexOuvert && requete && (

@@ -468,7 +468,8 @@ mark { background: linear-gradient(transparent 10%, var(--surligne) 10%, var(--s
 .rubans {
   position: absolute;
   top: -62px;
-  left: 7%;
+  /* Closer to the book's left edge (Ludo, 2026-11-09: the Sommaire cord stood too far in). */
+  left: 3%;
   display: flex;
   gap: 12px;
   z-index: 1;
@@ -1056,8 +1057,11 @@ mark { background: linear-gradient(transparent 10%, var(--surligne) 10%, var(--s
 }
 .commande-bande-sceau .icone { width: 20px; height: 20px; filter: drop-shadow(0 1px 0 rgba(255, 170, 140, 0.45)); }
 @media (min-width: 861px) and (max-width: 1139px) {
-  /* The gilded quill sits under the field's right end: the scroll lies to its left, never over the ribbons. */
-  .commande-bande { top: calc(100% + 12px); right: 50px; width: clamp(128px, calc(93vw - 672px), 238px); }
+  /* The scroll lies under the field's right end, pushed toward the window's edge (the copy's quill is hidden, 2026-11-09),
+     narrowed with the window: never over the ribbons, which tighten too (below). */
+  .commande-bande { top: calc(100% + 12px); right: -22px; width: clamp(128px, calc(100vw - 812px), 238px); }
+  .rubans { gap: 8px; }
+  .rubans .ruban:not(.minimal) { width: 84px; }
   .commande-bande-titre { font-size: 14.5px; }
 }
 @media (min-width: 861px) and (max-width: 999px) {

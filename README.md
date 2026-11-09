@@ -205,7 +205,8 @@ Price cells may contain units or a decimal comma (`25 septims`, `21,875`).
 
 ## Copy of the register (PDF export)
 
-The gilded quill next to the search field ("Faire une copie du registre") opens `/copie` in a new tab:
+The gilded quill next to the search field ("Faire une copie du registre") opens `/copie` in a new tab (hidden since
+2026-11-09: `COPIE_VISIBLE` in `lib/copie.ts`; the page and its code stay):
 the whole book laid out as an A4 document (front cover, title page, contents, one page per price chapter, the
 memo pages, back cover; the unwritten books are only named in the contents). It reads the same data as the
 grimoire (`chargerLivre()`, so the CSV or the published sheet, `chapitres.json` and the memos), so
