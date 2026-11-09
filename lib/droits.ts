@@ -11,7 +11,8 @@
 // - Entering the grimoire is a gesture (« Entrer dans le grimoire », `entrer`), checked at the Discord seal.
 // The defaults below only SEED the Grimoire's rows once, when the tab holds none (lib/registre.ts semerPermissions,
 // the secret page); a gesture added later arrives unchecked, except one marked `semee` (lot 2: `sortie`), whose missing
-// row the next seal writes once with its defaults (lib/registre.ts semerSiBesoin). A failed read grants nothing (`lu` false).
+// row the next seal (or the next read of /api/marchand) writes once with its defaults (lib/registre.ts semerSiBesoin); until
+// then `peut` reads its defaults. A failed read grants nothing (`lu` false).
 // Testers (TESTEURS_DISCORD_IDS, never the sheet; lib/testeurs.ts) hold every gesture and the secret page, even when
 // the tabs cannot be read.
 // The server checks every write (and the Trésor's reads); the page only hides what a member may not do.
@@ -332,6 +333,10 @@ export function peut(quoi: Action | Geste, qui: Qualites | null, table: TablePer
   const g: Geste | undefined = estGeste(quoi) ? quoi : GESTE_DE[quoi as Action]
   const c = g ? table.cases[g] : undefined
   if (!c) return false
+  // A gesture seeded with its defaults (`semee`) whose row the tab does not hold yet reads its defaults until the row is
+  // written (2026-11-09: the shadow book's tabs stayed hidden until the next Discord seal seeded their rows).
+  const def = g && !table.ecrites[g] ? GESTES.find((x) => x.cle === g && x.semee) : undefined
+  if (def) return qui.roles.some((r) => defautDe(def, r))
   return qui.roles.some((r) => c[r])
 }
 

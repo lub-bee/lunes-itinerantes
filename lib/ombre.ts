@@ -26,27 +26,39 @@ export const OMBRE_ECRITURE = true
 
 export const TEXTES = {
   surtitre: 'Livre d’ombre',
-  titre: 'Caravane de l’Ombre',
-  titreEn: 'The Caravan’s Shadow',
+  titre: 'Les Ombres des Lunes Itinérantes',
+  titreEn: 'The Shadows of the Wandering Moons',
   maxime: 'Celui qui voit dans l’ombre est puissant à la lumière.',
-  intro:
-    'Ce que le jour achète au prix du marché, l’ombre le revend au prix du silence. Ce livre ne s’ouvre qu’à qui a su lire la devise à l’envers.',
   /** The way out of the shadow book (a link at the foot of its first page and above the book; the inverted emblem too). */
   sortir: 'Quitter les ombres',
-  /** The opening page's right side: the shadow members' presentation, as Elijah gave it (v2, 2026-11-08). */
+  /**
+   * The opening page's text (left page, under the motto, with the drop cap): the shadow members' presentation, as Elijah
+   * gave it (v2, 2026-11-08; its French lightly mended on 2026-11-09), signed by him.
+   */
   presentation: {
-    surtitre: 'Ombre',
-    titre: 'Les ombres des lunes',
-    sousTitre: 'itinérantes',
-    devise: 'Une caravane informée est une caravane sauvée.',
-    toujours: ['Toujours masqué', 'Toujours sauvage', 'Toujours plusieurs'],
-    texte: 'Les ombres vont là où personne ne va, entendre et vendre sont leur apanage. Le savoir est une clé que l’on possédera.',
+    texte: 'Une caravane informée est une caravane sauvée. Les ombres vont là où personne ne va ; entendre et vendre sont leur apanage. Le savoir est une clé, et nous la posséderons.',
+    toujours: 'Toujours masquées, toujours sauvages, toujours plusieurs.',
     signature: 'Elijah, Voix de la sécurité',
+    /** The way to the letter (the page the members look for first). */
+    transmettre: 'Transmettre un secret',
+  },
+  /** The opening page's right side: the teachings (v1) and the shadow book's own table of its pages. */
+  enseignements: {
+    titre: 'Ombre',
+    intro:
+      'Ne demande jamais d’où vient la marchandise ; demande seulement ce qu’elle vaut, et à qui elle manque. Ce qui s’écrit ici ne se répète pas au grand jour.',
+    // Placeholder maxims: replace freely.
+    lecons: [
+      'Le vrai prix se dit à voix basse.',
+      'Une dette rappelée deux fois se paie double.',
+      'Ce que la garde n’a pas vu, la caravane ne l’a pas vendu.',
+    ],
+    table: 'Les pages de l’ombre',
   },
   secrets: {
     titre: 'Transmettre un secret',
     titreEn: 'Whisper a Secret',
-    court: 'Ombres',
+    court: 'Transmettre',
     intro: 'Ce que tu as vu, entendu ou volé, couche-le sur cette lettre et scelle-la. Seuls la Voix de la sécurité et les Patriarches en briseront le sceau ; toi seul relis ce que tu as transmis.',
     lettre: 'Lettre à la Voix de la sécurité',
     miens: 'Mes secrets',
@@ -99,7 +111,7 @@ export const PARTIE_OMBRE: Partie = { id: 'ombre', titre: 'Livre d’ombre', cou
 export type AccesOmbre = { secret: boolean; tri: boolean; archives: boolean }
 
 /**
- * The shadow book's pages, in tab order: « Caravane de l'Ombre » and its « Ombre » section first (it opens there), then
+ * The shadow book's pages, in tab order: « Les Ombres des Lunes Itinérantes » and its « Ombre » teachings first (it opens there), then
  * « Transmettre un secret », « Le tri », « Archives » (each to who may), then Marchandises, Recettes.
  */
 export function pagesOmbre(articles: Article[], acces: AccesOmbre = { secret: false, tri: false, archives: false }): (PageOmbre | PageSecrets | PageChapitre | PageMetier)[] {

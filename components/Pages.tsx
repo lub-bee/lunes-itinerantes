@@ -139,7 +139,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
       case 'divinite':
         return null
       case 'ombre':
-        return <SectionOmbre compact={compact} />
+        return <SectionOmbre ctx={ctx} compact={compact} />
       case 'secrets':
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
@@ -456,7 +456,7 @@ export function PageDroite({ page, ctx, integre = false }: { page: Page; ctx: Ct
       case 'ventes':
         return <DroiteVentes reg={ctx.registre} />
       case 'ombre':
-        return <Presentation />
+        return <Enseignements ctx={ctx} />
       case 'secrets':
         return <DroiteSecrets page={page} reg={ctx.registre} interactif={ctx.interactif} />
       case 'colophon':
@@ -776,9 +776,18 @@ function ListeArticles({ page, ctx }: { page: PageChapitre; ctx: Ctx }) {
 
 /* ───────────────────────────── The shadow book ───────────────────────────── */
 
-/** « Caravane de l'Ombre »: the motto read backwards, the inverted emblem (touch it to close the book). */
-function SectionOmbre({ compact }: { compact: boolean }) {
+/** Index of the shadow book's « Transmettre un secret » page, when the reader may open it. */
+const pageTransmettre = (ctx: Ctx) => ctx.livre.pages.findIndex((p) => p.type === 'secrets' && p.vue === 'transmettre')
+
+/**
+ * The shadow book's opening page (left): « Les Ombres des Lunes Itinérantes », the maxim, the inverted emblem (touch it to
+ * close the book), the motto read backwards, then the shadow members' presentation as Elijah gave it (with the drop cap),
+ * signed by him, and the way to the letter (2026-11-09: the presentation was a second title page opposite this one).
+ */
+function SectionOmbre({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
   const o = useOmbre()
+  const t = OMBRE.presentation
+  const transmettre = pageTransmettre(ctx)
   return (
     <div className="section-ombre">
       <header className="en-tete">
@@ -786,13 +795,25 @@ function SectionOmbre({ compact }: { compact: boolean }) {
         <div className="titre-ligne">
           <h2 className="titre-page">{OMBRE.titre}</h2>
         </div>
+        <div className="sous-titre">{OMBRE.titreEn}</div>
         <p className="maxime">{OMBRE.maxime}</p>
       </header>
       <button type="button" className="medaillon-ombre" onClick={o.fermer} title={OMBRE.sortir} aria-label={OMBRE.sortir}>
-        <Embleme taille={compact ? 78 : 112} />
+        <Embleme taille={compact ? 64 : 84} />
       </button>
       <Devise />
-      {!compact && <p className="intro lettrine">{OMBRE.intro}</p>}
+      <div className="presentation-ombre">
+        <p className="intro lettrine">{t.texte}</p>
+        <p className="toujours">{t.toujours}</p>
+        <p className="signature">{t.signature}</p>
+      </div>
+      {transmettre >= 0 && (
+        <div className="gestes gestes-ombre">
+          <Geste icone={ctx.livre.icones['envelope']} onClick={() => ctx.aller?.(transmettre)} disabled={!ctx.interactif}>
+            {t.transmettre}
+          </Geste>
+        </div>
+      )}
       <Action icone="lumiere" className="quitter-ombres" onClick={o.fermer}>
         {OMBRE.sortir.toLowerCase()}
       </Action>
@@ -800,25 +821,39 @@ function SectionOmbre({ compact }: { compact: boolean }) {
   )
 }
 
-/** The shadow members' presentation (Elijah's words), opposite « Caravane de l'Ombre ». */
-function Presentation() {
-  const t = OMBRE.presentation
+/** Opposite: the teachings, then the shadow book's own table of its pages (each one a click away). */
+function Enseignements({ ctx }: { ctx: Ctx }) {
+  const t = OMBRE.enseignements
+  const pages = ctx.livre.pages.map((p, i) => ({ p, i })).filter(({ p }) => p.partie === 'ombre' && p.type !== 'ombre')
   return (
-    <div className="enseignements presentation-ombre">
+    <div className="enseignements">
       <header className="en-tete">
-        <div className="surtitre">{t.surtitre}</div>
+        <div className="surtitre">{OMBRE.surtitre}</div>
         <h3 className="titre-section">{t.titre}</h3>
-        <div className="sous-titre">{t.sousTitre}</div>
         <Fleuron />
       </header>
-      <p className="devise-ombres">« {t.devise} »</p>
-      <ul className="toujours">
-        {t.toujours.map((l) => (
+      <p className="intro lettrine">{t.intro}</p>
+      <ol className="lecons">
+        {t.lecons.map((l) => (
           <li key={l}>{l}</li>
         ))}
-      </ul>
-      <p className="intro lettrine">{t.texte}</p>
-      <p className="signature">{t.signature}</p>
+      </ol>
+      {pages.length > 0 && (
+        <nav className="table-matieres table-ombre" aria-label={t.table}>
+          <h4>{t.table}</h4>
+          <ol>
+            {pages.map(({ p, i }) => (
+              <li key={p.id}>
+                <button type="button" tabIndex={ctx.interactif ? 0 : -1} onClick={() => ctx.aller?.(i)}>
+                  <span className="entree">{p.titre}</span>
+                  <span className="points" />
+                  <span className="renvoi">{romain((i - avantSommaire(ctx)) * 2 + 1)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
     </div>
   )
 }

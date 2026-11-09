@@ -767,11 +767,13 @@ sign before the fifth). Three beats, ~6–7 s (`components/Ombre.tsx`, run by `G
 2. The pages turn to « L'ombre de la Caravane »; all its ink dissolves at once; the side tabs retract.
 3. Together: the paper burns at its edges, the light dims, gilding and brass blacken, the emblem turns
    flat blood red and point up (header, medallion, blind-pressed emblem), the shadow tabs come out and the
-   page writes itself in: « Caravane de l'Ombre », « Celui qui voit dans l'ombre est puissant à la
+   page writes itself in: « Les Ombres des Lunes Itinérantes », « Celui qui voit dans l'ombre est puissant à la
    lumière. », and the « Ombre » section opposite.
 
-The shadow book opens on « Caravane de l'Ombre » and, opposite, the shadow members' presentation (Elijah's words; texts in
-`lib/ombre.ts`, easy to replace), then (v2, 2026-11-09, `lib/secrets.ts`, `components/Secrets.tsx`, `app/api/ombre`, script v3u):
+The shadow book opens on one spread (2026-11-09): left, « Les Ombres des Lunes Itinérantes » (« The Shadows of the Wandering
+Moons »), the maxim, the inverted emblem, the motto read backwards, the shadow members' presentation as Elijah gave it (drop
+cap, signed « Elijah, Voix de la sécurité ») and a « Transmettre un secret » button; right, the « Ombre » teachings and « Les
+pages de l'ombre », the shadow book's own table (texts in `lib/ombre.ts`, easy to replace); then (v2, 2026-11-09, `lib/secrets.ts`, `components/Secrets.tsx`, `app/api/ombre`, script v3u):
 « Transmettre un secret » (a letter after the Table's « création d'affaire » billet: Urgence · Prix · Interne/externe ·
 Provenance · Destinataire · Faction · Titre · Contenu, sealed when sent; below, « Mes secrets », only one's own with their state),
 « Le tri » (the sealed envelopes, urgent first; the notes: open, classify, correct the whole text, join one note to another —
@@ -783,7 +785,8 @@ gesture. « Gestion de la contrebande », a free list (hidden tab « Contrebande
 page and, in the day book, folded under each Marchandises chapter and on « Matières premières », beside the notice to all:
 « Toutes les ressources et marchandises interdites doivent être remises à la Voix de la sécurité pour être détruites. »
 
-Rights (lib/droits.ts, group « Livre d’ombre », seeded once at the next seal): `secret` (Patriarches, « . », Voix de la
+Rights (lib/droits.ts, group « Livre d’ombre », seeded once at the next seal or the next read of `/api/marchand`; until a
+`semee` gesture's row exists, its defaults apply; a tester sees every shadow tab): `secret` (Patriarches, « . », Voix de la
 sécurité: send, read one's own), `secretTri` and `secretArchives` (Patriarches, Voix de la sécurité), `contrebande` (Patriarches,
 Voix de la sécurité, Voix du commerce), `ombreLivre` (replaces `livre`, formerly open to all), `ombreMarchandise`, `ombreRecette`
 (Patriarches, « . », Voix de la sécurité). The rank « . » is the Discord role of that name (ID 1565167239097749725, `RANG_OMBRE`):

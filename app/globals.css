@@ -4221,12 +4221,17 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 
 /* ═══════════════════════════ Livre d'ombre v2 (components/Secrets.tsx) ═══════════════════════════ */
 
-/* The opening page's right side: the shadow members' presentation (Elijah's words). */
-.presentation-ombre .sous-titre { text-transform: lowercase; }
-.devise-ombres { margin: 4px 0 12px; text-align: center; font-style: italic; font-size: 19px; line-height: 1.35; color: var(--encre); }
-.toujours { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0 0 14px; padding: 0; list-style: none; font-family: var(--f-capitales); font-size: 17px; letter-spacing: 0.12em; color: var(--encre-rouge); }
+/* The opening page (left): the shadow members' presentation (Elijah's words) under the motto, the way to the letter; opposite,
+   the teachings and the table of the shadow's pages. `.toujours` stays scoped: Missions.tsx has its own « toujours ». */
+.section-ombre .titre-page { font-size: 46px; line-height: 1.05; }
+.section-ombre .en-tete > .sous-titre { margin: 2px 0 6px; }
+.presentation-ombre { margin-top: 6px; }
 .presentation-ombre .intro { text-align: justify; }
-.presentation-ombre .signature { text-align: right; }
+.presentation-ombre .toujours { margin: 2px 0 6px; text-align: center; font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.08em; color: var(--encre-rouge); }
+.presentation-ombre .signature { margin: 0; text-align: right; }
+.gestes-ombre { justify-content: center; margin-top: 10px; }
+.table-ombre { margin-top: 18px; }
+.table-ombre h4 { color: var(--encre-rouge); text-align: center; }
 
 /* The letter (« Transmettre un secret »), after the Table's « création d'affaire » billet: a head block (who, when, the
    number given at the seal), the fields on ruled lines, two rows of inked stamps, the wax button. */

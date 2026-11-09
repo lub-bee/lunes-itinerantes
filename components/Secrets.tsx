@@ -108,8 +108,12 @@ function Mot({ m }: { m: { ok: boolean; texte: string } | null }) {
   )
 }
 
-/** The page's state before its data: reading, unreadable, not linked, a script too old. */
-function EtatPage({ o, children }: { o?: EtatSecrets; children: (d: VueOmbre) => ReactNode }) {
+/**
+ * The page's state before its data: reading, unreadable, not linked, a script too old. `sansScript`: the page shows anyway
+ * under the « not ready » notice when the sheet's script is still older than v3u (the letter: its seal then answers why
+ * nothing is written, in character, 2026-11-09).
+ */
+function EtatPage({ o, sansScript = false, children }: { o?: EtatSecrets; sansScript?: boolean; children: (d: VueOmbre) => ReactNode }) {
   if (!o) return null
   if (o.erreur && o.donnees === undefined)
     return (
@@ -123,7 +127,15 @@ function EtatPage({ o, children }: { o?: EtatSecrets; children: (d: VueOmbre) =>
   if (o.donnees === undefined) return <p className="registre-ferme attente-encre">Le scribe de l’ombre déroule ses plis…</p>
   if (o.donnees === null) return <p className="registre-ferme">Le registre n’est pas encore relié au grimoire.</p>
   if (!o.donnees.moi) return <p className="registre-ferme">Signe d’abord l’ex-libris : l’ombre ne reçoit que les membres de la caravane.</p>
-  if (!o.donnees.actif) return <p className="registre-ferme">{OMBRE.pasPret}</p>
+  if (!o.donnees.actif)
+    return sansScript ? (
+      <>
+        <p className="registre-ferme">{OMBRE.pasPret}</p>
+        {children(o.donnees)}
+      </>
+    ) : (
+      <p className="registre-ferme">{OMBRE.pasPret}</p>
+    )
   return <>{children(o.donnees)}</>
 }
 
@@ -722,7 +734,7 @@ export function GaucheSecrets({ page, reg, interactif }: { page: PageSecrets; re
   const o = reg?.o
   return (
     <div className={`secrets-gauche secrets-${page.vue}`}>
-      <EtatPage o={o}>
+      <EtatPage o={o} sansScript={page.vue === 'transmettre'}>
         {(d) =>
           page.vue === 'transmettre' ? (
             d.droits.secret ? <Lettre o={o!} d={d} interactif={interactif} /> : <p className="registre-ferme">Cette page de l’ombre est réservée à d’autres pattes que les tiennes.</p>
@@ -742,7 +754,7 @@ export function GaucheSecrets({ page, reg, interactif }: { page: PageSecrets; re
 export function DroiteSecrets({ page, reg, interactif }: { page: PageSecrets; reg?: CtxRegistre; interactif: boolean }) {
   const o = reg?.o
   // On a phone the left page above already says why the data is missing: nothing twice.
-  if (!o?.donnees?.actif || !o.donnees.moi) return null
+  if (!o?.donnees?.moi || (!o.donnees.actif && page.vue !== 'transmettre')) return null
   const d = o.donnees
   return (
     <div className={`secrets-droite secrets-${page.vue}`}>

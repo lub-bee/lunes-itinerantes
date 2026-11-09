@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession, nomDe } from '@/lib/sceau'
 import { identite, testeurDe, type Identite } from '@/lib/identite'
-import { droitsDe, type Droits } from '@/lib/droits'
-import { ecrireRegistre, lireRegistre, registreRelie } from '@/lib/registre'
+import { droitsDe, semisNouveaux, type Droits } from '@/lib/droits'
+import { ecrireRegistre, lireRegistre, registreRelie, semerSiBesoin } from '@/lib/registre'
 
 // Who holds the pen: the order sheet and the missives show this name.
 // - `identite`: the member's name validated against the Membres tab (signed cookie, or the Discord
@@ -33,7 +33,10 @@ export async function GET(req: NextRequest) {
   let droits: Droits | null = null
   if (relie) {
     try {
-      const lu = await lireRegistre()
+      let lu = await lireRegistre()
+      // The gestures added later (`semee`, e.g. the shadow book's) whose rows the tab still lacks are seeded here too, not
+      // only at the next Discord seal: the script checks a shadow gesture on the sheet's own row (best effort).
+      if (lu.droits.lu && lu.droits.semees && semisNouveaux(lu.droits).length) lu = await semerSiBesoin(lu).catch((e) => (console.error('[marchand] seeding the permissions failed', e), lu))
       qui = await identite(req.cookies, lu)
       if (qui) droits = droitsDe(qui, lu.droits)
       // A linked seal whose Discord display name changed: its « Pseudo Discord » follows (v3n, best effort).

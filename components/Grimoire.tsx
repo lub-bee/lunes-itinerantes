@@ -125,7 +125,12 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
   // The Livre d'ombre v2: the secrets and the contraband list (read once signed; the server sends only what the reader may see).
   const secrets = useSecrets(registre.marchand?.identite ?? null)
   const droits = registre.marchand?.droits
-  const accesOmbre = useMemo(() => ({ secret: droits?.secret === true, tri: droits?.secretTri === true, archives: droits?.secretArchives === true }), [droits?.secret, droits?.secretTri, droits?.secretArchives])
+  // A tester sees every shadow page even before the registre knows them (the page then says why nothing can be written).
+  const testeur = registre.marchand?.testeur === true
+  const accesOmbre = useMemo(
+    () => ({ secret: testeur || droits?.secret === true, tri: testeur || droits?.secretTri === true, archives: testeur || droits?.secretArchives === true }),
+    [testeur, droits?.secret, droits?.secretTri, droits?.secretArchives],
+  )
 
   // The ex-libris first (when the registre is linked), and one page per missive after the list of
   // missives: open ones (oldest first), then closed ones.
