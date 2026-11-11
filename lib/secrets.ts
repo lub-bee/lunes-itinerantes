@@ -220,8 +220,8 @@ export const MOT_ETAT: Record<Etat, string> = {
 }
 
 /** The archives' filters: what each one may match. */
-export type Filtres = { requete: string; faction: string; provenance: string; urgence: string; informateur: string; du: string; au: string }
-export const FILTRES_VIDES: Filtres = { requete: '', faction: '', provenance: '', urgence: '', informateur: '', du: '', au: '' }
+export type Filtres = { requete: string; faction: string; provenance: string; urgence: string; portee: string; informateur: string; du: string; au: string }
+export const FILTRES_VIDES: Filtres = { requete: '', faction: '', provenance: '', urgence: '', portee: '', informateur: '', du: '', au: '' }
 
 /** The day of an ISO date in Tokyo (YYYY-MM-DD), for the date filters. */
 export const jourIso = (iso: string) => (iso ? new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : '')
@@ -234,6 +234,7 @@ export function filtrer(notes: Secret[], f: Filtres): Secret[] {
     if (mots.some((m) => !tout.includes(m))) return false
     if (!contient(s.faction, f.faction) || !contient(s.provenance, f.provenance) || !contient(s.informateur, f.informateur)) return false
     if (f.urgence && cle(s.urgence) !== cle(f.urgence)) return false
+    if (f.portee && cle(s.portee) !== cle(f.portee)) return false
     const j = jourIso(s.depose)
     if (f.du && j < f.du) return false
     if (f.au && j > f.au) return false

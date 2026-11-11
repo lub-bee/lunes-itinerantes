@@ -774,13 +774,16 @@ The shadow book opens on one spread (2026-11-09): left, « Les Ombres des Lunes 
 Moons »), the maxim, the inverted emblem, the motto read backwards, the shadow members' presentation as Elijah gave it (drop
 cap, signed « Elijah, Voix de la sécurité ») and a « Transmettre un secret » button; right, the « Ombre » teachings and « Les
 pages de l'ombre », the shadow book's own table (texts in `lib/ombre.ts`, easy to replace); then (v2, 2026-11-09, `lib/secrets.ts`, `components/Secrets.tsx`, `app/api/ombre`, script v3u):
-« Transmettre un secret » (a letter after the Table's « création d'affaire » billet: Urgence · Prix · Interne/externe ·
-Provenance · Destinataire · Faction · Titre · Contenu, sealed when sent; below, « Mes secrets », only one's own with their state),
-« Le tri » (the sealed envelopes, urgent first; the notes: open, classify, correct the whole text, join one note to another —
+« Transmettre un secret » (a button lays the letter on the left page as a note, after the Table's « création d'affaire »
+billet: Urgence · Prix · Interne/externe · Provenance · Destinataire · Faction · Titre · Contenu, sealed when sent; opposite,
+« Mes secrets », only one's own with their state, each opened in a note), « Le tri » (left: the filters by urgency and
+inside / outside; right: « Plis scellés » and « Plis ouverts », urgent first, each opened in a note: break the seal, classify,
+correct the whole text, join one note to another —
 one plain text, each contribution under « Auteur ----------- jj/mm/aaaa » —, remove: hidden everywhere, the row kept
-« retirée »), « Archives » (every note, search and filters by faction, provenance, urgency, informant, days; the removed ones
-given back), then Marchandises (the shadow goods, their prices corrected from an article's slip: « corriger les prix »; « rendre
-au grand jour » / « passer au Livre d'ombre » moves an article and its recipe) and Recettes. Each page shows to who holds its
+« retirée »), Marchandises (the shadow goods, their prices corrected from an article's slip: « corriger les prix »; « rendre
+au grand jour » / « passer au Livre d'ombre » moves an article and its recipe), Recettes, and « Archives » last, its tab apart at
+the foot of the column (every note, the same urgency and inside / outside filters, search and filters by faction, provenance,
+informant, days; each note opened in a note; the removed ones given back). Each page shows to who holds its
 gesture. « Gestion de la contrebande », a free list (hidden tab « Contrebande », one row per line), is held on the shadow goods
 page and, in the day book, folded under each Marchandises chapter and on « Matières premières », beside the notice to all:
 « Toutes les ressources et marchandises interdites doivent être remises à la Voix de la sécurité pour être détruites. »

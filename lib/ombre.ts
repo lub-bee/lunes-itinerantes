@@ -59,7 +59,10 @@ export const TEXTES = {
     titre: 'Transmettre un secret',
     titreEn: 'Whisper a Secret',
     court: 'Transmettre',
-    intro: 'Ce que tu as vu, entendu ou volé, couche-le sur cette lettre et scelle-la. Seuls la Voix de la sécurité et les Patriarches en briseront le sceau ; toi seul relis ce que tu as transmis.',
+    intro: 'Ce que tu as vu, entendu ou volé, couche-le sur une lettre et scelle-la. Seuls la Voix de la sécurité et les Patriarches en briseront le sceau ; toi seul relis ce que tu as transmis.',
+    /** The button that lays the letter on the page (a note, 2026-11-11), and the same once a draft is begun. */
+    ecrire: 'Écrire une lettre',
+    reprendre: 'Reprendre ma lettre',
     lettre: 'Lettre à la Voix de la sécurité',
     miens: 'Mes secrets',
     miensVide: 'Tu n’as encore rien transmis à l’ombre.',
@@ -68,17 +71,17 @@ export const TEXTES = {
     titre: 'Le tri',
     titreEn: 'The Sorting',
     court: 'Le tri',
-    intro: 'Les plis arrivent scellés. Brise le sceau, lis, classe ; joins ensemble ce qui parle de la même chose, corrige, ou retire ce qui ne doit plus se lire. Les plus brûlants passent devant.',
+    intro: 'Les plis arrivent scellés. Touche-en un, en face : brise le sceau, lis, classe ; joins ensemble ce qui parle de la même chose, corrige, ou retire ce qui ne doit plus se lire. Les plus brûlants passent devant.',
     scelles: 'Plis scellés',
     scellesVide: 'Nul pli ne t’attend : l’ombre se tait pour l’heure.',
-    notes: 'Les notes',
-    notesVide: 'Aucune note ouverte pour l’heure.',
+    notes: 'Plis ouverts',
+    notesVide: 'Aucun pli ouvert pour l’heure.',
   },
   archives: {
     titre: 'Archives',
     titreEn: 'The Archives',
     court: 'Archives',
-    intro: 'Tout ce que l’ombre a recueilli, dans l’ordre où elle l’a reçu. Cherche par un mot, une faction, une provenance, un informateur ou une date.',
+    intro: 'Tout ce que l’ombre a recueilli, dans l’ordre où elle l’a reçu. Trie par urgence, interne ou externe ; cherche par un mot, une faction, une provenance, un informateur ou une date.',
     vide: 'Rien ne répond à ces filtres.',
     retirees: 'Notes retirées',
   },
@@ -112,7 +115,7 @@ export type AccesOmbre = { secret: boolean; tri: boolean; archives: boolean }
 
 /**
  * The shadow book's pages, in tab order: « Les Ombres des Lunes Itinérantes » and its « Ombre » teachings first (it opens there), then
- * « Transmettre un secret », « Le tri », « Archives » (each to who may), then Marchandises, Recettes.
+ * « Transmettre un secret », « Le tri » (each to who may), Marchandises, Recettes, and « Archives » last (its tab apart, at the foot).
  */
 export function pagesOmbre(articles: Article[], acces: AccesOmbre = { secret: false, tri: false, archives: false }): (PageOmbre | PageSecrets | PageChapitre | PageMetier)[] {
   const marchandises: PageChapitre = {
@@ -155,9 +158,10 @@ export function pagesOmbre(articles: Article[], acces: AccesOmbre = { secret: fa
     enseignements,
     ...(acces.secret ? [secret('transmettre', TEXTES.secrets, 'envelope')] : []),
     ...(acces.tri ? [secret('tri', TEXTES.tri, 'wax-seal')] : []),
-    ...(acces.archives ? [secret('archives', TEXTES.archives, 'archive-research')] : []),
     marchandises,
     recettes,
+    // Last, set apart at the foot of the tabs (2026-11-11).
+    ...(acces.archives ? [secret('archives', TEXTES.archives, 'archive-research')] : []),
   ]
 }
 

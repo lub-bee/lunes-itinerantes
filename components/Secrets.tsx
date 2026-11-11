@@ -26,14 +26,16 @@ import {
   type VueOmbre,
 } from '@/lib/secrets'
 import { Action } from './Ornements'
-import type { CtxRegistre } from './Missives'
+import { Geste as GesteBouton, type CtxRegistre } from './Missives'
 
 /*
  * The Livre d'ombre v2 (lib/secrets.ts, app/api/ombre): « Transmettre un secret » (a letter in the style of the Table's
  * « création d'affaire » billet, then « Mes secrets »), « Le tri » (the sealed envelopes, the notes: open, classify, merge,
  * correct, remove), « Archives » (everything, searched and filtered; the removed notes given back), and the contraband list
  * (« Gestion de la contrebande »), shown where goods are listed. The server decides what each reader receives; the page only
- * draws it. The letter's draft, the filters and the note opened survive page turns (kept in the hook).
+ * draws it. Since 2026-11-11 the letter, one's own secrets, the envelopes and the notes open in a note laid on the left page
+ * (components/Fiche.tsx, `contenuSecret`); the lists stay on the right page. The letter's draft and the filters survive page
+ * turns (kept in the hook).
  */
 
 export type Brouillon = { titre: string; contenu: string; urgence: string; prix: string; provenance: string; destinataire: string; faction: string; portee: string }
@@ -50,8 +52,8 @@ export function useSecrets(signe: string | null) {
   const [erreur, setErreur] = useState<string | null>(null)
   const [brouillon, setBrouillon] = useState<Brouillon>(BROUILLON_VIDE)
   const [filtres, setFiltres] = useState<Filtres>(FILTRES_VIDES)
-  /** The note unfolded on « Le tri » / « Archives » (one at a time). */
-  const [ouverte, setOuverte] = useState<string | null>(null)
+  /** « Le tri »'s own filters (urgency, inside / outside), apart from the archives'. */
+  const [filtresTri, setFiltresTri] = useState<Filtres>(FILTRES_VIDES)
   const version = useRef(0)
   const recevoir = useCallback((d: VueOmbre | null) => {
     if (d) version.current = Math.max(version.current, d.version ?? 0)
@@ -83,7 +85,7 @@ export function useSecrets(signe: string | null) {
     },
     [recevoir],
   )
-  return { donnees, erreur, relire: lire, agir, brouillon, setBrouillon, filtres, setFiltres, ouverte, setOuverte }
+  return { donnees, erreur, relire: lire, agir, brouillon, setBrouillon, filtres, setFiltres, filtresTri, setFiltresTri }
 }
 
 export type EtatSecrets = ReturnType<typeof useSecrets>
@@ -321,9 +323,9 @@ function Lettre({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif:
   )
 }
 
-/** « Mes secrets »: what the reader sent, with its state; touched, its text. */
-function MesSecrets({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif: boolean }) {
-  const [vu, setVu] = useState<string | null>(null)
+/** « Mes secrets »: what the reader sent, with its state; touched, it opens in a note on the left (2026-11-11). */
+function MesSecrets({ reg, d, interactif }: { reg: CtxRegistre; d: VueOmbre; interactif: boolean }) {
+  const o = reg.o!
   return (
     <section className="mes-secrets">
       <h3 className="titre-section">{OMBRE.secrets.miens}</h3>
@@ -331,19 +333,13 @@ function MesSecrets({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interac
         <ul className="secrets-liste">
           {d.miens.map((s: MonSecret) => (
             <li key={s.id} className={`secret-carte etat-${cleEtat(s.etat)}`}>
-              <button type="button" className="secret-tete" onClick={() => setVu(vu === s.id ? null : s.id)} aria-expanded={vu === s.id} tabIndex={interactif ? 0 : -1}>
+              <button type="button" className="secret-tete" onClick={() => reg.ouvrir({ genre: 'mon-secret', id: s.id })} tabIndex={interactif ? 0 : -1}>
                 <span className="secret-titre">{s.titre}</span>
                 <Urgence u={s.urgence} />
                 <span className="secret-meta">
                   <Jour iso={s.depose} /> · <em className="secret-etat">{MOT_ETAT[s.etat]}</em>
                 </span>
               </button>
-              {vu === s.id && (
-                <div className="secret-corps">
-                  <Champs s={s} />
-                  <TexteNote contenu={s.contenu} />
-                </div>
-              )}
             </li>
           ))}
         </ul>
@@ -359,56 +355,99 @@ const cleEtat = (e: Etat) => ({ scellée: 'scellee', ouverte: 'ouverte', classé
 
 /* ───────────────────────── « Le tri » and « Archives » ───────────────────────── */
 
-/** The sealed envelopes, urgent first: « briser le sceau » opens one (it goes to the notes, unfolded). */
-function PlisScelles({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif: boolean }) {
-  const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null)
-  const [enCours, setEnCours] = useState<string | null>(null)
-  const plis = d.notes.filter((s) => s.etat === ETATS.scellee).sort(parUrgence)
-  const ouvrir = async (s: Secret) => {
-    setEnCours(s.id)
-    setMessage(null)
-    const r = await o.agir('ouvrir', { id: s.id })
-    setEnCours(null)
-    setMessage({ ok: r.ok, texte: r.message })
-    if (r.ok) o.setOuverte(s.id)
-  }
+/** The two filters of « Le tri » and « Archives »: urgency and inside / outside, as inked stamps (touched again: all). */
+function FiltresPlis({ f, changer, interactif }: { f: Filtres; changer: (k: 'urgence' | 'portee', v: string) => void; interactif: boolean }) {
   return (
-    <section className="plis-scelles">
+    <div className="filtres-plis">
+      <p className="lettre-rubrique centre">Urgence</p>
+      <Tampons liste={URGENCES} valeur={f.urgence} changer={(v) => changer('urgence', v)} fige={!interactif} etiquette="Filtrer par urgence" />
+      <p className="lettre-rubrique centre">Interne ou externe</p>
+      <Tampons liste={PORTEES} valeur={f.portee} changer={(v) => changer('portee', v)} fige={!interactif} etiquette="Filtrer : interne ou externe" />
+    </div>
+  )
+}
+
+/** « Le tri », left page: the filters and what they leave (the lists are on the right page). */
+function FiltresTri({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif: boolean }) {
+  const f = o.filtresTri
+  const vivantes = d.notes.filter(vivante)
+  const scelles = filtrer(vivantes.filter((s) => s.etat === ETATS.scellee), f).length
+  const ouverts = filtrer(vivantes.filter((s) => s.etat !== ETATS.scellee), f).length
+  return (
+    <div className="filtres-tri">
+      <FiltresPlis f={f} changer={(k, v) => o.setFiltresTri({ ...f, [k]: v })} interactif={interactif} />
+      <p className="decompte">
+        {scelles} pli{scelles > 1 ? 's' : ''} scellé{scelles > 1 ? 's' : ''}, {ouverts} pli{ouverts > 1 ? 's' : ''} ouvert{ouverts > 1 ? 's' : ''}
+        {(f.urgence || f.portee) && <> (sur {vivantes.length})</>}
+      </p>
+      {(f.urgence || f.portee) && (
+        <Action icone="annuler" onClick={() => o.setFiltresTri(FILTRES_VIDES)} disabled={!interactif}>
+          effacer les filtres
+        </Action>
+      )}
+    </div>
+  )
+}
+
+/** One envelope or note in a list (right page): its title, urgency, who and when; touched, it opens in a note on the left. */
+function LignePli({ s, d, reg, interactif, archives = false }: { s: Secret; d: VueOmbre; reg: CtxRegistre; interactif: boolean; archives?: boolean }) {
+  const scelle = s.etat === ETATS.scellee
+  const cible = d.notes.find((x) => x.id === s.fusionneeDans)
+  return (
+    <li className={`secret-carte note-carte etat-${cleEtat(s.etat)} ${estUrgente(s) ? 'urgente' : ''}`}>
+      <button type="button" className="secret-tete" onClick={() => reg.ouvrir({ genre: 'pli', id: s.id })} tabIndex={interactif ? 0 : -1}>
+        {scelle && <span className="pli-cire pli-cire-petite" aria-hidden />}
+        <span className="secret-titre">{s.titre}</span>
+        <Urgence u={s.urgence} />
+        {s.portee && <span className="secret-portee">{s.portee}</span>}
+        {s.faction && <span className="secret-faction">{s.faction}</span>}
+        <span className="secret-meta">
+          de {s.informateur || 'un inconnu'} · <Jour iso={s.depose} />
+          {archives && s.etat !== ETATS.ouverte && <> · <em>{s.etat === ETATS.fusionnee ? `jointe à « ${cible?.titre ?? s.fusionneeDans} »` : s.etat}</em></>}
+        </span>
+      </button>
+    </li>
+  )
+}
+
+/** « Le tri », right page: « Plis scellés » then « Plis ouverts » (opened or classified), urgent first, as filtered on the left. */
+function Plis({ reg, d, interactif }: { reg: CtxRegistre; d: VueOmbre; interactif: boolean }) {
+  const f = reg.o!.filtresTri
+  const vivantes = d.notes.filter(vivante)
+  const scelles = filtrer(vivantes.filter((s) => s.etat === ETATS.scellee), f).sort(parUrgence)
+  const ouverts = filtrer(vivantes.filter((s) => s.etat !== ETATS.scellee), f).sort(parUrgence)
+  const section = (titre: string, liste: Secret[], vide: string, cls: string) => (
+    <section className={cls}>
       <h3 className="titre-section">
-        {OMBRE.tri.scelles}
-        {plis.length > 0 && <span className="compte-plis"> · {plis.length}</span>}
+        {titre}
+        {liste.length > 0 && <span className="compte-plis"> · {liste.length}</span>}
       </h3>
-      {plis.length ? (
-        <ul className="plis-liste">
-          {plis.map((s) => (
-            <li key={s.id} className={`pli-scelle ${estUrgente(s) ? 'urgente' : ''}`}>
-              <span className="pli-cire" aria-hidden />
-              <span className="pli-texte">
-                <strong>{s.titre}</strong>
-                <span className="secret-meta">
-                  de {s.informateur || 'un inconnu'} · <Jour iso={s.depose} />
-                </span>
-                <Urgence u={s.urgence} />
-              </span>
-              <Action icone="sceau" onClick={() => ouvrir(s)} disabled={!interactif || enCours !== null}>
-                {enCours === s.id ? 'le sceau cède…' : 'briser le sceau'}
-              </Action>
-            </li>
+      {liste.length ? (
+        <ul className="secrets-liste">
+          {liste.map((s) => (
+            <LignePli key={s.id} s={s} d={d} reg={reg} interactif={interactif} />
           ))}
         </ul>
       ) : (
-        <p className="vide-encre">{OMBRE.tri.scellesVide}</p>
+        <p className="vide-encre">{vide}</p>
       )}
-      <Mot m={message} />
     </section>
+  )
+  return (
+    <>
+      {section(OMBRE.tri.scelles, scelles, OMBRE.tri.scellesVide, 'plis-scelles')}
+      {section(OMBRE.tri.notes, ouverts, OMBRE.tri.notesVide, 'plis-ouverts')}
+    </>
   )
 }
 
 type Geste = null | 'classer' | 'corriger' | 'joindre' | 'retirer'
 
-/** One note on « Le tri » or in the archives: folded (title, urgency, who, when), unfolded (its text, its gestures). */
-function NoteCarte({ s, o, d, interactif, archives = false }: { s: Secret; o: EtatSecrets; d: VueOmbre; interactif: boolean; archives?: boolean }) {
-  const ouverte = o.ouverte === s.id
+/**
+ * A note, in the note laid on the left page (« Le tri », « Archives »): sealed, its envelope and « briser le sceau »; open,
+ * its fields, its text, its trace and the sorting gestures; removed, « rendre au registre ».
+ */
+function CorpsPli({ s, o, d, changer, fermer }: { s: Secret; o: EtatSecrets; d: VueOmbre; changer: (f: FicheSecret) => void; fermer: () => void }) {
   const [geste, setGeste] = useState<Geste>(null)
   const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null)
   const [envoi, setEnvoi] = useState(false)
@@ -422,68 +461,92 @@ function NoteCarte({ s, o, d, interactif, archives = false }: { s: Secret; o: Et
     if (r.ok) setGeste(null)
     return r
   }
+  const meta = (
+    <p className="fiche-note secret-meta-fiche">
+      De <strong>{s.informateur || 'un inconnu'}</strong>, le <Jour iso={s.depose} /> · <em>{s.etat === ETATS.fusionnee ? `jointe à « ${cible?.titre ?? s.fusionneeDans} »` : s.etat}</em>
+    </p>
+  )
+  if (s.etat === ETATS.scellee)
+    return (
+      <div className="secret-fiche pli-ferme">
+        {meta}
+        <div className="pli-enveloppe">
+          <span className="pli-cire" aria-hidden />
+          <Urgence u={s.urgence} />
+        </div>
+        {d.droits.tri ? (
+          <div className="secret-form-pied">
+            <button type="button" className="commande-sceller" disabled={envoi} onClick={() => agir('ouvrir', {})}>
+              <span className="commande-cire" aria-hidden />
+              {envoi ? 'Le sceau cède…' : 'Briser le sceau'}
+            </button>
+          </div>
+        ) : (
+          <p className="fiche-note">Seuls la Voix de la sécurité et les Patriarches brisent les sceaux.</p>
+        )}
+        <Mot m={message} />
+      </div>
+    )
   const peutTrier = d.droits.tri && vivante(s)
   return (
-    <li className={`secret-carte note-carte etat-${cleEtat(s.etat)} ${estUrgente(s) ? 'urgente' : ''}`}>
-      <button type="button" className="secret-tete" onClick={() => o.setOuverte(ouverte ? null : s.id)} aria-expanded={ouverte} tabIndex={interactif ? 0 : -1}>
-        <span className="secret-titre">{s.titre}</span>
-        <Urgence u={s.urgence} />
-        {s.faction && <span className="secret-faction">{s.faction}</span>}
-        <span className="secret-meta">
-          de {s.informateur || 'un inconnu'} · <Jour iso={s.depose} />
-          {archives && s.etat !== ETATS.ouverte && s.etat !== ETATS.classee && <> · <em>{s.etat === ETATS.fusionnee ? `jointe à « ${cible?.titre ?? s.fusionneeDans} »` : s.etat}</em></>}
-          {archives && s.etat === ETATS.classee && <> · <em>classée</em></>}
-        </span>
-      </button>
-      {ouverte && (
-        <div className="secret-corps">
-          <Champs s={s} />
-          <TexteNote contenu={s.contenu} />
-          <p className="secret-trace">
-            N° {s.id}
-            {s.ouvertPar && <> · ouverte par {s.ouvertPar}{s.ouvertLe && <>, le <Jour iso={s.ouvertLe} /></>}</>}
-            {s.corrigeePar && <> · corrigée par {s.corrigeePar}{s.corrigeeLe && <>, le <Jour iso={s.corrigeeLe} /></>}</>}
-          </p>
-          {peutTrier && interactif && (
-            <>
-              {!geste && (
-                <div className="secret-gestes">
-                  <Action icone="usage" onClick={() => setGeste('classer')}>
-                    classer
-                  </Action>
-                  <Action icone="corriger" onClick={() => setGeste('corriger')}>
-                    corriger
-                  </Action>
-                  {d.notes.some((x) => x.id !== s.id && vivante(x)) && (
-                    <Action icone="fusionner" onClick={() => setGeste('joindre')}>
-                      joindre à une autre note
-                    </Action>
-                  )}
-                  <Action icone="retirer" className="action-discrete" onClick={() => setGeste('retirer')}>
-                    retirer
-                  </Action>
-                </div>
-              )}
-              {geste === 'classer' && <FormClasser s={s} envoi={envoi} annuler={() => setGeste(null)} envoyer={(c) => agir('classer', c)} />}
-              {geste === 'corriger' && <FormCorriger s={s} envoi={envoi} annuler={() => setGeste(null)} envoyer={(c) => agir('corriger', c)} />}
-              {geste === 'joindre' && <FormJoindre s={s} notes={d.notes} envoi={envoi} annuler={() => setGeste(null)} envoyer={(c) => agir('fusionner', { cible: c }).then((r) => r.ok && o.setOuverte(c))} />}
-              {geste === 'retirer' && (
-                <p className="confirmer-retrait" role="alert">
-                  Retirer « {s.titre} » de toutes les pages ? Ni son informateur ni le tri ne la verront plus ; les archives la gardent, d’où l’on peut la rendre.{' '}
-                  <Action icone="retirer" onClick={() => agir('retirerSecret', {})} disabled={envoi}>
-                    oui, la retirer
-                  </Action>{' '}
-                  <Action icone="annuler" onClick={() => setGeste(null)}>
-                    non
-                  </Action>
-                </p>
-              )}
-            </>
-          )}
-          <Mot m={message} />
-        </div>
+    <div className="secret-fiche">
+      {meta}
+      <Champs s={s} />
+      <TexteNote contenu={s.contenu} />
+      <p className="secret-trace">
+        N° {s.id}
+        {s.ouvertPar && <> · ouverte par {s.ouvertPar}{s.ouvertLe && <>, le <Jour iso={s.ouvertLe} /></>}</>}
+        {s.corrigeePar && <> · corrigée par {s.corrigeePar}{s.corrigeeLe && <>, le <Jour iso={s.corrigeeLe} /></>}</>}
+        {s.etat === ETATS.retiree && s.retireePar && <> · retirée par {s.retireePar}{s.retireeLe && <>, le <Jour iso={s.retireeLe} /></>}</>}
+      </p>
+      {s.etat === ETATS.fusionnee && cible && (
+        <Action icone="fusionner" onClick={() => changer({ genre: 'pli', id: cible.id })}>
+          lire « {cible.titre} »
+        </Action>
       )}
-    </li>
+      {s.etat === ETATS.retiree && d.droits.archives && (
+        <Action icone="rendre" onClick={() => agir('rendre', {})} disabled={envoi}>
+          {envoi ? 'le scribe la rend…' : 'rendre au registre'}
+        </Action>
+      )}
+      {peutTrier && (
+        <>
+          {!geste && (
+            <div className="secret-gestes">
+              <Action icone="usage" onClick={() => setGeste('classer')}>
+                classer
+              </Action>
+              <Action icone="corriger" onClick={() => setGeste('corriger')}>
+                corriger
+              </Action>
+              {d.notes.some((x) => x.id !== s.id && vivante(x)) && (
+                <Action icone="fusionner" onClick={() => setGeste('joindre')}>
+                  joindre à une autre note
+                </Action>
+              )}
+              <Action icone="retirer" className="action-discrete" onClick={() => setGeste('retirer')}>
+                retirer
+              </Action>
+            </div>
+          )}
+          {geste === 'classer' && <FormClasser s={s} envoi={envoi} annuler={() => setGeste(null)} envoyer={(c) => agir('classer', c)} />}
+          {geste === 'corriger' && <FormCorriger s={s} envoi={envoi} annuler={() => setGeste(null)} envoyer={(c) => agir('corriger', c)} />}
+          {geste === 'joindre' && <FormJoindre s={s} notes={d.notes} envoi={envoi} annuler={() => setGeste(null)} envoyer={(c) => agir('fusionner', { cible: c }).then((r) => r.ok && changer({ genre: 'pli', id: c }))} />}
+          {geste === 'retirer' && (
+            <p className="confirmer-retrait" role="alert">
+              Retirer « {s.titre} » de toutes les pages ? Ni son informateur ni le tri ne la verront plus ; les archives la gardent, d’où l’on peut la rendre.{' '}
+              <Action icone="retirer" onClick={() => agir('retirerSecret', {}).then((r) => r.ok && fermer())} disabled={envoi}>
+                oui, la retirer
+              </Action>{' '}
+              <Action icone="annuler" onClick={() => setGeste(null)}>
+                non
+              </Action>
+            </p>
+          )}
+        </>
+      )}
+      <Mot m={message} />
+    </div>
   )
 }
 
@@ -598,26 +661,7 @@ function FormJoindre({ s, notes, envoi, annuler, envoyer }: { s: Secret; notes: 
   )
 }
 
-/** The notes open or classified, urgent first. */
-function Notes({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif: boolean }) {
-  const notes = d.notes.filter((s) => vivante(s) && s.etat !== ETATS.scellee).sort(parUrgence)
-  return (
-    <section className="notes-ombre">
-      <h3 className="titre-section">{OMBRE.tri.notes}</h3>
-      {notes.length ? (
-        <ul className="secrets-liste">
-          {notes.map((s) => (
-            <NoteCarte key={s.id} s={s} o={o} d={d} interactif={interactif} />
-          ))}
-        </ul>
-      ) : (
-        <p className="vide-encre">{OMBRE.tri.notesVide}</p>
-      )}
-    </section>
-  )
-}
-
-/** The archives' search and filters (faction, provenance, urgency, informant, days). */
+/** The archives' search and filters: urgency and inside / outside as on « Le tri », then faction, provenance, informant, days. */
 function FiltresArchives({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif: boolean }) {
   const f = o.filtres
   const id = useId()
@@ -637,6 +681,7 @@ function FiltresArchives({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; in
   const actifs = Object.values(f).some((x) => x.trim())
   return (
     <div className="archives-filtres">
+      <FiltresPlis f={f} changer={changer} interactif={interactif} />
       <label className="fiche-champ archives-requete">
         <span>Chercher</span>
         <input type="search" value={f.requete} onChange={(e) => changer('requete', e.target.value)} placeholder="un mot, un nom, un lieu…" disabled={!interactif} />
@@ -644,18 +689,8 @@ function FiltresArchives({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; in
       <div className="archives-grille">
         {liste('faction', 'Faction')}
         {liste('provenance', 'Provenance')}
-        <label className="fiche-champ">
-          <span>Urgence</span>
-          <select value={f.urgence} onChange={(e) => changer('urgence', e.target.value)} disabled={!interactif}>
-            <option value="">toutes</option>
-            {URGENCES.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
         {liste('informateur', 'Informateur')}
+        <span />
         <label className="fiche-champ">
           <span>Du</span>
           <input type="date" value={f.du} onChange={(e) => changer('du', e.target.value)} disabled={!interactif} />
@@ -678,25 +713,18 @@ function FiltresArchives({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; in
   )
 }
 
-/** The archives: every note matching the filters (merged ones too), then the removed ones, each given back with « rendre ». */
-function Archives({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interactif: boolean }) {
+/** The archives: every note matching the filters (merged ones too), then the removed ones; each opens in a note on the left. */
+function Archives({ reg, d, interactif }: { reg: CtxRegistre; d: VueOmbre; interactif: boolean }) {
+  const o = reg.o!
   const notes = filtrer(d.notes, o.filtres)
   const retirees = filtrer(d.retirees, o.filtres)
-  const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null)
-  const [envoi, setEnvoi] = useState<string | null>(null)
-  const rendre = async (s: Secret) => {
-    setEnvoi(s.id)
-    const r = await o.agir('rendre', { id: s.id })
-    setEnvoi(null)
-    setMessage({ ok: r.ok, texte: r.message })
-  }
   return (
     <section className="archives-ombre">
       <h3 className="titre-section">{OMBRE.archives.titre}</h3>
       {notes.length ? (
         <ul className="secrets-liste">
           {notes.map((s) => (
-            <NoteCarte key={s.id} s={s} o={o} d={d} interactif={interactif} archives />
+            <LignePli key={s.id} s={s} d={d} reg={reg} interactif={interactif} archives />
           ))}
         </ul>
       ) : (
@@ -707,39 +735,85 @@ function Archives({ o, d, interactif }: { o: EtatSecrets; d: VueOmbre; interacti
           <h3 className="titre-section">{OMBRE.archives.retirees}</h3>
           <ul className="secrets-liste retirees">
             {retirees.map((s) => (
-              <li key={s.id} className="secret-carte etat-retiree">
-                <div className="secret-tete fige">
-                  <span className="secret-titre">{s.titre}</span>
-                  <span className="secret-meta">
-                    de {s.informateur || 'un inconnu'} · <Jour iso={s.depose} /> · retirée{s.retireePar && <> par {s.retireePar}</>}
-                    {s.retireeLe && <>, le <Jour iso={s.retireeLe} /></>}
-                  </span>
-                </div>
-                <Action icone="rendre" onClick={() => rendre(s)} disabled={!interactif || envoi !== null}>
-                  {envoi === s.id ? 'le scribe la rend…' : 'rendre au registre'}
-                </Action>
-              </li>
+              <LignePli key={s.id} s={s} d={d} reg={reg} interactif={interactif} archives />
             ))}
           </ul>
         </>
       )}
-      <Mot m={message} />
     </section>
   )
 }
 
+/* ───────────────────────── The notes (components/Fiche.tsx) ───────────────────────── */
+
+/** The shadow book's notes, laid on the left page like every slip of the grimoire (2026-11-11). */
+export type FicheSecret = { genre: 'lettre-ombre' } | { genre: 'mon-secret'; id: string } | { genre: 'pli'; id: string }
+
+export const GENRES_SECRET: FicheSecret['genre'][] = ['lettre-ombre', 'mon-secret', 'pli']
+
+/** A shadow note's head and body, and the gesture its reader must hold (checked by Fiche.tsx `Signe`). */
+export function contenuSecret(
+  f: FicheSecret,
+  env: { reg: CtxRegistre; changer: (f: FicheSecret) => void; fermer: () => void },
+): { surtitre: string; titre: string; corps: ReactNode; action: 'secret' | 'secretTri' | 'secretArchives' } {
+  const o = env.reg.o
+  const d = o?.donnees
+  if (f.genre === 'lettre-ombre')
+    return {
+      surtitre: OMBRE.surtitre,
+      titre: OMBRE.secrets.titre,
+      action: 'secret',
+      corps: <EtatPage o={o} sansScript>{(v) => <Lettre o={o!} d={v} interactif />}</EtatPage>,
+    }
+  if (f.genre === 'mon-secret') {
+    const s = d?.miens.find((x) => x.id === f.id)
+    return {
+      surtitre: `${OMBRE.surtitre} · ${OMBRE.secrets.miens}`,
+      titre: s?.titre ?? OMBRE.secrets.miens,
+      action: 'secret',
+      corps: s ? (
+        <div className="secret-fiche">
+          <p className="fiche-note secret-meta-fiche">
+            Transmis le <Jour iso={s.depose} /> · <em>{MOT_ETAT[s.etat]}</em>
+          </p>
+          <Champs s={s} />
+          <TexteNote contenu={s.contenu} />
+          <p className="secret-trace">N° {s.id}</p>
+        </div>
+      ) : (
+        <p className="fiche-note">Ce secret n’est plus dans ton registre.</p>
+      ),
+    }
+  }
+  const s = d ? [...d.notes, ...d.retirees].find((x) => x.id === f.id) : undefined
+  return {
+    surtitre: `${OMBRE.surtitre} · ${s?.etat === ETATS.scellee ? 'Pli scellé' : s?.etat === ETATS.retiree ? OMBRE.archives.retirees : 'Note'}`,
+    titre: s?.titre ?? 'Note',
+    action: d?.droits.tri ? 'secretTri' : 'secretArchives',
+    corps: s && o && d ? <CorpsPli key={s.id} s={s} o={o} d={d} changer={env.changer} fermer={env.fermer} /> : <p className="fiche-note">Cette note n’est plus dans le registre de l’ombre.</p>,
+  }
+}
+
 /* ───────────────────────── The pages ───────────────────────── */
 
-export function GaucheSecrets({ page, reg, interactif }: { page: PageSecrets; reg?: CtxRegistre; interactif: boolean; compact?: boolean }) {
+export function GaucheSecrets({ page, reg, interactif, icone }: { page: PageSecrets; reg?: CtxRegistre; interactif: boolean; compact?: boolean; icone?: string }) {
   const o = reg?.o
   return (
     <div className={`secrets-gauche secrets-${page.vue}`}>
       <EtatPage o={o} sansScript={page.vue === 'transmettre'}>
         {(d) =>
           page.vue === 'transmettre' ? (
-            d.droits.secret ? <Lettre o={o!} d={d} interactif={interactif} /> : <p className="registre-ferme">Cette page de l’ombre est réservée à d’autres pattes que les tiennes.</p>
+            d.droits.secret ? (
+              <div className="gestes gestes-lettre">
+                <GesteBouton icone={icone} onClick={() => reg!.ouvrir({ genre: 'lettre-ombre' })} disabled={!interactif}>
+                  {estBrouillon(o!.brouillon) ? OMBRE.secrets.reprendre : OMBRE.secrets.ecrire}
+                </GesteBouton>
+              </div>
+            ) : (
+              <p className="registre-ferme">Cette page de l’ombre est réservée à d’autres pattes que les tiennes.</p>
+            )
           ) : page.vue === 'tri' ? (
-            d.droits.tri ? <PlisScelles o={o!} d={d} interactif={interactif} /> : <p className="registre-ferme">Le tri est réservé à la Voix de la sécurité et aux Patriarches.</p>
+            d.droits.tri ? <FiltresTri o={o!} d={d} interactif={interactif} /> : <p className="registre-ferme">Le tri est réservé à la Voix de la sécurité et aux Patriarches.</p>
           ) : d.droits.archives ? (
             <FiltresArchives o={o!} d={d} interactif={interactif} />
           ) : (
@@ -751,16 +825,18 @@ export function GaucheSecrets({ page, reg, interactif }: { page: PageSecrets; re
   )
 }
 
+const estBrouillon = (b: Brouillon) => Object.values(b).some((v) => v.trim())
+
 export function DroiteSecrets({ page, reg, interactif }: { page: PageSecrets; reg?: CtxRegistre; interactif: boolean }) {
   const o = reg?.o
   // On a phone the left page above already says why the data is missing: nothing twice.
-  if (!o?.donnees?.moi || (!o.donnees.actif && page.vue !== 'transmettre')) return null
+  if (!reg || !o?.donnees?.moi || (!o.donnees.actif && page.vue !== 'transmettre')) return null
   const d = o.donnees
   return (
     <div className={`secrets-droite secrets-${page.vue}`}>
-      {page.vue === 'transmettre' && d.droits.secret && <MesSecrets o={o} d={d} interactif={interactif} />}
-      {page.vue === 'tri' && d.droits.tri && <Notes o={o} d={d} interactif={interactif} />}
-      {page.vue === 'archives' && d.droits.archives && <Archives o={o} d={d} interactif={interactif} />}
+      {page.vue === 'transmettre' && d.droits.secret && <MesSecrets reg={reg} d={d} interactif={interactif} />}
+      {page.vue === 'tri' && d.droits.tri && <Plis reg={reg} d={d} interactif={interactif} />}
+      {page.vue === 'archives' && d.droits.archives && <Archives reg={reg} d={d} interactif={interactif} />}
     </div>
   )
 }

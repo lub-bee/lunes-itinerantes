@@ -14,7 +14,7 @@ import { etatMission } from '@/lib/intendance'
 import { ChampRecherche, MOT_COURT_LIVRAISON } from './MissionsCommun'
 import { livraisonDe, VERBES as VERBES_MISSION } from '@/lib/missions'
 import type { EtatTresor, FicheTresor } from './Tresor'
-import type { EtatSecrets } from './Secrets'
+import type { EtatSecrets, FicheSecret } from './Secrets'
 import { Action, En, Icone, Plume, Septims } from './Ornements'
 
 /*
@@ -45,6 +45,8 @@ export type Fiche =
   | FicheMission
   /** The pay's notes (components/Tresor.tsx). */
   | FicheTresor
+  /** The Livre d'ombre's notes (components/Secrets.tsx): the letter, one of my secrets, an envelope or a note. */
+  | FicheSecret
 
 export type CtxRegistre = {
   r: EtatRegistre

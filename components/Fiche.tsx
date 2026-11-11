@@ -35,6 +35,7 @@ import { auCoffre, idMissive, quand as quandComplet, quantite, type CtxRegistre,
 import { Action, En, Icone, Septims } from './Ornements'
 import { contenuMission } from './Missions'
 import { contenuTresor } from './Tresor'
+import { contenuSecret, type FicheSecret } from './Secrets'
 import type { Action as ActionDroit, Geste } from '@/lib/droits'
 
 type Droit = ActionDroit | Geste
@@ -323,6 +324,12 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
     case 'reglages-paie':
     case 'cloture-semaine': {
       const c = contenuTresor(f, { reg: env.reg, icones: env.icones, fermer: env.fermer })
+      return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
+    }
+    case 'lettre-ombre':
+    case 'mon-secret':
+    case 'pli': {
+      const c = contenuSecret(f, { reg: env.reg, changer: (x: FicheSecret) => env.changer(x), fermer: env.fermer })
       return { surtitre: c.surtitre, titre: c.titre, corps: <Signe env={env} action={c.action}>{c.corps}</Signe> }
     }
     case 'ecrire':

@@ -4364,7 +4364,27 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 .archives-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; }
 .archives-filtres .fiche-champ input, .archives-filtres .fiche-champ select { width: 100%; }
 .archives-filtres .decompte { margin: 4px 0 0; }
-.secrets-liste.retirees .secret-carte { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; opacity: 0.8; }
+.secrets-liste.retirees .secret-carte { opacity: 0.8; }
+
+/* 2026-11-11: the letter, my secrets, the envelopes and the notes open in a note on the left (components/Fiche.tsx). */
+.gestes-lettre { margin-top: 14px; }
+.secret-tete .pli-cire-petite { flex: none; align-self: center; width: 15px; height: 15px; box-shadow: inset 0 0 0 2px rgba(80, 8, 2, 0.35), 0 1px 1px rgba(20, 4, 0, 0.5); }
+.secret-portee { font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.06em; color: var(--encre-douce); }
+.filtres-plis { display: flex; flex-direction: column; gap: 2px; }
+.filtres-plis .lettre-choix { margin-bottom: 4px; }
+.filtres-tri { margin-top: 10px; text-align: center; }
+.filtres-tri .decompte { margin: 6px 0 2px; }
+.secret-fiche { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.secret-fiche > .action { align-self: flex-start; }
+.secret-meta-fiche { margin: 0; }
+.pli-enveloppe { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0; padding: 22px 10px; border: 1px dashed rgba(110, 78, 40, 0.45); border-radius: 3px; background: rgba(255, 250, 232, 0.25); }
+.pli-enveloppe .pli-cire { width: 42px; height: 42px; }
+.pli-ferme .secret-form-pied { justify-content: center; }
+/* Archives: the last tab, apart at the foot of the column (on a phone, at the end of the row, after a gap). */
+.onglet.onglet-archives { margin-top: auto; }
+@media (max-width: 860px) {
+  .onglet.onglet-archives { margin-top: 0; margin-left: 14px; }
+}
 
 /* « Gestion de la contrebande », where goods and resources are listed: the notice to all, the list to who holds it. */
 .avis-contrebande { margin: 6px 0 4px; padding: 4px 8px; text-align: center; font-style: italic; font-size: 14.5px; line-height: 1.35; color: var(--encre-rouge); border-top: 1px dotted currentColor; border-bottom: 1px dotted currentColor; }

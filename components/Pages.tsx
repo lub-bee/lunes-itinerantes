@@ -144,7 +144,7 @@ export function PageGauche({ page, ctx, compact = false }: { page: Page; ctx: Ct
         return (
           <EnTete surtitre={surtitreDe(ctx.livre, page)} titre={page.titre} sousTitre={page.titreEn} icone={ctx.livre.icones[page.icone]} compact={compact}>
             {!compact && <p className="intro lettrine">{page.intro}</p>}
-            <GaucheSecrets page={page} reg={ctx.registre} interactif={ctx.interactif} compact={compact} />
+            <GaucheSecrets page={page} reg={ctx.registre} interactif={ctx.interactif} compact={compact} icone={ctx.livre.icones['envelope']} />
           </EnTete>
         )
       case 'ventes':
