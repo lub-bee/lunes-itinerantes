@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useRef } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState } from 'react'
 import { CLICS_SECRET, DELAI_CLICS, DEVISE_JOUR, DEVISE_OMBRE, MOT_SECRET } from '@/lib/ombre'
 
 /*
@@ -60,6 +60,95 @@ export function Devise({ className }: { className?: string }) {
         </span>
       ))}
     </p>
+  )
+}
+
+/* ───────────────────────── The candle ───────────────────────── */
+
+/** How long the flame takes to go out before the book leaves the shadow (the CSS `eteinte` lasts a little less). */
+const SOUFFLE_MS = 600
+
+/**
+ * « Revenir à la lumière », above the shadow book: an ivory candle in a small brass chamberstick, the label beside
+ * it underlined in red (approved prototype ii, _atelier/caravane/ombre/bougie/protos.html). Hover or keyboard
+ * focus: a breath is coming, the flame leans. Click: it is blown out (ember, smoke wisp), then `onSouffle` runs;
+ * at once under reduced motion. Lit again if the book did not leave the shadow (a sequence was still playing).
+ */
+export function Bougie({ libelle, onSouffle, className }: { libelle: string; onSouffle: () => void | Promise<void>; className?: string }) {
+  const [souffle, setSouffle] = useState(false)
+  const minuteur = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const vivant = useRef(true)
+  useEffect(() => {
+    vivant.current = true
+    return () => {
+      vivant.current = false
+      clearTimeout(minuteur.current)
+    }
+  }, [])
+  // The gradients' ids, unique per candle (they are referenced by url(#…)).
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const g = (n: string) => `${n}-${id}`
+  const souffler = () => {
+    if (souffle) return
+    setSouffle(true)
+    const agir = async () => {
+      await onSouffle()
+      if (vivant.current) setSouffle(false)
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) void agir()
+    else minuteur.current = setTimeout(() => void agir(), SOUFFLE_MS)
+  }
+  return (
+    <button type="button" className={`bougie-btn ${souffle ? 'est-souffle' : ''} ${className ?? ''}`} onClick={souffler} aria-label={libelle} aria-disabled={souffle || undefined} title={libelle}>
+      <svg viewBox="0 0 32 40" aria-hidden focusable="false">
+        <defs>
+          <radialGradient id={g('flamme')} cx="0.5" cy="0.78" r="0.62">
+            <stop offset="0" stopColor="#fff4c4" />
+            <stop offset="0.4" stopColor="#ffc44e" />
+            <stop offset="0.78" stopColor="#f2621c" />
+            <stop offset="1" stopColor="#c8101c" stopOpacity="0.85" />
+          </radialGradient>
+          <radialGradient id={g('halo')}>
+            <stop offset="0" stopColor="#ffbe5c" stopOpacity="0.55" />
+            <stop offset="0.55" stopColor="#ff8a34" stopOpacity="0.16" />
+            <stop offset="1" stopColor="#ff7a2a" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id={g('cire')} x1="0" x2="1">
+            <stop offset="0" stopColor="#b9a07a" />
+            <stop offset="0.35" stopColor="#f3e6c8" />
+            <stop offset="0.7" stopColor="#e6d3ad" />
+            <stop offset="1" stopColor="#a68d66" />
+          </linearGradient>
+          <linearGradient id={g('laiton')} x1="0" x2="1">
+            <stop offset="0" stopColor="#5a3c14" />
+            <stop offset="0.28" stopColor="#c99e48" />
+            <stop offset="0.5" stopColor="#f3d98c" />
+            <stop offset="0.78" stopColor="#b08431" />
+            <stop offset="1" stopColor="#4e3410" />
+          </linearGradient>
+        </defs>
+        <path className="fumee" pathLength={1} d="M15 15.6 C12.6 12.8 17.4 10.6 15 7.6 C12.8 4.8 17.6 2.4 15.4 -1.4 C13.6 -4.4 17 -6.8 16 -10" />
+        <g className="flamme" style={{ transformOrigin: '15px 15.8px' }}>
+          <ellipse className="halo" cx="15" cy="10.5" rx="10" ry="11" fill={`url(#${g('halo')})`} />
+          <path className="f-ext" d="M15 4 C18.5 8.6 19.1 12.3 15 15.9 C10.9 12.3 11.5 8.6 15 4Z" fill={`url(#${g('flamme')})`} />
+          <path className="f-int" d="M15 9 C16.6 11 16.7 13.1 15 14.9 C13.3 13.1 13.4 11 15 9Z" fill="#fff6d6" />
+        </g>
+        <path d="M15 15.6 L15 17.8" stroke="#24120c" strokeWidth="1" strokeLinecap="round" />
+        <circle className="braise" cx="15" cy="15.9" r="0.9" />
+        <rect x="12" y="17.4" width="6" height="13" rx="0.6" fill={`url(#${g('cire')})`} />
+        <ellipse cx="15" cy="17.55" rx="3" ry="0.8" fill="#faf0d8" />
+        <path d="M12.3 17.8 Q11.8 20.4 12.3 21.6 Q12.8 22 12.9 21 Q12.9 19.2 12.3 17.8Z" fill="#faf0d8" opacity="0.9" />
+        {/* Brass chamberstick: ring handle, dish (its reflection of the flame), socket. */}
+        <path d="M27.4 33.2 C31.6 33.2 31.6 27.4 27.6 27.6 C25.8 27.7 25.4 29.4 26.2 30.4" fill="none" stroke={`url(#${g('laiton')})`} strokeWidth="1.6" strokeLinecap="round" />
+        <ellipse cx="15" cy="34.6" rx="13.4" ry="3.6" fill="#3a260c" />
+        <ellipse cx="15" cy="33.8" rx="13.4" ry="3.3" fill={`url(#${g('laiton')})`} />
+        <ellipse cx="15" cy="33.3" rx="10.6" ry="2.2" fill="#8a6626" opacity="0.65" />
+        <ellipse className="reflet" cx="15" cy="33.2" rx="6" ry="1.4" fill="#ffd27a" opacity="0.7" />
+        <path d="M10.6 29.6 H19.4 L18.8 33 H11.2Z" fill={`url(#${g('laiton')})`} />
+        <ellipse cx="15" cy="29.7" rx="4.4" ry="0.9" fill="#f3d98c" />
+      </svg>
+      <span className="etiquette">{libelle}</span>
+    </button>
   )
 }
 

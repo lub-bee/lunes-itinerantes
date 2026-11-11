@@ -3513,15 +3513,62 @@ strong.a-verser { font-weight: 400; }
   }
 }
 
-/* « Quitter les ombres »: the book's action link, in the shadow red; at the foot of « Caravane de l'Ombre »
-   and above the book, where the day book's ribbons were (they are hidden in the shadow). */
-.scene.ombre .lien-encre.action.quitter-ombres { color: #e3192a; border-bottom-color: rgba(227, 25, 42, 0.7); }
-.scene.ombre .lien-encre.action.quitter-ombres .action-icone { color: #e3192a; opacity: 1; }
-.section-ombre .quitter-ombres { align-self: center; margin-top: 10px; }
-.sortie-ombres { position: absolute; z-index: 31; top: -44px; left: 7%; }
-.sortie-ombres .quitter-ombres { padding: 4px 8px; border-radius: 3px; background: rgba(20, 6, 4, 0.75); color: #f3dcb2 !important; }
+/* « Revenir à la lumière »: a candle in a brass chamberstick, above the book where the day book's ribbons were (they
+   are hidden in the shadow); centred above the book on narrow screens. Ported from the approved prototype ii
+   (_atelier/caravane/ombre/bougie/protos.html); the blow-out is shortened to end before the book leaves the shadow. */
+.sortie-ombres { position: absolute; z-index: 31; top: -44px; left: 7%; height: 44px; display: flex; align-items: flex-end; }
 @media (max-width: 860px) {
-  .sortie-ombres { position: relative; top: auto; left: auto; display: flex; justify-content: center; margin: 0 0 8px; }
+  .sortie-ombres { position: relative; top: auto; left: auto; height: auto; justify-content: center; margin: 0 0 8px; }
+}
+.bougie-btn { appearance: none; border: 0; margin: 0; padding: 0; background: none; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-capitales); font-size: 14.5px; color: #ecd2a2; -webkit-tap-highlight-color: transparent; }
+.bougie-btn:focus-visible { outline: 1px dashed rgba(243, 220, 178, 0.7); outline-offset: 3px; }
+.bougie-btn[aria-disabled='true'] { cursor: default; }
+.bougie-btn svg { width: 30px; height: 38px; overflow: visible; flex: none; display: block; }
+.bougie-btn .etiquette { padding: 0 1px 1px; border-bottom: 1px solid rgba(200, 16, 28, 0.75); text-shadow: 0 1px 2px #000; transition: color 0.25s ease; }
+.bougie-btn:hover .etiquette, .bougie-btn:focus-visible .etiquette { color: #fff0cc; }
+.bougie-btn .flamme { transform-box: view-box; animation: bougie-vacille 2.8s ease-in-out infinite; }
+.bougie-btn .f-int { animation: bougie-coeur 1.3s ease-in-out infinite; }
+.bougie-btn .halo, .bougie-btn .reflet { animation: bougie-lueur 2.1s ease-in-out infinite; }
+@keyframes bougie-vacille {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); }
+  18% { transform: scale(0.97, 1.05) skewX(2deg); }
+  37% { transform: scale(1.02, 0.96) skewX(-1.5deg); }
+  58% { transform: scale(0.98, 1.03) skewX(1deg); }
+  79% { transform: scale(1.01, 0.98) skewX(-2deg); }
+}
+@keyframes bougie-coeur { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.7; } }
+@keyframes bougie-lueur { 0%, 100% { opacity: 0.85; } 40% { opacity: 0.6; } 70% { opacity: 1; } }
+/* Hover / keyboard focus: a breath is coming, the flame leans and wavers. */
+.bougie-btn:hover .flamme, .bougie-btn:focus-visible .flamme { animation: bougie-approche 0.55s ease-in-out infinite; }
+@keyframes bougie-approche {
+  0%, 100% { transform: skewX(-9deg) scale(0.97, 1); }
+  35% { transform: skewX(-19deg) scale(0.92, 0.9) translateX(0.5px); }
+  65% { transform: skewX(-6deg) scale(0.99, 1.02); }
+}
+/* Click: blown out (bends, shrinks, goes out), the wick's ember glows then dies, a thin smoke wisp rises and drifts. */
+.bougie-btn .braise { fill: #ff8a2e; opacity: 0; }
+.bougie-btn .fumee { fill: none; stroke: rgba(214, 204, 190, 0.8); stroke-width: 0.8; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transform-box: fill-box; }
+.bougie-btn.est-souffle .flamme, .bougie-btn.est-souffle:hover .flamme, .bougie-btn.est-souffle:focus-visible .flamme { animation: bougie-eteinte 0.56s cubic-bezier(0.35, 0.1, 0.6, 1) forwards; }
+.bougie-btn.est-souffle .halo, .bougie-btn.est-souffle .reflet { animation: none; opacity: 0; transition: opacity 0.4s ease; }
+.bougie-btn.est-souffle .braise { animation: bougie-braise 1.5s ease-out 0.22s forwards; }
+.bougie-btn.est-souffle .fumee { animation: bougie-fumee 2.1s cubic-bezier(0.3, 0.2, 0.4, 1) 0.3s forwards; }
+@keyframes bougie-eteinte {
+  0% { transform: skewX(-8deg) scale(1, 1); opacity: 1; }
+  22% { transform: skewX(-38deg) scale(0.92, 0.78) translateX(0.6px); opacity: 1; }
+  50% { transform: skewX(-55deg) scale(0.55, 0.4) translateX(1px); opacity: 0.85; }
+  78% { transform: skewX(-30deg) scale(0.22, 0.14); opacity: 0.5; }
+  100% { transform: skewX(-10deg) scale(0.05, 0.02); opacity: 0; }
+}
+@keyframes bougie-braise { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes bougie-fumee {
+  0% { stroke-dashoffset: 1; opacity: 0.9; transform: translate(0, 0); }
+  45% { stroke-dashoffset: 0; opacity: 0.7; }
+  100% { stroke-dashoffset: -0.75; opacity: 0; transform: translate(1.5px, -5px); }
+}
+/* Reduced motion: a still flame; blowing it out puts it out at once (and the book leaves the shadow at once). */
+@media (prefers-reduced-motion: reduce) {
+  .bougie-btn .flamme, .bougie-btn .f-int, .bougie-btn .halo, .bougie-btn .reflet, .bougie-btn .braise, .bougie-btn .fumee, .bougie-btn .etiquette { animation: none !important; transition: none !important; }
+  .bougie-btn.est-souffle .flamme { opacity: 0; }
 }
 
 /* ═══════════════════════════ The book of Missions (prototype, components/Missions.tsx) ═══════════════════════════ */

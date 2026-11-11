@@ -12,7 +12,7 @@ import { artisanDe, metierDe } from '@/lib/metiers'
 import CHAPITRES from '@/content/chapitres.json'
 import { avecAnglais, cle, dicoAnglais, type Recette } from '@/lib/missives'
 import { PageDroite, PageGauche, PageUnique, type Ctx } from './Pages'
-import { Action, CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
+import { CoinLaiton, Embleme, Icone, IconesLivre, Plume } from './Ornements'
 import { animerFeuillet, animerPortee, Feuillet } from './Feuillet'
 import { CleRefermer, Verrou } from './Fer'
 import { COPIE_VISIBLE, ICONE_COPIE } from '@/lib/copie'
@@ -24,7 +24,7 @@ import { idDemande, titreDemande, useMissions } from './Missions'
 import { useTresor } from './Tresor'
 import { useSecrets } from './Secrets'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
-import { Annule, blocsTexte, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
+import { Annule, blocsTexte, Bougie, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
 import { PAGE_DEVISE, PARTIE_OMBRE, pagesOmbre, TEXTES as OMBRE_TEXTES } from '@/lib/ombre'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
@@ -1155,12 +1155,10 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       </header>
 
       <main className={`livre-zone ${etroit === null ? 'en-attente' : ''}`}>
-        {/* Out of the shadow book, from any of its pages: where the day book's ribbons were. */}
+        {/* Out of the shadow book, from any of its pages, where the day book's ribbons were: the candle to blow out. */}
         {ombre === 'ombre' && (
           <div className="sortie-ombres">
-            <Action icone="lumiere" className="quitter-ombres" onClick={fermerOmbre}>
-              {OMBRE_TEXTES.sortir.toLowerCase()}
-            </Action>
+            <Bougie libelle={OMBRE_TEXTES.sortir} className="quitter-ombres" onSouffle={fermerOmbre} />
           </div>
         )}
         <nav className="rubans" aria-label="Livres du grimoire">
