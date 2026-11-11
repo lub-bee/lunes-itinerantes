@@ -770,8 +770,8 @@ sign before the fifth). Three beats, ~6–7 s (`components/Ombre.tsx`, run by `G
    page writes itself in: « Les Ombres des Lunes Itinérantes », « Celui qui voit dans l'ombre est puissant à la
    lumière. », and the « Ombre » section opposite.
 
-The shadow book opens on one spread (2026-11-09): left, « Les Ombres des Lunes Itinérantes » (« The Shadows of the Wandering
-Moons »), the maxim, the inverted emblem, the motto read backwards, the shadow members' presentation as Elijah gave it (drop
+The shadow book opens on one spread (2026-11-09): left, « Les Ombres des Lunes Itinérantes » (no English subtitle), the
+maxim, the inverted emblem, the motto read backwards, the shadow members' presentation as Elijah gave it (drop
 cap, signed « Elijah, Voix de la sécurité ») and a « Transmettre un secret » button; right, the « Ombre » teachings and « Les
 pages de l'ombre », the shadow book's own table (texts in `lib/ombre.ts`, easy to replace); then (v2, 2026-11-09, `lib/secrets.ts`, `components/Secrets.tsx`, `app/api/ombre`, script v3u):
 « Transmettre un secret » (a button lays the letter on the left page as a note, after the Table's « création d'affaire »
@@ -794,7 +794,7 @@ sécurité: send, read one's own), `secretTri` and `secretArchives` (Patriarches
 Voix de la sécurité, Voix du commerce), `ombreLivre` (replaces `livre`, formerly open to all), `ombreMarchandise`, `ombreRecette`
 (Patriarches, « . », Voix de la sécurité). The rank « . » is the Discord role of that name (ID 1565167239097749725, `RANG_OMBRE`):
 read from the Rôles tab like any rank, and added by the grimoire while that tab does not name it; it is never written in the
-Membres « Rôle » cell. The route (`/api/ombre`, `/api/registre`) checks every write, the script checks it again. Touching the inverted emblem closes it (the
+Membres « Rôle » cell. The route (`/api/ombre`, `/api/registre`) checks every write, the script checks it again. « Revenir à la lumière » above the book (was « Quitter les ombres ») or touching the inverted emblem closes it (the
 reverse). Never in the address, never kept across a reload. Reduced motion: one ~0.75 s fade.
 
 Which book shows a row: an optional **`Livre`** column (« Régulier » or empty / « Ombre ») in the

@@ -29,8 +29,8 @@ export const TEXTES = {
   titre: 'Les Ombres des Lunes Itinérantes',
   titreEn: 'The Shadows of the Wandering Moons',
   maxime: 'Celui qui voit dans l’ombre est puissant à la lumière.',
-  /** The way out of the shadow book (a link at the foot of its first page and above the book; the inverted emblem too). */
-  sortir: 'Quitter les ombres',
+  /** The way out of the shadow book (the button above the book; the inverted emblem's tooltip too). Was « Quitter les ombres ». */
+  sortir: 'Revenir à la lumière',
   /**
    * The opening page's text (left page, under the motto, with the drop cap): the shadow members' presentation, as Elijah
    * gave it (v2, 2026-11-08; its French lightly mended on 2026-11-09), signed by him.

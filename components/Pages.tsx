@@ -782,7 +782,8 @@ const pageTransmettre = (ctx: Ctx) => ctx.livre.pages.findIndex((p) => p.type ==
 /**
  * The shadow book's opening page (left): « Les Ombres des Lunes Itinérantes », the maxim, the inverted emblem (touch it to
  * close the book), the motto read backwards, then the shadow members' presentation as Elijah gave it (with the drop cap),
- * signed by him, and the way to the letter (2026-11-09: the presentation was a second title page opposite this one).
+ * signed by him, and the way to the letter (2026-11-09: the presentation was a second title page opposite this one; 2026-11-11:
+ * no English subtitle, no way out at its foot: « Revenir à la lumière » above the book and the emblem remain).
  */
 function SectionOmbre({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
   const o = useOmbre()
@@ -795,7 +796,6 @@ function SectionOmbre({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
         <div className="titre-ligne">
           <h2 className="titre-page">{OMBRE.titre}</h2>
         </div>
-        <div className="sous-titre">{OMBRE.titreEn}</div>
         <p className="maxime">{OMBRE.maxime}</p>
       </header>
       <button type="button" className="medaillon-ombre" onClick={o.fermer} title={OMBRE.sortir} aria-label={OMBRE.sortir}>
@@ -814,9 +814,6 @@ function SectionOmbre({ ctx, compact }: { ctx: Ctx; compact: boolean }) {
           </Geste>
         </div>
       )}
-      <Action icone="lumiere" className="quitter-ombres" onClick={o.fermer}>
-        {OMBRE.sortir.toLowerCase()}
-      </Action>
     </div>
   )
 }

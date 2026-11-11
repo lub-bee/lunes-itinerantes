@@ -4224,7 +4224,6 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 /* The opening page (left): the shadow members' presentation (Elijah's words) under the motto, the way to the letter; opposite,
    the teachings and the table of the shadow's pages. `.toujours` stays scoped: Missions.tsx has its own « toujours ». */
 .section-ombre .titre-page { font-size: 46px; line-height: 1.05; }
-.section-ombre .en-tete > .sous-titre { margin: 2px 0 6px; }
 .presentation-ombre { margin-top: 6px; }
 .presentation-ombre .intro { text-align: justify; }
 .presentation-ombre .toujours { margin: 2px 0 6px; text-align: center; font-family: var(--f-capitales); font-size: 15px; letter-spacing: 0.08em; color: var(--encre-rouge); }
