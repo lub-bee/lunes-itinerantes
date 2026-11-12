@@ -4,9 +4,9 @@
  * A third file of the sheet's Apps Script project, beside grimoire.gs (v3s, then v3u) and the Table's conseil.gs. It defines no
  * doGet / doPost / onEdit: no web request ever reaches it (grimoire.gs routes every request to the grimoire or to
  * conseil.gs). Adding it, or removing it, needs NO new deployment and changes no answer of the grimoire.
- * Apps Script files share ONE global scope: the only globals of this file are the namespaces `ImportNoms` and
- * `ImportSecrets` and the four editor functions below (none starts with « conseil » or « grimoire »); everything else is
- * local to a namespace.
+ * Apps Script files share ONE global scope: the only globals of this file are the namespaces `ImportNoms`,
+ * `ImportSecrets` and `ImportNettoyage` and the six editor functions below (none starts with « conseil » or
+ * « grimoire »); everything else is local to a namespace.
  *
  *  The renaming of 2026-11-06 — the items' names brought to the official French names of the game, ONCE. The plan
  *  (RENOMMAGE below, from _atelier/caravane/noms/plan-renommage.json: renames, English fixes, rows deleted and added)
@@ -43,6 +43,23 @@
  *      is written then. Else Catalogues copied first to a hidden tab « Sauvegarde Catalogues <date> »; the notes appended
  *      to Secrets (created hidden when missing; columns by header name); the rows deleted (bottom up); one journal line
  *      per note (geste « import »); SECRETS_ELIJAH_FAIT = the date (JST); then `Grimoire.onEdit` (cache, VERSION).
+ *
+ *  The test data of the shared sheet, removed ONCE before the production release (plan validated by Ludo:
+ *  _atelier/caravane/prod/nettoyage-test.md, sections A and the three demandes of B ruled TEST). The numbers are listed in
+ *  ImportNettoyage below; each row is found by its « N° … » column (by header name, never by row number): the missive
+ *  M-261106-6D0I (all its rows), five demandes, their missions, the hand-overs (by demande, missive or number), their
+ *  Points (by mission or gift number), their Mouvements (by missive or action number), the test event and its entries,
+ *  the test secret and its lines of « Journal de l'ombre ». D-261110-1A0H, D-261110-5R73, I-261110-*, I-261111-*,
+ *  M-261026-040X, the October Mouvements and Commandes are KEPT: a row about to be removed that names one of them stops
+ *  the real run. A missing tab is passed (said in the log).
+ *    - `importNettoyageSimuler`: deletes nothing; logs each tab's count (beside the export's of 2026-11-12) and every row
+ *      to remove, and writes one line per tab to the hidden tab « Journal des imports » (Horodatage | Script | Onglet | N°
+ *      | Détail; Script « nettoyage (simulation) »), created when missing.
+ *    - `importNettoyage`: under the script lock, refused when the script property NETTOYAGE_TEST_FAIT is set (a second
+ *      run), when a needed column is missing, or when a row to remove names a kept number: nothing is written then. Else
+ *      each touched tab copied first to a hidden « Sauvegarde <tab> <yyyy-MM-dd> » (« (2) »… when taken); the rows deleted
+ *      bottom up; one « nettoyage » line per tab in « Journal des imports »; NETTOYAGE_TEST_FAIT = the date (JST); then
+ *      `Grimoire.onEdit` (cache, VERSION).
  */
 
 /** Run it first: what the renaming of 2026-11-06 would change, logged (nothing is written). */
@@ -53,6 +70,10 @@ function importRenommer() { ImportNoms.renommer(); }
 function importSecretsSimuler() { ImportSecrets.simuler(); }
 /** Elijah's informations turned into notes of Secrets, once (Catalogues backed up first; a second run is refused). */
 function importSecrets() { ImportSecrets.importer(); }
+/** Run it first: the test rows that would be removed, tab by tab (only « Journal des imports » is written). */
+function importNettoyageSimuler() { ImportNettoyage.simuler(); }
+/** The test data removed, once (each touched tab backed up first; a second run is refused). */
+function importNettoyage() { ImportNettoyage.nettoyer(); }
 
 var ImportNoms = (function () {
 
@@ -1207,5 +1228,413 @@ function importer() {
 return {
   simuler: simuler,
   importer: importer,
+};
+})();
+
+var ImportNettoyage = (function () {
+
+/* ───────────────────────── The plan (_atelier/caravane/prod/nettoyage-test.md, validated by Ludo 2026-11-12) ───────────────────────── */
+
+/**
+ * The test data removed before the production release: sections A and the three demandes of B ruled TEST. Everything is
+ * matched by its number (the « N° … » columns, by header name), never by row number. D-261110-1A0H, D-261110-5R73 and all
+ * that hangs on them, the missive M-261026-040X, the October Mouvements and Commandes are KEPT (section B's last line, C).
+ */
+var MISSIVES = ['M-261106-6D0I'];
+var DEMANDES = ['D-261106-650N', 'D-261105-3Y5L', 'D-261028-6F0N', 'D-261030-1763', 'D-261110-6E0Y'];
+/** The 2026-11-06 trials (A.4) and the gift on the test missive (A.1), not tied to a demande. */
+var INTENDANCE = ['I-261106-6F1R', 'I-261106-1U44-1', 'I-261106-4L5K-1', 'I-261106-082L', 'I-261106-0H2A-2'];
+/** The test missive's delivery and its 21 shares (A.1). */
+var ACTIONS = ['A-261106-1J1V'];
+var EVENEMENTS = ['E-261105-456R'];
+var SECRETS = ['S-261111-3Z21'];
+
+/**
+ * What must never be removed: a row about to be removed whose any cell names one of these is a planning error, and the
+ * real run is refused (nothing written).
+ */
+var PROTEGES = /D-261110-1A0H|D-261110-5R73|I-26111[01]-|M-261026-040X|M-261021-3D1D/i;
+
+/** The rows the export of 2026-11-12 holds for the plan (shown beside each tab's count; a difference is said, not blocking). */
+var ATTENDUS = {
+  'Missives': 1, 'Demandes': 5, 'Missions': 22, 'Intendance': 18, 'Points': 12, 'Mouvements': 40,
+  'Événements': 1, 'Écritures événements': 7, 'Secrets': 1, "Journal de l'ombre": 2,
+};
+
+/** The tabs, in the order they are analysed (a later tab's rule may use the numbers an earlier one removes). Headers: grimoire.gs v3u's. */
+var ONGLETS = [
+  { nom: 'Missives', colonnes: [['N° missive', 'numero']] },
+  { nom: 'Demandes', colonnes: [['N° demande', 'numero']] },
+  { nom: 'Missions', colonnes: [['N° mission', 'numero'], ['N° demande', 'demande']] },
+  { nom: 'Intendance', colonnes: [['N°', 'id'], ['N° mission', 'mission'], ['N° demande', 'demande'], ['N° missive', 'missive']] },
+  { nom: 'Points', colonnes: [['N° mission', 'mission']] },
+  { nom: 'Mouvements', colonnes: [['N° action', 'action'], ['N° missive', 'missive']] },
+  { nom: 'Événements', colonnes: [['N° événement', 'id']] },
+  { nom: 'Écritures événements', colonnes: [['N° écriture', 'id'], ['N° événement', 'evenement']] },
+  { nom: 'Secrets', colonnes: [['N°', 'id']] },
+  { nom: "Journal de l'ombre", colonnes: [['N°', 'id']] },
+];
+
+/** The hidden tab every import of this file may log to (one line per tab). */
+var JOURNAL = {
+  nom: 'Journal des imports',
+  colonnes: [['Horodatage', 'horodatage'], ['Script', 'script'], ['Onglet', 'onglet'], ['N°', 'id'], ['Détail', 'detail']],
+};
+
+/** The script property set by the real run (its date): a second run is refused. */
+var NETTOYAGE_TEST_FAIT = 'NETTOYAGE_TEST_FAIT';
+
+/* ───────────────────────── Helpers ───────────────────────── */
+
+/** Comparable header (grimoire.gs's): lower case, no accents, letters and digits only. */
+function cleEntete(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/œ/g, 'oe').replace(/æ/g, 'ae').replace(/[^a-z0-9]+/g, '');
+}
+
+/** 0-based column of each field in a header row (-1 when absent). */
+function indexColonnes(entete, def) {
+  var noms = entete.map(cleEntete);
+  var index = {};
+  def.colonnes.forEach(function (col) {
+    var i = noms.indexOf(cleEntete(col[0]));
+    (col[2] || []).forEach(function (ancien) { if (i < 0) i = noms.indexOf(cleEntete(ancien)); });
+    index[col[1]] = i;
+  });
+  return index;
+}
+
+/** A cell as text (a date as JST), ends trimmed. */
+function texteCellule(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm');
+  return String(v === null || v === undefined ? '' : v).replace(/\r\n?/g, '\n').trim();
+}
+
+/** A number as compared: trimmed, upper case. */
+function cle(v) { return texteCellule(v).toUpperCase(); }
+
+/** A set of numbers. */
+function ensemble(liste) {
+  var s = {};
+  liste.forEach(function (x) { s[cle(x)] = true; });
+  return s;
+}
+
+/** A row in short, for the log: its non-empty cells (dates as JST), at most 220 characters. */
+function decrireLigne(entete, ligne) {
+  var parts = [];
+  ligne.forEach(function (v, j) {
+    var t = texteCellule(v).replace(/\n/g, ' ');
+    if (t) parts.push((texteCellule(entete[j]) || ('col ' + (j + 1))) + '=' + (t.length > 40 ? t.slice(0, 40) + '…' : t));
+  });
+  var s = parts.join(' · ');
+  return s.length > 220 ? s.slice(0, 220) + '…' : s;
+}
+
+/* ───────────────────────── The analysis (reads only) ───────────────────────── */
+
+/**
+ * The plan against the sheet as it is now; writes nothing. `onglets`: per tab { nom, present, lignes: [{ ligne (1-based),
+ * id, texte }] }; `bloquants`: why the real run would refuse (a needed column missing, a protected number about to go);
+ * `remarques`: the rest (a missing tab, a number of the plan not found, a count other than the export's).
+ */
+function analyser() {
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  var res = { onglets: [], bloquants: [], remarques: [] };
+  var missives = ensemble(MISSIVES);
+  var demandes = ensemble(DEMANDES);
+  var intendance = ensemble(INTENDANCE);
+  var actions = ensemble(ACTIONS);
+  var evenements = ensemble(EVENEMENTS);
+  var secrets = ensemble(SECRETS);
+  var missions = {};
+  var trouves = {};
+  // Each tab's rule: the row's numbers (by field) → removed or not. Removed numbers feed the later tabs.
+  var REGLES = {
+    'Missives': function (x) { return missives[x.numero]; },
+    'Demandes': function (x) { return demandes[x.numero]; },
+    'Missions': function (x) {
+      if (!demandes[x.demande]) return false;
+      if (x.numero) missions[x.numero] = true;
+      return true;
+    },
+    'Intendance': function (x) {
+      if (!(intendance[x.id] || demandes[x.demande] || missives[x.missive] || missions[x.mission])) return false;
+      if (x.id) intendance[x.id] = true;
+      return true;
+    },
+    'Points': function (x) {
+      return missions[x.mission] || intendance[x.mission] || DEMANDES.some(function (d) { return x.mission.indexOf(d + '-') === 0; });
+    },
+    'Mouvements': function (x) { return missives[x.missive] || intendance[x.action] || actions[x.action]; },
+    'Événements': function (x) { return evenements[x.id]; },
+    'Écritures événements': function (x) { return evenements[x.evenement]; },
+    'Secrets': function (x) { return secrets[x.id]; },
+    "Journal de l'ombre": function (x) { return secrets[x.id]; },
+  };
+  ONGLETS.forEach(function (def) {
+    var r = { nom: def.nom, present: false, lignes: [] };
+    res.onglets.push(r);
+    var feuille = classeur.getSheetByName(def.nom);
+    if (!feuille) { res.remarques.push('« ' + def.nom + ' » : onglet introuvable, passé'); return; }
+    r.present = true;
+    if (feuille.getLastRow() < 2) return;
+    var tout = feuille.getDataRange().getValues();
+    var idx = indexColonnes(tout[0], def);
+    var absentes = def.colonnes.filter(function (c) { return idx[c[1]] < 0; });
+    if (absentes.length) {
+      res.bloquants.push('« ' + def.nom + ' » : colonne(s) ' + absentes.map(function (c) { return '« ' + c[0] + ' »'; }).join(', ') + ' introuvable(s) en ligne 1');
+      return;
+    }
+    for (var i = 1; i < tout.length; i++) {
+      var x = {};
+      def.colonnes.forEach(function (c) { x[c[1]] = cle(tout[i][idx[c[1]]]); });
+      if (!REGLES[def.nom](x)) continue;
+      Object.keys(x).forEach(function (k) { if (x[k]) trouves[x[k]] = true; });
+      var texte = decrireLigne(tout[0], tout[i]);
+      var id = x[def.colonnes[0][1]];
+      r.lignes.push({ ligne: i + 1, id: id, texte: texte });
+      // The assertion: nothing kept may go.
+      var protege = tout[i].map(texteCellule).filter(function (t) { return PROTEGES.test(t); });
+      if (protege.length) res.bloquants.push('« ' + def.nom + ' » ligne ' + (i + 1) + ' porte un numéro gardé (' + protege.join(' ; ').slice(0, 120) + ') : ' + texte);
+    }
+    var attendu = ATTENDUS[def.nom];
+    if (attendu !== undefined && r.lignes.length !== attendu) res.remarques.push('« ' + def.nom + ' » : ' + r.lignes.length + ' ligne(s) au lieu des ' + attendu + ' de l\'export du 12/11 (vérifier la liste ci-dessus)');
+  });
+  // A number of the plan that no row carried (already removed by hand?): said.
+  [].concat(MISSIVES, DEMANDES, INTENDANCE, ACTIONS, EVENEMENTS, SECRETS).forEach(function (n) {
+    if (!trouves[cle(n)]) res.remarques.push(n + ' : introuvable dans le registre (déjà retiré ?)');
+  });
+  // The pay's invoices may cite the test event: never removed here, said.
+  var factures = classeur.getSheetByName('Factures');
+  if (factures && factures.getLastRow() >= 2) {
+    var f = factures.getDataRange().getValues();
+    var fe = f[0].map(cleEntete).indexOf(cleEntete('N° événement'));
+    for (var k = 1; fe >= 0 && k < f.length; k++) {
+      if (evenements[cle(f[k][fe])]) res.remarques.push('« Factures » ligne ' + (k + 1) + ' cite ' + texteCellule(f[k][fe]) + ' : laissée (hors du plan)');
+    }
+  }
+  return res;
+}
+
+/** The analysis as French lines for the editor's log (every row to remove, bottom up). */
+function journalAnalyse(a, titre) {
+  var lignes = [titre];
+  a.bloquants.forEach(function (b) { lignes.push('   !! ' + b); });
+  var total = 0;
+  a.onglets.forEach(function (r) {
+    if (!r.present) { lignes.push('— ' + r.nom + ' : onglet introuvable, passé'); return; }
+    var attendu = ATTENDUS[r.nom];
+    lignes.push('— ' + r.nom + ' : ' + r.lignes.length + ' ligne(s) à supprimer' + (attendu !== undefined ? ' (export du 12/11 : ' + attendu + ')' : ''));
+    r.lignes.slice().sort(function (p, q) { return q.ligne - p.ligne; }).forEach(function (l) { lignes.push('   ligne ' + l.ligne + ' : ' + l.texte); });
+    total += r.lignes.length;
+  });
+  a.remarques.forEach(function (r) { lignes.push('   note : ' + r); });
+  lignes.push('Total : ' + total + ' ligne(s) à supprimer dans ' + a.onglets.filter(function (r) { return r.lignes.length; }).length + ' onglet(s)' + (a.bloquants.length ? ' ; ' + a.bloquants.length + ' blocage(s).' : '.'));
+  return lignes;
+}
+
+/** Logs the lines in pieces (one entry of the execution log holds a few thousand characters at most). */
+function journaliser(lignes) {
+  var bloc = [];
+  var taille = 0;
+  lignes.forEach(function (l) {
+    if (taille + l.length > 6000 && bloc.length) { Logger.log(bloc.join('\n')); bloc = []; taille = 0; }
+    bloc.push(l);
+    taille += l.length + 1;
+  });
+  if (bloc.length) Logger.log(bloc.join('\n'));
+}
+
+/* ───────────────────────── Writing ───────────────────────── */
+
+/**
+ * The hidden « Journal des imports » ready to append to: created hidden with its header row when missing (or when row 1 is
+ * empty); missing headers added at the end of row 1. A row 1 holding none of its headers: null (nothing written).
+ */
+function preparerJournal() {
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  var feuille = classeur.getSheetByName(JOURNAL.nom);
+  var entetes = JOURNAL.colonnes.map(function (col) { return col[0]; });
+  if (!feuille) {
+    feuille = classeur.insertSheet(JOURNAL.nom);
+    feuille.hideSheet();
+  }
+  var largeur = Math.max(feuille.getLastColumn(), 1);
+  var premiere = feuille.getLastRow() === 0 ? [] : feuille.getRange(1, 1, 1, largeur).getValues()[0];
+  var vide = !premiere.some(function (v) { return String(v).trim() !== ''; });
+  if (vide) {
+    feuille.getRange(1, 1, 1, entetes.length).setValues([entetes]).setFontWeight('bold');
+    feuille.setFrozenRows(1);
+    premiere = entetes.slice();
+  } else {
+    var index = indexColonnes(premiere, JOURNAL);
+    var absentes = JOURNAL.colonnes.filter(function (col) { return index[col[1]] < 0; });
+    if (absentes.length === JOURNAL.colonnes.length) return null;
+    if (absentes.length) {
+      var fin = premiere.length;
+      while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
+      var ajout = absentes.map(function (col) { return col[0]; });
+      feuille.getRange(1, fin + 1, 1, ajout.length).setValues([ajout]).setFontWeight('bold');
+      premiere = premiere.slice(0, fin).concat(ajout);
+    }
+  }
+  var idx = indexColonnes(premiere, JOURNAL);
+  var cols = {};
+  var large = 0;
+  Object.keys(idx).forEach(function (k) { cols[k] = idx[k] + 1; large = Math.max(large, cols[k]); });
+  return { feuille: feuille, cols: cols, largeur: large };
+}
+
+/** The journal written, one row per object, each field under its header (a failure there is logged, nothing else stops). */
+function ecrireJournal(objets) {
+  try {
+    var p = preparerJournal();
+    if (!p) { Logger.log('« ' + JOURNAL.nom + ' » : la ligne 1 ne porte aucun des en-têtes attendus, journal non écrit.'); return; }
+    if (!objets.length) return;
+    var lignes = objets.map(function (o) {
+      var l = [];
+      for (var i = 0; i < p.largeur; i++) l.push('');
+      Object.keys(o).forEach(function (k) { if (p.cols[k]) l[p.cols[k] - 1] = o[k]; });
+      return l;
+    });
+    p.feuille.getRange(p.feuille.getLastRow() + 1, 1, lignes.length, p.largeur).setValues(lignes);
+  } catch (err) {
+    Logger.log('« ' + JOURNAL.nom + ' » n\'a pas pu être écrit (' + err + ').');
+  }
+}
+
+/** The journal's lines: one per tab (its numbers, distinct, and its row numbers), then the blocks and the total. */
+function lignesJournal(a, script, quand, sauvegardes) {
+  var res = [];
+  a.onglets.forEach(function (r) {
+    if (!r.present) { res.push({ horodatage: quand, script: script, onglet: r.nom, id: '', detail: 'onglet introuvable, passé' }); return; }
+    var ids = [];
+    r.lignes.forEach(function (l) { if (l.id && ids.indexOf(l.id) < 0) ids.push(l.id); });
+    var nums = r.lignes.map(function (l) { return l.ligne; }).sort(function (p, q) { return q - p; });
+    var d = r.lignes.length + ' ligne(s) ' + (script.indexOf('simulation') >= 0 ? 'à supprimer' : 'supprimée(s)') +
+      (nums.length ? ' (lignes ' + nums.join(', ') + ')' : '') +
+      (ATTENDUS[r.nom] !== undefined ? ' · export du 12/11 : ' + ATTENDUS[r.nom] : '') +
+      (sauvegardes && sauvegardes[r.nom] ? ' · sauvegarde « ' + sauvegardes[r.nom] + ' »' : '');
+    res.push({ horodatage: quand, script: script, onglet: r.nom, id: ids.join(', ').slice(0, 1000), detail: d.slice(0, 1000) });
+  });
+  a.bloquants.forEach(function (b) { res.push({ horodatage: quand, script: script, onglet: '', id: '', detail: ('BLOCAGE : ' + b).slice(0, 1000) }); });
+  a.remarques.forEach(function (b) { res.push({ horodatage: quand, script: script, onglet: '', id: '', detail: ('note : ' + b).slice(0, 1000) }); });
+  return res;
+}
+
+/** grimoire.gs in the same project: its hand-edit handler drops its cache and moves its VERSION on. */
+function grimoirePresent() {
+  return typeof Grimoire !== 'undefined' && Grimoire && typeof Grimoire.onEdit === 'function';
+}
+
+/** The name of a tab's backup, free in the spreadsheet (« Sauvegarde Points 2026-11-12 », then « … (2) »). */
+function nomSauvegarde(classeur, nom, quand) {
+  var base = 'Sauvegarde ' + nom + ' ' + Utilities.formatDate(quand, 'Asia/Tokyo', 'yyyy-MM-dd');
+  var n = base;
+  for (var i = 2; classeur.getSheetByName(n); i++) n = base + ' (' + i + ')';
+  return n;
+}
+
+/**
+ * The rows deleted bottom up. A sheet must keep one row below its frozen ones: when the deletion would leave none, a
+ * blank row is added at the end first.
+ */
+function supprimer(feuille, numeros) {
+  var tri = numeros.slice().sort(function (p, q) { return q - p; });
+  var gelees = feuille.getFrozenRows();
+  var max = feuille.getMaxRows();
+  if (max - tri.length <= gelees) feuille.insertRowsAfter(max, gelees + 1 - (max - tri.length));
+  tri.forEach(function (n) { feuille.deleteRow(n); });
+}
+
+/* ───────────────────────── The two entry points ───────────────────────── */
+
+/** Run from the editor (as `importNettoyageSimuler`): the plan logged and written to « Journal des imports » only. */
+function simuler() {
+  var fait = PropertiesService.getScriptProperties().getProperty(NETTOYAGE_TEST_FAIT);
+  var quand = new Date();
+  var a = analyser();
+  var lignes = journalAnalyse(a, 'SIMULATION du nettoyage des données de test (rien n\'est supprimé ; seul l\'onglet « ' + JOURNAL.nom + ' » est écrit).' + (fait ? ' Déjà fait le ' + fait + ' : le vrai passage sera refusé.' : ''));
+  if (!grimoirePresent()) lignes.push('ATTENTION : grimoire.gs est introuvable dans ce projet : le vrai passage sera refusé.');
+  lignes.push(a.bloquants.length ? 'Le vrai passage (importNettoyage) sera refusé tant que ces blocages demeurent.' : 'Si tout est juste : sélectionner importNettoyage puis Exécuter.');
+  journaliser(lignes);
+  ecrireJournal(lignesJournal(a, 'nettoyage (simulation)', quand));
+  return a;
+}
+
+/**
+ * Run from the editor (as `importNettoyage`), once: under the script lock, the analysis made again; refused (nothing
+ * written) when already done or blocked; every tab it touches copied first to a hidden backup tab; the rows deleted bottom
+ * up; one journal line per tab; NETTOYAGE_TEST_FAIT set; then grimoire.gs's hand-edit handler.
+ */
+function nettoyer() {
+  if (!grimoirePresent()) {
+    Logger.log('Refusé : grimoire.gs est introuvable dans ce projet (son cache ne pourrait pas être vidé). Rien n\'a été écrit.');
+    return { ok: false, erreur: 'grimoire absent' };
+  }
+  var proprietes = PropertiesService.getScriptProperties();
+  var verrou = LockService.getScriptLock();
+  try {
+    verrou.waitLock(30000);
+  } catch (err) {
+    Logger.log('Le registre est occupé (une écriture en cours) : réessayer dans une minute. Rien n\'a été écrit.');
+    return { ok: false, erreur: 'sheet busy' };
+  }
+  var touche = false;
+  try {
+    var fait = proprietes.getProperty(NETTOYAGE_TEST_FAIT);
+    if (fait) {
+      Logger.log('Refusé : le nettoyage des données de test a déjà été fait le ' + fait + '. Rien n\'a été écrit. (Pour le refaire malgré tout : supprimer la propriété ' + NETTOYAGE_TEST_FAIT + ' dans Paramètres du projet → Propriétés du script.)');
+      return { ok: false, erreur: 'already done' };
+    }
+    var quand = new Date();
+    var a = analyser();
+    if (a.bloquants.length) {
+      journaliser(journalAnalyse(a, 'REFUSÉ : le plan toucherait des données gardées ou le registre ne correspond pas. Rien n\'a été écrit.'));
+      return { ok: false, erreur: 'blocked', analyse: a };
+    }
+    var classeur = SpreadsheetApp.getActiveSpreadsheet();
+    var cibles = a.onglets.filter(function (r) { return r.present && r.lignes.length; });
+    // Every touched tab backed up before the first deletion.
+    var sauvegardes = {};
+    cibles.forEach(function (r) {
+      var nom = nomSauvegarde(classeur, r.nom, quand);
+      var copie = classeur.getSheetByName(r.nom).copyTo(classeur);
+      touche = true;
+      copie.setName(nom);
+      copie.hideSheet();
+      sauvegardes[r.nom] = nom;
+    });
+    cibles.forEach(function (r) {
+      supprimer(classeur.getSheetByName(r.nom), r.lignes.map(function (l) { return l.ligne; }));
+    });
+    ecrireJournal(lignesJournal(a, 'nettoyage', quand, sauvegardes));
+    var date = Utilities.formatDate(quand, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm') + ' (JST)';
+    proprietes.setProperty(NETTOYAGE_TEST_FAIT, date);
+    var lignes = journalAnalyse(a, 'NETTOYAGE FAIT le ' + date + '.');
+    lignes.push('Sauvegardes (onglets masqués, clic droit sur la barre des onglets → Afficher) : ' + (cibles.length ? cibles.map(function (r) { return sauvegardes[r.nom]; }).join(', ') : 'aucune'));
+    lignes.push('Le cache est vidé : le site lit le registre nettoyé à son prochain chargement.');
+    journaliser(lignes);
+    return { ok: true, analyse: a, sauvegardes: sauvegardes };
+  } catch (err) {
+    Logger.log('ERREUR pendant le nettoyage : ' + err + (touche ? ' — une partie a pu être écrite : les onglets « Sauvegarde … » gardent l\'état d\'avant.' : ' — rien n\'a été écrit.'));
+    return { ok: false, erreur: String(err) };
+  } finally {
+    // As a hand edit does (a script's writes fire no onEdit): grimoire.gs's cache dropped, its version moved on.
+    if (touche) {
+      try {
+        Grimoire.onEdit();
+      } catch (err) {
+        Logger.log('Le cache du grimoire n\'a pas pu être vidé (' + err + ') : lancer grimoireViderCache depuis l\'éditeur.');
+      }
+    }
+    verrou.releaseLock();
+  }
+}
+
+return {
+  simuler: simuler,
+  nettoyer: nettoyer,
 };
 })();
