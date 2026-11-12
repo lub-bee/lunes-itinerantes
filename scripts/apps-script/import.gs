@@ -1,11 +1,12 @@
 /**
  * import.gs — one-shot imports into the caravan's sheet, run BY HAND from the Apps Script editor.
  *
- * A third file of the sheet's Apps Script project, beside grimoire.gs (v3s) and the Table's conseil.gs. It defines no
+ * A third file of the sheet's Apps Script project, beside grimoire.gs (v3s, then v3u) and the Table's conseil.gs. It defines no
  * doGet / doPost / onEdit: no web request ever reaches it (grimoire.gs routes every request to the grimoire or to
  * conseil.gs). Adding it, or removing it, needs NO new deployment and changes no answer of the grimoire.
- * Apps Script files share ONE global scope: the only globals of this file are the namespace `ImportNoms` and the two
- * editor functions below (none starts with « conseil » or « grimoire »); everything else is local to the namespace.
+ * Apps Script files share ONE global scope: the only globals of this file are the namespaces `ImportNoms` and
+ * `ImportSecrets` and the four editor functions below (none starts with « conseil » or « grimoire »); everything else is
+ * local to a namespace.
  *
  *  The renaming of 2026-11-06 — the items' names brought to the official French names of the game, ONCE. The plan
  *  (RENOMMAGE below, from _atelier/caravane/noms/plan-renommage.json: renames, English fixes, rows deleted and added)
@@ -25,12 +26,33 @@
  *      cache dropped, its VERSION moved on), so every reader sees the new names at once.
  *  The tabs' headers below are grimoire.gs v3s's mappings (same names, same older headers), copied: grimoire.gs keeps
  *  them private. The bench import-renommage.js checks they are still identical.
+ *
+ *  Elijah's informations of 2026-11-12 — his old « Information … » rows of Catalogues (Livre = Ombre), written as articles
+ *  before the Livre d'ombre v2 had notes, turned ONCE into notes of the hidden tab « Secrets » (grimoire.gs v3u), then
+ *  removed from Catalogues (plan validated by Ludo: _atelier/caravane/ombre/conversion-infos-elijah.md). INFOS_ELIJAH below
+ *  is the plan's table: each entry finds its row by the Catalogues « Article » (and Livre = Ombre, never by row number);
+ *  the note's text is that row's « Note » as it is in the sheet when the script runs, whole, with the item's reference on
+ *  its own last line (« [A001] »); A021 and A021 bis make ONE note in the merged format (two contributions, each under
+ *  « Elijah ----------- jj/mm/aaaa », grimoire.gs RE_ENTETE_FUSION). 24 notes, 26 rows removed. Each note: Informateur and
+ *  Ouvert par « Elijah », Déposé le and Ouvert le the run's date, État « ouverte » (straight to the Archives, not to Le tri).
+ *    - `importSecretsSimuler`: writes nothing in Secrets nor Catalogues; logs every planned note (in full) and every row
+ *      to remove, and writes them to the hidden tab « Journal de l'ombre » (geste « import (simulation) »; the title and
+ *      the fields, never a note's text).
+ *    - `importSecrets`: under the script lock, refused when the script property SECRETS_ELIJAH_FAIT is set (a second run),
+ *      when a row of the plan is missing (or found twice), or when one of the titles is already a note of Secrets: nothing
+ *      is written then. Else Catalogues copied first to a hidden tab « Sauvegarde Catalogues <date> »; the notes appended
+ *      to Secrets (created hidden when missing; columns by header name); the rows deleted (bottom up); one journal line
+ *      per note (geste « import »); SECRETS_ELIJAH_FAIT = the date (JST); then `Grimoire.onEdit` (cache, VERSION).
  */
 
 /** Run it first: what the renaming of 2026-11-06 would change, logged (nothing is written). */
 function importRenommerSimuler() { ImportNoms.renommerSimuler(); }
 /** The renaming of 2026-11-06, once (backups first; a second run is refused). */
 function importRenommer() { ImportNoms.renommer(); }
+/** Run it first: the notes Elijah's informations would become, and the Catalogues rows removed (nothing is written there). */
+function importSecretsSimuler() { ImportSecrets.simuler(); }
+/** Elijah's informations turned into notes of Secrets, once (Catalogues backed up first; a second run is refused). */
+function importSecrets() { ImportSecrets.importer(); }
 
 var ImportNoms = (function () {
 
@@ -773,5 +795,417 @@ function renommer() {
 return {
   renommerSimuler: renommerSimuler,
   renommer: renommer,
+};
+})();
+
+var ImportSecrets = (function () {
+
+/* ───────────────────────── The tabs (grimoire.gs v3u's mappings, copied) ───────────────────────── */
+
+var CATALOGUE = {
+  nom: 'Catalogues',
+  colonnes: [
+    ['Article', 'fr', ['fr', 'articles', 'détail', 'details', 'désignation', 'nom', 'objet', 'produit']],
+    ['Article (EN)', 'en', ['en', 'anglais', 'english', 'nom anglais', 'nom en', 'article anglais', 'détail en', 'désignation en']],
+    ['Note', 'note', ['notes', 'remarque', 'commentaire']],
+    ['Livre', 'livre', ['registre', 'book']],
+  ],
+};
+var SECRETS = {
+  nom: 'Secrets',
+  colonnes: [
+    ['N°', 'id'], ['Déposé le', 'depose'], ['Informateur', 'informateur'], ['Titre', 'titre'], ['Contenu', 'contenu'],
+    ['Urgence', 'urgence'], ['Prix', 'prix'], ['Provenance', 'provenance'], ['Destinataire', 'destinataire'], ['Faction', 'faction'],
+    ['Interne / externe', 'portee', ['Interne/externe', 'Portée']], ['État', 'etat'], ['Ouvert par', 'ouvertPar'], ['Ouvert le', 'ouvertLe'],
+    ['Fusionnée dans', 'fusionneeDans'], ['État avant', 'etatAvant'], ['Corrigée par', 'corrigeePar'], ['Corrigée le', 'corrigeeLe'],
+    ['Retirée par', 'retireePar'], ['Retirée le', 'retireeLe'],
+  ],
+};
+var JOURNAL = {
+  nom: "Journal de l'ombre",
+  colonnes: [['Horodatage', 'horodatage'], ['Geste', 'geste'], ['Par', 'par'], ['N°', 'id'], ['Détail', 'detail']],
+};
+
+/* ───────────────────────── The plan (conversion-infos-elijah.md, validated by Ludo) ───────────────────────── */
+
+/**
+ * One entry per note, in the order of the sheet. `sources`: the Catalogues rows it comes from, each by its « Article »
+ * (compared like headers: case, accents, spaces ignored) and the reference written at the end of its text; two sources
+ * make one merged note (the second's « Article (EN) » heads its text). `titre` and the other fields: the plan's table
+ * (Urgence « Ordinaire » and Interne / externe « Externe » unless stated). Values from lib/secrets.ts (URGENCES, PORTEES).
+ */
+var INFORMATEUR = 'Elijah';
+var INFOS_ELIJAH = [
+  { sources: [{ article: 'Information', ref: 'Information' }], titre: "Culte d'Azurah", faction: "Culte d'Azurah" },
+  { sources: [{ article: 'InformationA001', ref: 'A001' }], titre: "Dar'Adar", provenance: 'Skirr' },
+  { sources: [{ article: 'Information A002', ref: 'A002' }], titre: 'Vit alli Skooma', prix: '50–200 (prod. 999)' },
+  { sources: [{ article: 'Information A003', ref: 'A003' }], titre: "Dahl'Dran" },
+  { sources: [{ article: 'Information A004', ref: 'A004' }], titre: "Scierie de Faillaise, Jo'Kar" },
+  { sources: [{ article: 'Information A005', ref: 'A005' }], titre: 'Brelayn', faction: "Sentinelles d'Azurah", urgence: 'Pressante' },
+  { sources: [{ article: 'Information A006', ref: 'A006' }], titre: "Taverne d'Eau rouge / sucrelune 10s/u" },
+  { sources: [{ article: 'Information A007', ref: 'A007' }], titre: "Ja'Abi et Therendal", portee: 'Interne' },
+  { sources: [{ article: 'Information A008', ref: 'A008' }], titre: "Alchimiste d'Aubétoile" },
+  { sources: [{ article: 'Information A009', ref: 'A009' }], titre: 'Armure dwemer complète' },
+  { sources: [{ article: 'Information A010', ref: 'A010' }], titre: "O'reil", faction: 'Compagnie minière de Riveboie' },
+  { sources: [{ article: 'Information A011', ref: 'A011' }], titre: 'Culte de Molag Bal et vampires', faction: 'Culte de Molag Bal', urgence: 'Pressante' },
+  { sources: [{ article: 'Information A012', ref: 'A012' }], titre: "S'Mhirth", faction: 'Tong' },
+  { sources: [{ article: 'Information A013', ref: 'A013' }], titre: 'Culte de Shor / Shézar / Lorkan', provenance: 'Jarhan Afrani', faction: 'Culte de Shor' },
+  { sources: [{ article: 'Information A014', ref: 'A014' }], titre: 'Pierre de Shor : Compagnie de Roche-Ébène', faction: 'Compagnie de Roche-Ébène' },
+  { sources: [{ article: 'Information A014 Bis', ref: 'A014 bis' }], titre: 'Mavar Senptry, enchanteur de Faillaise' },
+  { sources: [{ article: 'Information A015', ref: 'A015' }], titre: 'Enchanteur de Faillaise : Grosse bourse (Ornim)' },
+  { sources: [{ article: 'Information A016', ref: 'A016' }], titre: 'Temple de Julianos, Boie-de-Chêne', faction: 'Temple de Julianos' },
+  { sources: [{ article: 'Information 017', ref: '017' }], titre: 'Mariage Terari / Veleroth Vendeaume' },
+  { sources: [{ article: 'Information A018', ref: 'A018' }], titre: 'Tong de Boie-de-Chêne (Wulan Tong)', faction: 'Tong' },
+  { sources: [{ article: 'Information A019', ref: 'A019' }], titre: "Raz'Zir, Boie-de-Chêne" },
+  { sources: [{ article: 'Information A020', ref: 'A020' }], titre: 'Les Bleuets, compagnie nordique à Folpertus', faction: 'Les Bleuets' },
+  { sources: [{ article: 'Information A021', ref: 'A021' }, { article: 'Information A021 bis', ref: 'A021 bis' }],
+    titre: "Ahnassaï, noble d'Aubétoile", faction: "Noblesse d'Aubétoile" },
+  { sources: [{ article: 'Information A022', ref: 'A022' }], titre: 'Caravane des sables : journal de Magnus', portee: 'Interne' },
+];
+var CHAMPS_PLAN = ['urgence', 'prix', 'provenance', 'destinataire', 'faction', 'portee'];
+var DEFAUTS = { urgence: 'Ordinaire', portee: 'Externe' };
+
+/** The script property set by the real run (its date): a second run is refused. */
+var SECRETS_ELIJAH_FAIT = 'SECRETS_ELIJAH_FAIT';
+
+/* ───────────────────────── Helpers ───────────────────────── */
+
+/** Comparable header (grimoire.gs's): lower case, no accents, letters and digits only. */
+function cleEntete(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/œ/g, 'oe').replace(/æ/g, 'ae').replace(/[^a-z0-9]+/g, '');
+}
+
+/** 0-based column of each field in a header row (-1 when absent); older header names count too (grimoire.gs's). */
+function indexColonnes(entete, def) {
+  var noms = entete.map(cleEntete);
+  var index = {};
+  def.colonnes.forEach(function (col) {
+    var i = noms.indexOf(cleEntete(col[0]));
+    (col[2] || []).forEach(function (ancien) { if (i < 0) i = noms.indexOf(cleEntete(ancien)); });
+    index[col[1]] = i;
+  });
+  return index;
+}
+
+/** A shadow book's row (grimoire.gs `estOmbre`). */
+function estOmbre(v) { return /ombre|shadow/i.test(String(v === undefined || v === null ? '' : v)); }
+
+/** A cell as text (a date as JST), ends trimmed, line breaks as \n. */
+function texteCellule(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm');
+  return String(v === null || v === undefined ? '' : v).replace(/\r\n?/g, '\n').trim();
+}
+
+/** A contribution's heading in a merged note (grimoire.gs `enteteFusion`): « Elijah ----------- 12/11/2026 ». */
+var RE_ENTETE_FUSION = /^(.+?)\s+-{3,}\s+(\d{1,2}\/\d{1,2}\/\d{4})\s*$/;
+function enteteFusion(auteur, quand) {
+  return auteur + ' ----------- ' + Utilities.formatDate(quand, 'Asia/Tokyo', 'dd/MM/yyyy');
+}
+
+/** A note's number as the site makes it (app/api/ombre numero('S')): « S-261112-AB12 », free in `pris`. */
+function nouvelId(quand, pris) {
+  var jour = Utilities.formatDate(quand, 'Asia/Tokyo', 'yyyy-MM-dd').replace(/-/g, '').slice(2);
+  var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (;;) {
+    var hasard = '';
+    for (var i = 0; i < 4; i++) hasard += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    var id = 'S-' + jour + '-' + hasard;
+    if (!pris[cleEntete(id)]) { pris[cleEntete(id)] = true; return id; }
+  }
+}
+
+/* ───────────────────────── The analysis (reads only) ───────────────────────── */
+
+/**
+ * The plan against the sheet as it is now; writes nothing. `notes`: the rows to append ({ id, titre, contenu, … ,
+ * lignes: the Catalogues rows it comes from }); `suppressions` ({ ligne, article }, 1-based); `bloquants`: why the real
+ * run would refuse (a row missing or found twice, an empty text, a title already in Secrets); `remarques`: the rest.
+ */
+function analyser(quand) {
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  var res = { notes: [], suppressions: [], bloquants: [], remarques: [] };
+  var feuille = classeur.getSheetByName(CATALOGUE.nom);
+  if (!feuille || feuille.getLastRow() < 2) { res.bloquants.push('l\'onglet « ' + CATALOGUE.nom + ' » est introuvable ou vide'); return res; }
+  var tout = feuille.getDataRange().getValues();
+  var idx = indexColonnes(tout[0], CATALOGUE);
+  ['fr', 'note', 'livre'].forEach(function (k) {
+    if (idx[k] < 0) res.bloquants.push('la colonne « ' + CATALOGUE.colonnes.filter(function (c) { return c[1] === k; })[0][0] + ' » manque dans Catalogues');
+  });
+  if (res.bloquants.length) return res;
+  // The shadow rows, by their Article.
+  var ombre = {};
+  var jour = {};
+  for (var i = 1; i < tout.length; i++) {
+    var k = cleEntete(tout[i][idx.fr]);
+    if (!k) continue;
+    var cible = estOmbre(tout[i][idx.livre]) ? ombre : jour;
+    (cible[k] = cible[k] || []).push(i);
+  }
+  // The notes already in Secrets: their numbers and titles.
+  var pris = {};
+  var titres = {};
+  var secrets = classeur.getSheetByName(SECRETS.nom);
+  if (secrets && secrets.getLastRow() >= 2) {
+    var s = secrets.getDataRange().getValues();
+    var is = indexColonnes(s[0], SECRETS);
+    for (var j = 1; j < s.length; j++) {
+      if (is.id >= 0 && texteCellule(s[j][is.id])) pris[cleEntete(s[j][is.id])] = true;
+      if (is.titre >= 0 && texteCellule(s[j][is.titre])) titres[cleEntete(s[j][is.titre])] = texteCellule(s[j][is.id]) || ('ligne ' + (j + 1));
+    }
+  }
+  var attendus = {};
+  INFOS_ELIJAH.forEach(function (info) {
+    var parts = [];
+    var lignes = [];
+    var manque = false;
+    info.sources.forEach(function (src, n) {
+      var k = cleEntete(src.article);
+      attendus[k] = true;
+      var trouves = ombre[k] || [];
+      if (trouves.length !== 1) {
+        manque = true;
+        if (trouves.length > 1) res.bloquants.push('« ' + src.article + ' » : ' + trouves.length + ' lignes du Livre d\'ombre portent ce nom (lignes ' + trouves.map(function (r) { return r + 1; }).join(', ') + ')');
+        else if (jour[k]) res.bloquants.push('« ' + src.article + ' » : trouvée ligne ' + (jour[k][0] + 1) + ' mais pas dans le Livre d\'ombre (colonne Livre ≠ Ombre)');
+        else res.bloquants.push('« ' + src.article + ' » : introuvable dans Catalogues (Livre = Ombre)');
+        return;
+      }
+      var r = trouves[0];
+      var note = texteCellule(tout[r][idx.note]);
+      if (!note) { manque = true; res.bloquants.push('« ' + src.article + ' » (ligne ' + (r + 1) + ') : la Note est vide'); return; }
+      var tete = n > 0 && idx.en >= 0 ? texteCellule(tout[r][idx.en]) : '';
+      parts.push({ texte: (tete ? tete + ': ' : '') + note + '\n[' + src.ref + ']' });
+      lignes.push({ ligne: r + 1, article: texteCellule(tout[r][idx.fr]) });
+    });
+    if (manque) return;
+    var contenu = parts.length === 1 ? parts[0].texte : parts.map(function (p) { return enteteFusion(INFORMATEUR, quand) + '\n' + p.texte; }).join('\n\n');
+    if (titres[cleEntete(info.titre)]) res.bloquants.push('« ' + info.titre + ' » : une note de ce titre est déjà dans Secrets (' + titres[cleEntete(info.titre)] + ')');
+    var o = { id: nouvelId(quand, pris), depose: quand, informateur: INFORMATEUR, titre: info.titre, contenu: contenu, etat: 'ouverte', ouvertPar: INFORMATEUR, ouvertLe: quand, lignes: lignes };
+    CHAMPS_PLAN.forEach(function (c) { o[c] = info[c] !== undefined ? info[c] : (DEFAUTS[c] || ''); });
+    res.notes.push(o);
+    lignes.forEach(function (l) { res.suppressions.push(l); });
+  });
+  // Other « Information » rows of the shadow book are left (and said).
+  Object.keys(ombre).forEach(function (k) {
+    if (k.indexOf('information') === 0 && !attendus[k]) ombre[k].forEach(function (r) { res.remarques.push('ligne ' + (r + 1) + ' « ' + texteCellule(tout[r][idx.fr]) + ' » : hors du plan, laissée'); });
+  });
+  return res;
+}
+
+/** The analysis as French lines for the editor's log (each note in full). */
+function journalAnalyse(a, titre) {
+  var lignes = [titre];
+  a.bloquants.forEach(function (b) { lignes.push('   !! ' + b); });
+  a.notes.forEach(function (o, n) {
+    lignes.push('— Note ' + (n + 1) + ' : ' + o.id + ' « ' + o.titre + ' » (Catalogues ' + o.lignes.map(function (l) { return 'ligne ' + l.ligne + ' « ' + l.article + ' »'; }).join(' + ') + ')');
+    lignes.push('   Urgence : ' + o.urgence + ' · Interne / externe : ' + o.portee + (o.prix ? ' · Prix : ' + o.prix : '') + (o.provenance ? ' · Provenance : ' + o.provenance : '') + (o.faction ? ' · Faction : ' + o.faction : '') + ' · État : ' + o.etat);
+    o.contenu.split('\n').forEach(function (l) { lignes.push('   | ' + l); });
+  });
+  var tri = a.suppressions.slice().sort(function (p, q) { return q.ligne - p.ligne; });
+  tri.forEach(function (s) { lignes.push('   Catalogues ligne ' + s.ligne + ' supprimée : « ' + s.article + ' »'); });
+  a.remarques.forEach(function (r) { lignes.push('   note : ' + r); });
+  lignes.push('Total : ' + a.notes.length + ' note(s) à ajouter à Secrets, ' + a.suppressions.length + ' ligne(s) de Catalogues à supprimer' + (a.bloquants.length ? ' ; ' + a.bloquants.length + ' blocage(s).' : '.'));
+  return lignes;
+}
+
+/** Logs the lines in pieces (one entry of the execution log holds a few thousand characters at most). */
+function journaliser(lignes) {
+  var bloc = [];
+  var taille = 0;
+  lignes.forEach(function (l) {
+    if (taille + l.length > 6000 && bloc.length) { Logger.log(bloc.join('\n')); bloc = []; taille = 0; }
+    bloc.push(l);
+    taille += l.length + 1;
+  });
+  if (bloc.length) Logger.log(bloc.join('\n'));
+}
+
+/* ───────────────────────── Writing ───────────────────────── */
+
+/**
+ * A hidden tab of the shadow book ready to append to (grimoire.gs `preparer`, simplified): created hidden with its
+ * header row when missing (or when row 1 is empty); missing headers added at the end of row 1. A row 1 holding none
+ * of its headers: null (nothing written). Returns { feuille, cols (1-based), largeur }.
+ */
+function preparer(def) {
+  var classeur = SpreadsheetApp.getActiveSpreadsheet();
+  var feuille = classeur.getSheetByName(def.nom);
+  var entetes = def.colonnes.map(function (col) { return col[0]; });
+  if (!feuille) {
+    feuille = classeur.insertSheet(def.nom);
+    feuille.hideSheet();
+  }
+  var largeur = Math.max(feuille.getLastColumn(), 1);
+  var premiere = feuille.getLastRow() === 0 ? [] : feuille.getRange(1, 1, 1, largeur).getValues()[0];
+  var vide = !premiere.some(function (v) { return String(v).trim() !== ''; });
+  if (vide) {
+    feuille.getRange(1, 1, 1, entetes.length).setValues([entetes]).setFontWeight('bold');
+    feuille.setFrozenRows(1);
+    premiere = entetes.slice();
+  } else {
+    var index = indexColonnes(premiere, def);
+    var absentes = def.colonnes.filter(function (col) { return index[col[1]] < 0; });
+    if (absentes.length === def.colonnes.length) return null;
+    if (absentes.length) {
+      var fin = premiere.length;
+      while (fin > 0 && String(premiere[fin - 1]).trim() === '') fin--;
+      var ajout = absentes.map(function (col) { return col[0]; });
+      feuille.getRange(1, fin + 1, 1, ajout.length).setValues([ajout]).setFontWeight('bold');
+      premiere = premiere.slice(0, fin).concat(ajout);
+    }
+  }
+  var idx = indexColonnes(premiere, def);
+  var cols = {};
+  var large = 0;
+  Object.keys(idx).forEach(function (k) { cols[k] = idx[k] + 1; large = Math.max(large, cols[k]); });
+  return { feuille: feuille, cols: cols, largeur: large };
+}
+
+/** Appends objects as rows, each field under its header, in one call. */
+function ajouter(p, objets) {
+  if (!objets.length) return;
+  var lignes = objets.map(function (o) {
+    var l = [];
+    for (var i = 0; i < p.largeur; i++) l.push('');
+    Object.keys(o).forEach(function (k) { if (p.cols[k]) l[p.cols[k] - 1] = o[k]; });
+    return l;
+  });
+  p.feuille.getRange(p.feuille.getLastRow() + 1, 1, lignes.length, p.largeur).setValues(lignes);
+}
+
+/** The journal's lines for the notes and the rows removed (the title and the fields, never a note's text). */
+function lignesJournal(a, geste, quand) {
+  var res = a.notes.map(function (o) {
+    var d = '« ' + o.titre + ' » depuis Catalogues ' + o.lignes.map(function (l) { return 'ligne ' + l.ligne + ' « ' + l.article + ' »'; }).join(' + ') +
+      ' · ' + o.urgence + ' · ' + o.portee + (o.faction ? ' · ' + o.faction : '') + (o.provenance ? ' · de ' + o.provenance : '') + (o.prix ? ' · ' + o.prix : '') +
+      ' · ' + o.contenu.length + ' caractères';
+    return { horodatage: quand, geste: geste, par: INFORMATEUR, id: o.id, detail: d.slice(0, 300) };
+  });
+  if (geste !== 'import') {
+    a.suppressions.slice().sort(function (p, q) { return q.ligne - p.ligne; }).forEach(function (s) {
+      res.push({ horodatage: quand, geste: geste, par: INFORMATEUR, id: '', detail: 'Catalogues ligne ' + s.ligne + ' « ' + s.article + ' » à supprimer' });
+    });
+  }
+  return res;
+}
+
+/** The journal written (a failure there is logged, nothing else stops). */
+function ecrireJournal(lignes) {
+  try {
+    var p = preparer(JOURNAL);
+    if (!p) { Logger.log('« ' + JOURNAL.nom + ' » : la ligne 1 ne porte aucun des en-têtes attendus, journal non écrit.'); return; }
+    ajouter(p, lignes);
+  } catch (err) {
+    Logger.log('« ' + JOURNAL.nom + ' » n\'a pas pu être écrit (' + err + ').');
+  }
+}
+
+/** grimoire.gs in the same project: its hand-edit handler drops its cache and moves its VERSION on. */
+function grimoirePresent() {
+  return typeof Grimoire !== 'undefined' && Grimoire && typeof Grimoire.onEdit === 'function';
+}
+
+/** The name of the backup tab, free in the spreadsheet (« Sauvegarde Catalogues 2026-11-12 », then « … (2) »). */
+function nomSauvegarde(classeur, quand) {
+  var base = 'Sauvegarde ' + CATALOGUE.nom + ' ' + Utilities.formatDate(quand, 'Asia/Tokyo', 'yyyy-MM-dd');
+  var n = base;
+  for (var i = 2; classeur.getSheetByName(n); i++) n = base + ' (' + i + ')';
+  return n;
+}
+
+/* ───────────────────────── The two entry points ───────────────────────── */
+
+/** Run from the editor (as `importSecretsSimuler`): the plan logged and journaled; Secrets and Catalogues untouched. */
+function simuler() {
+  var fait = PropertiesService.getScriptProperties().getProperty(SECRETS_ELIJAH_FAIT);
+  var quand = new Date();
+  var a = analyser(quand);
+  var lignes = journalAnalyse(a, 'SIMULATION de la conversion des informations d\'Elijah (rien n\'est écrit dans Secrets ni Catalogues ; les numéros changeront au vrai passage).' + (fait ? ' Déjà faite le ' + fait + ' : le vrai passage sera refusé.' : ''));
+  if (!grimoirePresent()) lignes.push('ATTENTION : grimoire.gs est introuvable dans ce projet : le vrai passage sera refusé.');
+  lignes.push(a.bloquants.length ? 'Le vrai passage (importSecrets) sera refusé tant que ces blocages demeurent.' : 'Si tout est juste : sélectionner importSecrets puis Exécuter.');
+  journaliser(lignes);
+  var j = lignesJournal(a, 'import (simulation)', quand);
+  a.bloquants.forEach(function (b) { j.push({ horodatage: quand, geste: 'import (simulation)', par: INFORMATEUR, id: '', detail: ('BLOCAGE : ' + b).slice(0, 300) }); });
+  ecrireJournal(j);
+  return a;
+}
+
+/**
+ * Run from the editor (as `importSecrets`), once: under the script lock, the analysis made again; refused (nothing
+ * written) when already done or blocked; Catalogues copied to a hidden backup tab; the notes appended to Secrets; the rows
+ * deleted bottom up; the journal; SECRETS_ELIJAH_FAIT set; then grimoire.gs's hand-edit handler.
+ */
+function importer() {
+  if (!grimoirePresent()) {
+    Logger.log('Refusé : grimoire.gs est introuvable dans ce projet (son cache ne pourrait pas être vidé). Rien n\'a été écrit.');
+    return { ok: false, erreur: 'grimoire absent' };
+  }
+  var proprietes = PropertiesService.getScriptProperties();
+  var verrou = LockService.getScriptLock();
+  try {
+    verrou.waitLock(30000);
+  } catch (err) {
+    Logger.log('Le registre est occupé (une écriture en cours) : réessayer dans une minute. Rien n\'a été écrit.');
+    return { ok: false, erreur: 'sheet busy' };
+  }
+  var touche = false;
+  try {
+    var fait = proprietes.getProperty(SECRETS_ELIJAH_FAIT);
+    if (fait) {
+      Logger.log('Refusé : les informations d\'Elijah ont déjà été converties le ' + fait + '. Rien n\'a été écrit. (Pour le refaire malgré tout : supprimer la propriété ' + SECRETS_ELIJAH_FAIT + ' dans Paramètres du projet → Propriétés du script.)');
+      return { ok: false, erreur: 'already done' };
+    }
+    var quand = new Date();
+    var a = analyser(quand);
+    if (a.bloquants.length) {
+      journaliser(journalAnalyse(a, 'REFUSÉ : le plan ne correspond pas au registre. Rien n\'a été écrit.'));
+      return { ok: false, erreur: 'blocked', analyse: a };
+    }
+    var classeur = SpreadsheetApp.getActiveSpreadsheet();
+    var p = preparer(SECRETS);
+    if (!p) {
+      Logger.log('Refusé : la ligne 1 de « ' + SECRETS.nom + ' » ne porte aucun des en-têtes attendus. Rien n\'a été écrit dans Catalogues ni Secrets.');
+      return { ok: false, erreur: 'secrets header' };
+    }
+    var catalogue = classeur.getSheetByName(CATALOGUE.nom);
+    var sauvegarde = nomSauvegarde(classeur, quand);
+    var copie = catalogue.copyTo(classeur);
+    copie.setName(sauvegarde);
+    copie.hideSheet();
+    touche = true;
+    ajouter(p, a.notes.map(function (o) {
+      var r = {};
+      ['id', 'depose', 'informateur', 'titre', 'contenu', 'etat', 'ouvertPar', 'ouvertLe'].concat(CHAMPS_PLAN).forEach(function (c) { r[c] = o[c]; });
+      return r;
+    }));
+    a.suppressions.map(function (s) { return s.ligne; }).sort(function (x, y) { return y - x; })
+      .forEach(function (n) { catalogue.deleteRow(n); });
+    ecrireJournal(lignesJournal(a, 'import', quand));
+    var date = Utilities.formatDate(quand, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm') + ' (JST)';
+    proprietes.setProperty(SECRETS_ELIJAH_FAIT, date);
+    var lignes = journalAnalyse(a, 'CONVERSION FAITE le ' + date + '.');
+    lignes.push('Sauvegarde (onglet masqué, clic droit sur la barre des onglets → Afficher) : ' + sauvegarde);
+    lignes.push('Le cache est vidé : les notes sont dans les Archives du Livre d\'ombre au prochain chargement.');
+    journaliser(lignes);
+    return { ok: true, analyse: a, sauvegarde: sauvegarde };
+  } catch (err) {
+    Logger.log('ERREUR pendant la conversion : ' + err + (touche ? ' — une partie a pu être écrite : l\'onglet « Sauvegarde Catalogues … » garde l\'état d\'avant.' : ' — rien n\'a été écrit.'));
+    return { ok: false, erreur: String(err) };
+  } finally {
+    // As a hand edit does (a script's writes fire no onEdit): grimoire.gs's cache dropped, its version moved on.
+    if (touche) {
+      try {
+        Grimoire.onEdit();
+      } catch (err) {
+        Logger.log('Le cache du grimoire n\'a pas pu être vidé (' + err + ') : lancer grimoireViderCache depuis l\'éditeur.');
+      }
+    }
+    verrou.releaseLock();
+  }
+}
+
+return {
+  simuler: simuler,
+  importer: importer,
 };
 })();
