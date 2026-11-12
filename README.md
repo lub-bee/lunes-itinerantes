@@ -141,11 +141,14 @@ site, take the last part of the icon's URL. Only the icons in use are sent to th
 
 ### Table texture
 
-`public/textures/table.jpg` is Poly Haven's [wood_table](https://polyhaven.com/a/wood_table) (CC0), 2K,
-recompressed. Swap the file to change the table; its tint is set in `app/globals.css` (`body`).
-`public/textures/cuir.jpg` (the locked book on the login page) is Poly Haven's
+Textures are served with `Cache-Control: public, max-age=604800, stale-while-revalidate=2592000`
+(`next.config.ts`).
+
+`public/textures/table.webp` is Poly Haven's [wood_table](https://polyhaven.com/a/wood_table) (CC0), 2K,
+recompressed to a 1024 px WebP (the JPEG originals stay beside the WebP copies as sources). Swap the file to change the table; its tint is set in `app/globals.css` (`body`).
+`public/textures/cuir.webp` (the locked book on the login page) is Poly Haven's
 [brown_leather](https://polyhaven.com/a/brown_leather) (CC0), 2K, recompressed.
-`public/textures/fer.jpg` (the forged-iron key and lock) is Poly Haven's
+`public/textures/fer.webp` (the forged-iron key and lock) is Poly Haven's
 [rusty_metal_04](https://polyhaven.com/a/rusty_metal_04) (CC0), desaturated and lit by an SVG filter
 (`FiltreFer` in `components/Sceau.tsx`).
 
@@ -813,8 +816,8 @@ facts in character; it is listed at the end of the table of contents.
   the rank medallions (`public/rangs/*`) were illustrated by Ri'Oblan with Gépéthé Image 2.
 - Icons: [game-icons.net](https://game-icons.net) (Lorc, Delapouite and contributors), CC BY 3.0, also
   credited in a short line on the title page.
-- Textures: Poly Haven's wood_table, brown_leather and rusty_metal_04 (CC0) for `table.jpg`, `cuir.jpg` /
-  `cuir-impression.jpg` and `fer.jpg`. `chiffon.jpg` (rag paper), `parchemin-impression.jpg` (print
+- Textures: Poly Haven's wood_table, brown_leather and rusty_metal_04 (CC0) for `table.webp`, `cuir.webp` /
+  `cuir-impression.jpg` and `fer.webp`. `chiffon.jpg` (rag paper), `parchemin-impression.jpg` (print
   parchment) and `gaufrage.webp` (blind-pressed emblem) are made for the project.
 - Fonts: UnifrakturMaguntia, IM Fell English / IM Fell English SC, Mrs Saint Delafield (SIL Open Font
   License, Google Fonts).

@@ -101,7 +101,7 @@ export default function Copie({ livre }: { livre: Livre }) {
   )
 }
 
-const TEXTURES = ['/textures/cuir-impression.jpg', '/textures/fer.jpg', '/textures/parchemin-impression.jpg']
+const TEXTURES = ['/textures/cuir-impression.jpg', '/textures/fer.webp', '/textures/parchemin-impression.jpg']
 
 const teinte = (livre: Livre, partie: Page['partie']) => ({ '--teinte': livre.parties.find((p) => p.id === partie)?.couleur } as CSSProperties)
 

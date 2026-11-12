@@ -11,7 +11,7 @@ export function FiltreFer({ id, l, h }: { id: string; l: number; h: number }) {
   const cote = Math.max(l, h) * 1.2
   return (
     <filter id={id} filterUnits="userSpaceOnUse" x="0" y="0" width={l} height={h} colorInterpolationFilters="sRGB">
-      <feImage href="/textures/fer.jpg" x="0" y="0" width={cote} height={cote} preserveAspectRatio="xMidYMid slice" result="photo" />
+      <feImage href="/textures/fer.webp" x="0" y="0" width={cote} height={cote} preserveAspectRatio="xMidYMid slice" result="photo" />
       <feColorMatrix in="photo" type="saturate" values="0.12" result="gris" />
       <feComponentTransfer in="gris" result="sombre">
         <feFuncR type="linear" slope="0.62" intercept="0.02" />

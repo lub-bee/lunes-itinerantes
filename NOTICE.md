@@ -25,9 +25,9 @@ license and indicate if changes were made.
 | Asset | Source | License |
 |---|---|---|
 | Icons (tabs, ribbons, margins), via `@iconify-json/game-icons` | [game-icons.net](https://game-icons.net), by Lorc, Delapouite and contributors | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
-| `public/textures/table.jpg` | Poly Haven, [wood_table](https://polyhaven.com/a/wood_table) | CC0 |
-| `public/textures/cuir.jpg`, `public/textures/cuir-impression.jpg` | Poly Haven, [brown_leather](https://polyhaven.com/a/brown_leather) | CC0 |
-| `public/textures/fer.jpg` | Poly Haven, [rusty_metal_04](https://polyhaven.com/a/rusty_metal_04) | CC0 |
+| `public/textures/table.webp` | Poly Haven, [wood_table](https://polyhaven.com/a/wood_table) | CC0 |
+| `public/textures/cuir.webp`, `public/textures/cuir-impression.jpg` | Poly Haven, [brown_leather](https://polyhaven.com/a/brown_leather) | CC0 |
+| `public/textures/fer.webp` | Poly Haven, [rusty_metal_04](https://polyhaven.com/a/rusty_metal_04) | CC0 |
 | Fonts: UnifrakturMaguntia, IM Fell English, IM Fell English SC, Mrs Saint Delafield | Google Fonts | [SIL Open Font License 1.1](https://openfontlicense.org) |
 
 ## Disclaimer
