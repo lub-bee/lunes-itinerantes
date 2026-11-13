@@ -4455,7 +4455,7 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 .sans-coupure { white-space: nowrap; }
 
 /* ═══ Ri'Oblan's note (components/Billet.tsx) ═══
-   A small slip of rag paper, pinned with the slip's brass pin (.fiche-epingle), written in the ex-libris' quill hand,
+   A small slip of rag paper, pinned with the slip's brass pin (.fiche-epingle), written in Ri'Oblan's brush hand (Water Brush, --font-billet),
    over a dimmed book that takes no click until it is crumpled. */
 
 .billet-voile {
@@ -4525,8 +4525,8 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 }
 .billet-froisser:hover, .billet-froisser:focus-visible { outline: none; color: var(--encre-rouge); background: rgba(142, 31, 20, 0.08); }
 .billet-froisser:focus-visible { box-shadow: 0 0 0 1.5px var(--encre-rouge); }
-.billet-texte { margin: 0; font-family: var(--font-plume), var(--f-texte); font-size: 31px; line-height: 1.22; overflow-wrap: anywhere; }
-.billet-signature { margin: 12px 0 0; text-align: right; font-family: var(--font-plume), var(--f-texte); font-size: 27px; line-height: 1.15; color: var(--encre-rouge); }
+.billet-texte { margin: 0; font-family: var(--font-billet), var(--f-texte); font-size: 29px; line-height: 1.3; overflow-wrap: break-word; }
+.billet-signature { margin: 12px 0 0; text-align: right; font-family: var(--font-billet), var(--f-texte); font-size: 25px; line-height: 1.2; color: var(--encre-rouge); }
 .billet-voile.froisse { animation: billet-voile 320ms ease reverse both; }
 .billet-voile.froisse .billet { animation: billet-froisse 320ms cubic-bezier(0.5, 0, 0.9, 0.5) both; }
 @keyframes billet-voile { from { opacity: 0; } }
@@ -4534,8 +4534,8 @@ body:has(.qualite-bandeau) .scene, body:has(.qualite-bandeau) .seuil { min-heigh
 @keyframes billet-froisse { to { opacity: 0; transform: rotate(-24deg) scale(0.18, 0.12); filter: brightness(0.8); } }
 @media (max-width: 520px) {
   .billet { padding: 32px 22px 20px; }
-  .billet-texte { font-size: 27px; }
-  .billet-signature { font-size: 24px; }
+  .billet-texte { font-size: 26px; }
+  .billet-signature { font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .billet-voile, .billet, .billet-voile.froisse, .billet-voile.froisse .billet { animation: none; }

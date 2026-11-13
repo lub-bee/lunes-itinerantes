@@ -1,15 +1,12 @@
 // Ri'Oblan's revenge (Ludo's character): one handwritten note each time Dar'Riyo opens the grimoire, closed before
 // anything else (components/Billet.tsx). The 19 texts validated by Ludo on 2026-11-13 (_atelier/caravane/billets/billets.md),
 // verbatim. SERVER ONLY: imported by app/api/billet/route.ts alone, so the texts never reach the page's bundle; the route
-// answers only Dar'Riyo's session (and a tester previewing with `?billet`).
-
-import { cle } from './missives'
+// answers only Dar'Riyo's Discord seal, by its user ID (and a tester previewing with `?billet`).
 
 export type Billet = { id: number; texte: string }
 
-/** The member the notes are for, compared with cle() (case, accents, apostrophes and spaces ignored). */
-export const DESTINATAIRE = "Dar'Riyo"
-export const estDestinataire = (nom: string | null | undefined) => Boolean(nom) && cle(nom!) === cle(DESTINATAIRE)
+/** Dar'Riyo's Discord user ID: the notes are his seal's alone (a name proves nothing; a password session has no ID). */
+export const DISCORD_DESTINATAIRE = '435091209795534860'
 
 export const BILLETS: readonly Billet[] = [
   { id: 1, texte: "Bien dormi ? J'ai fait pipi sur ton lit. — Un Admirateur SECRET (tu sais, comme celui dont on tait le nom)" },

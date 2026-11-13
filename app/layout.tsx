@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { IM_Fell_English, IM_Fell_English_SC, Mrs_Saint_Delafield, UnifrakturMaguntia } from 'next/font/google'
+import { IM_Fell_English, IM_Fell_English_SC, Mrs_Saint_Delafield, UnifrakturMaguntia, Water_Brush } from 'next/font/google'
 import './globals.css'
 import { BandeauQualite } from '@/components/Qualite'
 
@@ -8,6 +8,8 @@ const texte = IM_Fell_English({ weight: '400', style: ['normal', 'italic'], subs
 const capitales = IM_Fell_English_SC({ weight: '400', subsets: ['latin'], variable: '--font-capitales' })
 // A quick slanted hand, as a person signs with a quill, for the name signed on the ex-libris.
 const plume = Mrs_Saint_Delafield({ weight: '400', subsets: ['latin'], variable: '--font-plume' })
+// Ri'Oblan's brush hand, for his notes only (components/Billet.tsx): not preloaded, fetched when a note shows.
+const billet = Water_Brush({ weight: '400', subsets: ['latin'], variable: '--font-billet', preload: false })
 
 export const metadata: Metadata = {
   title: 'Grimoire de la Caravane',
@@ -19,7 +21,7 @@ export const viewport: Viewport = { themeColor: '#1a110b', width: 'device-width'
 
 export default function Racine({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${gothique.variable} ${texte.variable} ${capitales.variable} ${plume.variable}`}>
+    <html lang="fr" className={`${gothique.variable} ${texte.variable} ${capitales.variable} ${plume.variable} ${billet.variable}`}>
       <body>
         {children}
         {/* Testers only (lot 1c): « Tu portes le rang de… » while viewing as chosen ranks; nothing for anyone else. */}

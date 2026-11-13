@@ -1301,7 +1301,7 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       {/* The light dims over everything but the side tabs (darkness B). */}
       <div className="voile-ombre" aria-hidden />
       {/* Ri'Oblan's note, over everything once per opening: Dar'Riyo only (the server decides; nothing for anyone else). */}
-      <Billet pret={registre.marchand !== null} signe={Boolean(registre.marchand?.identite)} />
+      <Billet pret={registre.marchand !== null} discord={registre.marchand?.discord === true} />
     </div>
     </OmbreContexte.Provider>
     </IconesLivre.Provider>

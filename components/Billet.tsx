@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 
 // Ri'Oblan's note (lib/billets.ts, app/api/billet/route.ts): once per opening of the grimoire (a page load), a small
 // slip pinned over the book that must be crumpled before anything else. The texts come from the server, which answers
-// Dar'Riyo's seal only (and a tester's with `?billet` in the address); for anyone else the route answers 404 and
+// Dar'Riyo's Discord seal only, by its user ID (and a tester's with `?billet` in the address); for anyone else the route answers 404 and
 // nothing shows. The order: every note read once, in a random order, then a new round (kept in this browser).
 
 type Billet = { id: number; texte: string }
@@ -66,10 +66,10 @@ function scinder(texte: string): [string, string | null] {
 }
 
 /**
- * `pret`: the reader is known (the /api/marchand answer came); `signe`: they hold a name of the register. The route is
- * asked once per page load, once signed (or with `?billet`, a tester's preview).
+ * `pret`: the reader is known (the /api/marchand answer came); `discord`: their seal is a Discord one (a password
+ * session never gets a note: no request). The route is asked once per page load.
  */
-export default function Billet({ pret, signe }: { pret: boolean; signe: boolean }) {
+export default function Billet({ pret, discord }: { pret: boolean; discord: boolean }) {
   const [billets, setBillets] = useState<Billet[] | null>(null)
   const [billet, setBillet] = useState<Billet | null>(null)
   const [froisse, setFroisse] = useState(false)
@@ -78,14 +78,13 @@ export default function Billet({ pret, signe }: { pret: boolean; signe: boolean 
   const avant = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
-    if (!pret || demande.current) return
+    if (!pret || !discord || demande.current) return
     let apercu = false
     try {
       apercu = new URLSearchParams(window.location.search).has('billet')
     } catch {
       // No address to read: no preview.
     }
-    if (!signe && !apercu) return
     demande.current = true
     fetch(`/api/billet${apercu ? '?billet' : ''}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -97,7 +96,7 @@ export default function Billet({ pret, signe }: { pret: boolean; signe: boolean 
         setBillet(choisir(l))
       })
       .catch(() => {})
-  }, [pret, signe])
+  }, [pret, discord])
 
   useEffect(() => {
     if (billet) fermer.current?.focus({ preventScroll: true })
