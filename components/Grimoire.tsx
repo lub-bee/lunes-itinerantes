@@ -26,6 +26,7 @@ import { useSecrets } from './Secrets'
 import { DUREES_OEUFS, EffetsOeufs, ivresse, type Oeuf } from './Oeufs'
 import { Annule, blocsTexte, Bougie, dissoudre, ecrire, encrerDevise, fin, FiltresOmbre, OmbreContexte, pause, type Course, type CtxOmbre, type EtatOmbre } from './Ombre'
 import { PAGE_DEVISE, PARTIE_OMBRE, pagesOmbre, TEXTES as OMBRE_TEXTES } from '@/lib/ombre'
+import Billet from './Billet'
 
 /** `rapide`: a riffle (the « fus ro dah » egg), leaves turning much faster. */
 type Tourne = { de: number; vers: number; manuel: boolean; rapide?: boolean }
@@ -1299,6 +1300,8 @@ export default function Grimoire({ livre: livreServeur }: { livre: Livre }) {
       )}
       {/* The light dims over everything but the side tabs (darkness B). */}
       <div className="voile-ombre" aria-hidden />
+      {/* Ri'Oblan's note, over everything once per opening: Dar'Riyo only (the server decides; nothing for anyone else). */}
+      <Billet pret={registre.marchand !== null} signe={Boolean(registre.marchand?.identite)} />
     </div>
     </OmbreContexte.Provider>
     </IconesLivre.Provider>
