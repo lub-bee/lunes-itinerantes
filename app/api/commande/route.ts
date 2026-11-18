@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
   // asks for at least that version. Otherwise another server instance, still holding the copy
   // without this order (same version as far as the reader knows), could answer its next read and
   // the sale would vanish from « Mes ventes ».
-  const version = await lireRegistreFrais().catch((e) => {
+  const version = await lireRegistreFrais().then((l) => l.version, (e) => {
     console.error(`[commande] fresh read after ${commande.numero} failed`, e)
     return null
   })
