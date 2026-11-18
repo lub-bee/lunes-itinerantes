@@ -272,6 +272,10 @@ The default file name is the page title, *Registre de la Caravane des Lunes Itin
   re-reads floor and ceiling from the catalogue, recomputes every total, gives the order a number
   (`C-YYMMDD-XXXXX`, JST day) and forwards it to the Apps Script with `COMMANDES_JETON`. The script
   URL and token never reach the browser. Without them, sealing answers an in-character error.
+  The script moves the registre's version on without answering with it, so the route then reads the
+  registre afresh and returns that `version`; the page's « Mes ventes » re-read asks for at least it,
+  so another server instance still holding the copy without the order cannot answer it (the sale
+  would vanish from the list). An answer older than the data already shown is dropped.
 - Code: `components/Commande.tsx` (scroll, sheet, mobile roll, state), `lib/commande.ts` (maths shared
   with the route), `app/api/commande/route.ts`, `scripts/apps-script/grimoire.gs`; styles in the
   *Order mode* section of `app/globals.css`.

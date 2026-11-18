@@ -58,7 +58,9 @@ export function useRegistre(articles: Article[]) {
   /** Newest registre version seen: the server never answers with an older one (own writes stay). */
   const version = useRef(0)
   const recevoir = useCallback((d: DonneesRegistre) => {
-    version.current = Math.max(version.current, d.version ?? 0)
+    // An answer older than one already shown (reads overtaking each other) is dropped.
+    if ((d.version ?? 0) < version.current) return
+    version.current = d.version ?? 0
     setBase(d)
   }, [])
 

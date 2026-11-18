@@ -215,7 +215,7 @@ export function useCommande(reg: EtatRegistre) {
     setMessage(null)
     try {
       const rep = await fetch('/api/commande', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envoyee) })
-      const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string; coffre?: 'ok' | 'pas-pret' | 'echec' | null } | null
+      const r = (await rep.json().catch(() => null)) as { ok?: boolean; message?: string; numero?: string; coffre?: 'ok' | 'pas-pret' | 'echec' | null; version?: number | null } | null
       if (!rep.ok || !r?.ok) {
         setMessage({ genre: 'erreur', texte: r?.message ?? "Le coursier n'est pas revenu. Ta commande reste sur la table : réessaie." })
         return
@@ -229,8 +229,8 @@ export function useCommande(reg: EtatRegistre) {
             ? ' Ce qui fut pris au coffre n’a pas pu être noté : préviens l’Intendance.'
             : ''
       setMessage({ genre: 'ok', texte: `Marché conclu, l'encre sèche dans le registre.${r.numero ? ` (n° ${r.numero})` : ''}${coffre}` })
-      // The sale now shows in « Mes ventes ».
-      reg.relire()
+      // The sale now shows in « Mes ventes »: read at least the version that holds it.
+      reg.relire(r.version ?? undefined)
     } catch {
       setMessage({ genre: 'erreur', texte: "Le coursier n'est pas revenu. Ta commande reste sur la table : réessaie." })
     } finally {

@@ -88,6 +88,16 @@ export function oublierRegistre() {
   revalidateTag(ETIQUETTE_REGISTRE)
 }
 
+/**
+ * The registre as the script now holds it (never a cached copy), kept as this instance's newest one.
+ * After a sealed order: the script moved its version on but did not answer with it.
+ */
+export async function lireRegistreFrais(): Promise<number> {
+  const l = await lireScript()
+  garder(l)
+  return l.version
+}
+
 function garder(l: Lecture) {
   if (!frais || l.version >= frais.version) frais = { ...l, le: Date.now() }
 }

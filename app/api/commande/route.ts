@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { lireSession } from '@/lib/sceau'
 import { nomSigne } from '@/lib/identite'
 import { chargerArticles } from '@/lib/livre'
-import { ecrireRegistre, lireRegistre, oublierRegistre } from '@/lib/registre'
+import { ecrireRegistre, lireRegistre, lireRegistreFrais, oublierRegistre } from '@/lib/registre'
 import { calculerLigne, centimes, poidsLigne, repartirGlobal, statut, totaux, uniteLigne, type CommandeEnvoyee } from '@/lib/commande'
 
 // Seals an order: validates it, recomputes every total from the catalogue, and hands it to the
@@ -140,7 +140,15 @@ export async function POST(req: NextRequest) {
   // « Mes ventes » reads the orders from the registre: its cached copy is now too old.
   oublierRegistre()
   const coffre = auCoffre.length ? await sortiesDuCoffre(commande.numero, vendeur, auCoffre) : null
-  return NextResponse.json({ ok: true, numero: commande.numero, total: commande.total, coffre })
+  // The script moved the registre's version on but does not say to which one: read it, so the reader
+  // asks for at least that version. Otherwise another server instance, still holding the copy
+  // without this order (same version as far as the reader knows), could answer its next read and
+  // the sale would vanish from « Mes ventes ».
+  const version = await lireRegistreFrais().catch((e) => {
+    console.error(`[commande] fresh read after ${commande.numero} failed`, e)
+    return null
+  })
+  return NextResponse.json({ ok: true, numero: commande.numero, total: commande.total, coffre, version })
 }
 
 /**
