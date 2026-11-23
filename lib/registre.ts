@@ -149,6 +149,9 @@ function lu(l: Lecture) {
 export async function ecrireRegistre(action: string, charge: Record<string, unknown>) {
   const r = await appelerScript<{ onglets?: Onglets; version?: number; ms?: number; etapes?: Record<string, number>; feuillets?: boolean }>({ action, ...DRAPEAUX, ...charge })
   dernierScript = { ms: r.ms ?? null, cache: null }
+  // The shared copy (45 s, served stale once past that) predates this write: dropped, so another instance or a
+  // reloaded page (which asks for no version) never reads the registre without it.
+  revalidateTag(ETIQUETTE_REGISTRE)
   if (!r.onglets) return { ...r, lu: null }
   const l = { onglets: r.onglets, version: r.version ?? 0, feuillets: r.feuillets === true }
   garder(l)
