@@ -40,14 +40,19 @@ export type DefRole = { cle: Role; nom: string; alias?: string[] }
 /** Known ranks (their defaults below); the Rôles tab may name others, which start with nothing. */
 export const ROLES: DefRole[] = [
   { cle: 'membre', nom: 'Membre', alias: ['Membres'] },
-  { cle: 'patriarche', nom: 'Patriarche', alias: ['Patriarches'] },
+  { cle: 'patriarche', nom: 'Patriarche', alias: ['Patriarches', 'Ahnurra'] },
   { cle: 'argentier', nom: 'Argentier', alias: ['Argentiers', 'Argentière', 'Argentier / Argentière', 'Argentier / Argentiere'] },
   { cle: 'aide-de-camp', nom: 'Aide de camp', alias: ['Aides de camp'] },
-  { cle: 'maitre-des-routes', nom: 'Maître des routes' },
-  { cle: 'voix-du-commerce', nom: 'Voix du commerce' },
-  { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité' },
-  { cle: 'marchand-de-lune', nom: 'Marchand de lune', alias: ['Marchands de lune', 'Marchande de lune'] },
-  { cle: 'petites-lunes', nom: 'Petites lunes', alias: ['Petite lune'] },
+  // 2026-11-24 (Ludo): every rank is also known by its Khajiit title (lib/rangs.ts `nomKhajiit`); a renamed rank keeps its key
+  // and its former names (« Pleine lune » = « Marchand de lune », « Lune montante » = « Petites lunes », confirmed by Ludo).
+  { cle: 'maitre-des-routes', nom: 'Maître des routes', alias: ['Wodro ros'] },
+  { cle: 'voix-du-commerce', nom: 'Voix du commerce', alias: ['Bajiit ros'] },
+  { cle: 'voix-de-la-securite', nom: 'Voix de la sécurité', alias: ['Rasina ros'] },
+  { cle: 'marchand-de-lune', nom: 'Marchand de lune', alias: ['Marchands de lune', 'Marchande de lune', 'Pleine lune', 'Pleines lunes', "Teko'i"] },
+  { cle: 'intendant', nom: 'Intendant', alias: ['Intendants', 'Intendante', 'Etiit'] },
+  { cle: 'scribe-des-lunes', nom: 'Scribe des lunes', alias: ['Scribes des lunes', 'Durrarriit', "Kha'jay Durrarriit"] },
+  { cle: 'petites-lunes', nom: 'Petites lunes', alias: ['Petite lune', 'Lune montante', 'Lunes montantes', 'Jranti'] },
+  { cle: 'nouvelle-lune', nom: 'Nouvelle lune', alias: ['Nouvelles lunes', 'Ifa', "Ifa Kha'jay"] },
   { cle: 'ami-des-lunes', nom: 'Ami des Lunes', alias: ['Amie des Lunes', 'Amis des Lunes'] },
   // Livre d'ombre v2: the shadow members, the Discord role named « . » (a label with no letter: its key is set by hand).
   { cle: 'ombre', nom: '.', alias: ['Ombre des lunes', 'Ombres des lunes'] },
@@ -126,8 +131,12 @@ const A = 'argentier'
 const ADC = 'aide-de-camp'
 const VOIX = ['maitre-des-routes', 'voix-du-commerce', 'voix-de-la-securite']
 const MARCHAND = 'marchand-de-lune'
-/** Everyone but the Petites lunes. */
-const SAUF_PETITES = [P, A, ADC, ...VOIX, MARCHAND]
+/** One Intendant for now (later one per craft): the chest's accounts, missions opened and closed, the Intendance read. */
+const INTENDANT = 'intendant'
+/** The grimoire's keeper: the catalogue and the recipes, the Intendance read; no missions, no Trésor, no shadow. */
+const SCRIBE = 'scribe-des-lunes'
+/** Everyone but the Petites lunes / Lune montante (and the Nouvelles lunes, the recruits: no box of their own either). */
+const SAUF_PETITES = [P, A, ADC, ...VOIX, MARCHAND, INTENDANT, SCRIBE]
 const TRESOR = [P, A]
 /** Livre d'ombre v2: every shadow gesture defaults to the Patriarchs, the shadow members and the Voix de la sécurité. */
 const VS = 'voix-de-la-securite'
@@ -135,17 +144,17 @@ const OMBRES = [P, OMBRE, VS]
 
 export const GESTES: DefGeste[] = [
   { cle: 'entrer', groupe: 'Grimoire', libelle: 'Entrer dans le grimoire', defaut: 'tous', note: 'vérifié au sceau Discord' },
-  { cle: 'vente', groupe: 'Marchandises', libelle: 'Inscrire une marchandise / mettre en vente', defaut: [P, A, ...VOIX] },
+  { cle: 'vente', groupe: 'Marchandises', libelle: 'Inscrire une marchandise / mettre en vente', defaut: [P, A, ...VOIX, SCRIBE] },
   { cle: 'prix', groupe: 'Marchandises', libelle: 'Changer un prix (vente ou achat)', defaut: SAUF_PETITES, note: 'avec la page Achat, à venir' },
-  { cle: 'retirer', groupe: 'Marchandises', libelle: 'Retirer un article du catalogue', defaut: [P, A, ADC, ...VOIX] },
+  { cle: 'retirer', groupe: 'Marchandises', libelle: 'Retirer un article du catalogue', defaut: [P, A, ADC, ...VOIX, SCRIBE] },
   { cle: 'deplacer', groupe: 'Marchandises', libelle: 'Déplacer un article vers un autre chapitre', defaut: 'tous' },
   { cle: 'versement', groupe: 'Marchandises', libelle: 'Marquer versée la part d’une vente', defaut: TRESOR },
   { cle: 'recette', groupe: 'Recettes', libelle: 'Consigner une recette', defaut: SAUF_PETITES },
   { cle: 'recetteCorriger', groupe: 'Recettes', libelle: 'Corriger une recette / ajouter une variante', defaut: SAUF_PETITES },
   { cle: 'usage', groupe: 'Recettes', libelle: 'Choisir la recette d’usage d’un ouvrage', defaut: 'tous' },
-  { cle: 'ressource', groupe: 'Recettes', libelle: 'Inscrire / mettre à jour une matière', defaut: [P, A, ...VOIX, MARCHAND] },
-  { cle: 'ecrire', groupe: 'Missives et missions', libelle: 'Écrire une mission ou une missive', defaut: [P, A, ADC], note: 'missive, mission mère et ses missions enfants (l’écrire, la corriger, la clore), mission permanente' },
-  { cle: 'remise', groupe: 'Missives et missions', libelle: 'Consigner une remise ou un don', defaut: [P, A, ADC, ...VOIX], note: 'et répondre oui / non à ce qui a été déposé' },
+  { cle: 'ressource', groupe: 'Recettes', libelle: 'Inscrire / mettre à jour une matière', defaut: [P, A, ...VOIX, MARCHAND, INTENDANT, SCRIBE] },
+  { cle: 'ecrire', groupe: 'Missives et missions', libelle: 'Écrire une mission ou une missive', defaut: [P, A, ADC, INTENDANT], note: 'missive, mission mère et ses missions enfants (l’écrire, la corriger, la clore), mission permanente' },
+  { cle: 'remise', groupe: 'Missives et missions', libelle: 'Consigner une remise ou un don', defaut: [P, A, ADC, ...VOIX, INTENDANT], note: 'et répondre oui / non à ce qui a été déposé' },
   { cle: 'cloture', groupe: 'Missives et missions', libelle: 'Clore une missive (livrée ou inachevée)', defaut: 'tous' },
   { cle: 'choix', groupe: 'Missives et missions', libelle: 'Choisir la recette d’une ligne de missive', defaut: 'tous' },
   { cle: 'releve', groupe: 'Missives et missions', libelle: 'Relever le coffre (compter)', defaut: 'tous' },
@@ -154,8 +163,8 @@ export const GESTES: DefGeste[] = [
   { cle: 'missionsMembre', groupe: 'Missives et missions', libelle: 'Signaler une remise ou un dépôt', defaut: 'tous', note: 'au coffre des petites lunes, ou remis en main propre : il attend qu’on réponde' },
   { cle: 'don', groupe: 'Missives et missions', libelle: 'Déclarer un don libre', defaut: 'tous', note: 'plus proposé : on le signale comme une remise' },
   { cle: 'ponderation', groupe: 'Missives et missions', libelle: 'Régler la pondération des efforts', defaut: [P] },
-  { cle: 'sortie', groupe: 'Missives et missions', libelle: 'Consigner une sortie du coffre', defaut: [P, A, ADC], note: 'sortir pour façonner, confirmer une vente prise au coffre, une perte', semee: true },
-  { cle: 'intendance', groupe: 'Livres', libelle: 'Ouvrir le livre de l’Intendance', defaut: [P, A, ADC] },
+  { cle: 'sortie', groupe: 'Missives et missions', libelle: 'Consigner une sortie du coffre', defaut: [P, A, ADC, INTENDANT], note: 'sortir pour façonner, confirmer une vente prise au coffre, une perte', semee: true },
+  { cle: 'intendance', groupe: 'Livres', libelle: 'Ouvrir le livre de l’Intendance', defaut: [P, A, ADC, INTENDANT, SCRIBE] },
   { cle: 'tresor', groupe: 'Livres', libelle: 'Ouvrir le livre du Trésor (et voir les points)', defaut: TRESOR },
   { cle: 'reglagesPaie', groupe: 'Trésor', libelle: 'Régler la paie', defaut: TRESOR },
   { cle: 'facture', groupe: 'Trésor', libelle: 'Inscrire, corriger ou rayer une facture', defaut: TRESOR },
@@ -204,7 +213,7 @@ export const GESTE_DE: Record<Action, Geste> = {
   refuser: 'remise',
   ponderation: 'ponderation',
   permanente: 'ecrire',
-  // Lot 2b: correcting, closing and reopening a sheet or a mission: who writes missions (Patriarche, Argentier, Aide de camp).
+  // Lot 2b: correcting, closing and reopening a sheet or a mission: who writes missions (by default Patriarche, Argentier, Aide de camp, Intendant).
   feuillet: 'ecrire',
   fermer: 'ecrire',
   reglagesPaie: 'reglagesPaie',

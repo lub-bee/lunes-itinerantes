@@ -2921,6 +2921,9 @@ button.glyphe-recette:hover, button.glyphe-recette:focus-visible { outline: none
 .rang:hover .rang-sceau, .rang:focus-visible .rang-sceau { filter: drop-shadow(0 1.5px 1.5px rgba(40, 20, 5, 0.45)) brightness(1.15); }
 .rang:hover .rang-nom, .rang:focus-visible .rang-nom { fill: var(--encre-rouge); }
 .arbre-sans-rang { margin-top: 2px; }
+/* The tiers of the hierarchy (Conseil restreint, Membres): a bracket and its name upright in the left margin. */
+.tier-trait { fill: none; stroke: rgba(110, 70, 35, 0.55); stroke-width: 1.1; }
+.tier-nom { font-family: var(--f-capitales); font-size: 12px; letter-spacing: 0.08em; fill: var(--encre-pale); dominant-baseline: central; }
 /* The members of a rank, as a roll of honour: one name per line, centred, in display small capitals with
    a red initial, a small ornament between names. */
 .liste-membres { list-style: none; margin: 14px 0 6px; padding: 0; text-align: center; }

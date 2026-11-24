@@ -297,7 +297,8 @@ function contenu(f: Fiche, env: Env): { surtitre: string; titre: string; sousTit
       return {
         surtitre: 'Livre de la Caravane',
         titre: r?.nom ?? SANS_RANG.nom,
-        sousTitre: r?.nomEn ?? SANS_RANG.nomEn,
+        // A Khajiit title (lib/rangs.ts `nomKhajiit`) comes before the English name.
+        sousTitre: r ? [r.nomKhajiit, r.nomEn].filter(Boolean).join(' · ') : SANS_RANG.nomEn,
         embleme: r && estImage(r.icone) ? <img className="fiche-medaillon" src={r.icone} alt="" width={118} height={118} /> : r ? <span className="fiche-sceau" style={{ background: r.couleur }} /> : undefined,
         corps: <MembresDuRang cle={f.cle} env={env} />,
       }

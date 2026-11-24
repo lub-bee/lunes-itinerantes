@@ -1,20 +1,21 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { estImage, RANGS, SANS_RANG, type Rang } from '@/lib/rangs'
+import { estImage, RANGS, SANS_RANG, TIERS, type Rang } from '@/lib/rangs'
 import type { CtxRegistre } from './Missives'
 
 /*
- * The caravan's ranks as an engraved family tree: the Patriarch on top, the three Voices and the
- * Master of the roads below, then the Moon merchants and the Little moons. Each rank is a coloured
+ * The caravan's ranks as an engraved family tree: the Patriarchs on top, the three Ros below (Master of
+ * the roads, the two Voices): the « Conseil restreint »; then the « Membres »: Full moon, Steward and Scribe
+ * of moons side by side, the Rising moon, the New moon (the recruits). Each tier is a bracket in the left margin. Each rank is a coloured
  * seal (or its icon, when lib/rangs.ts gives one); touching it pins the list of its members on the
  * other page. Static drawing, no animation.
  */
 
 const LARGEUR = 420
 const RAYON = 25
-const Y = { 1: 46, 2: 176, 3: 302, 4: 414 } as Record<number, number>
-const HAUTEUR = 482
+const Y = { 1: 46, 2: 176, 3: 302, 4: 414, 5: 526 } as Record<number, number>
+const HAUTEUR = 594
 /** Drawn size of an image medallion: its ring matches a seal's ring (the points stand out). */
 const MEDAILLON = (RAYON + 5) * 2 * 1.18
 
@@ -63,6 +64,14 @@ export function ArbreRangs({ reg, icones, interactif }: { reg?: CtxRegistre; ico
     if (g !== d) traits.push(<Trait key={`b${n}`} d={`M${g - 6} ${barre + 3} q3 -3 6 -3 H${d} q3 0 6 3`} />)
     bas.forEach((p) => traits.push(<Trait key={`d${n}${p.cle}`} d={`M${p.x} ${barre} V${p.y - RAYON - 4}`} />))
   })
+  // The tiers (lib/rangs.ts TIERS): a bracket in the left margin from the tier's first seal to its last label, its name upright.
+  const tiers = TIERS.flatMap((t) => {
+    const qs = ps.filter((p) => t.niveaux.includes(p.niveau))
+    if (!qs.length) return []
+    const haut = Math.min(...qs.map((p) => p.y)) - MEDAILLON / 2
+    const bas = Math.max(...qs.map(sousEtiquette)) - 4
+    return [{ nom: t.nom, haut, bas }]
+  })
   const ouvrir = (cle: string) => reg?.ouvrir({ genre: 'rang', cle })
   return (
     <div className="arbre-rangs">
@@ -77,6 +86,14 @@ export function ArbreRangs({ reg, icones, interactif }: { reg?: CtxRegistre; ico
           ))}
         </defs>
         <g className="arbre-traits">{traits}</g>
+        {tiers.map((t) => (
+          <g key={t.nom} className="arbre-tier" aria-hidden="true">
+            <path d={`M21 ${t.haut} H15 V${t.bas} H21`} className="tier-trait" />
+            <text x={8} y={(t.haut + t.bas) / 2} transform={`rotate(-90 8 ${(t.haut + t.bas) / 2})`} textAnchor="middle" className="tier-nom">
+              {t.nom}
+            </text>
+          </g>
+        ))}
         {ps.map((p) => {
           const n = h?.[p.cle]?.length
           const lignes = p.lignes ?? [p.nom]
@@ -86,7 +103,7 @@ export function ArbreRangs({ reg, icones, interactif }: { reg?: CtxRegistre; ico
               className="rang"
               role="button"
               tabIndex={interactif ? 0 : -1}
-              aria-label={`${p.nom}${n !== undefined ? ` : ${n} membre${n > 1 ? 's' : ''}` : ''}`}
+              aria-label={`${p.nom}${p.nomKhajiit ? ` (${p.nomKhajiit})` : ''}${n !== undefined ? ` : ${n} membre${n > 1 ? 's' : ''}` : ''}`}
               onClick={() => ouvrir(p.cle)}
               onKeyDown={(e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return

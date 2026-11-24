@@ -333,9 +333,17 @@ memo pages). When the sheet is linked (see
 below), an **ex-libris** is the page before the title page: the book opens on it for a reader not yet
 signed, and turning back from the title spread always reaches it; folios still start at the title page.
 
-**Ranks** (« La Caravane » page): a tree of the caravan's ranks — Patriarche; Maître des routes, Voix
-du commerce, Voix de la sécurité; Marchand de lune; Petites lunes — each a coloured seal (an icon can
-be set per rank). Touching a seal lists the members who hold it (signed readers only, through
+**Ranks** (« La Caravane » page): a tree of the caravan's ranks in two tiers (Ludo, 2026-11-24), each rank a Khajiit
+title and a French name (`nomKhajiit` / `nom` in `lib/rangs.ts`, tiers in `TIERS`). **Conseil restreint**: Ahnurra
+(Patriarches); the three Ros — Wodro ros (Maître des routes), Bajiit ros (Voix du commerce), Rasina ros (Voix de la
+sécurité). **Membres**: Teko'i (Pleine lune), Etiit (Intendant: one for now, later one per craft) and Durrarriit (Scribe des
+lunes, the grimoire's keeper) side by side; Jranti (Lune montante); Ifa (Nouvelle lune: the recruits asking to join). « Pleine
+lune » is the former « Marchand de lune » and « Lune montante » the former « Petites lunes » (renamed by Ludo): they keep their
+keys and their old names as aliases, so existing « Rôle » cells, Rôles labels and Permissions columns still resolve. Each rank
+is a coloured seal (an icon can be set per rank); the tree shows the French name, the members note the Khajiit title before
+the English name, each tier is a bracket in the margin; the « Rôle » column and the Rôles tab accept either name (« Ros »
+alone is ambiguous: not accepted). A Nouvelle lune enters the grimoire only while also holding the Discord role « Membre »
+(the prerequisite of *Permissions*); its rank grants no box of its own. Touching a seal lists the members who hold it (signed readers only, through
 `/api/caravane`); members whose « Rôle » names no rank are under « Sans rang ». Ranks (order, names,
 colours, accepted spellings, medallions) live in `lib/rangs.ts`; a rank's `icone` is either an image
 under `public/rangs/` (round, transparent outside, ~224 px WebP, drawn instead of the coloured seal) or a
@@ -479,7 +487,7 @@ is `ONGLETS` at the top of `grimoire.gs`.
 
 | Tab | One row = | Columns |
 |---|---|---|
-| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Marchand de lune, Petites lunes — case and accents ignored; « Ami des Lunes » = not a member), `Discord ID` (aliases `Discord`, `ID Discord`) and `Pseudo Discord`, written by a v3n script at a member's first Discord seal (headers appended at the end of row 1; sent only with `discord: true`) |
+| **Membres** (read only, imported by hand) | one member | `Nom`, `Rôle` (the rank: Patriarche, Maître des routes, Voix du commerce, Voix de la sécurité, Pleine lune / Marchand de lune, Intendant, Scribe des lunes, Lune montante / Petites lunes, Nouvelle lune, or their Khajiit titles — case and accents ignored; « Ami des Lunes » = not a member), `Discord ID` (aliases `Discord`, `ID Discord`) and `Pseudo Discord`, written by a v3n script at a member's first Discord seal (headers appended at the end of row 1; sent only with `discord: true`) |
 | **Ressources** | one raw material | `Ressource`, `Nom EN`, `Origine` (récolte, loot, achat, craft… — older header `Catégorie`), `Prix courant` (septims for one lot — older header `Valeur`), `Bonne affaire` (same), `Note`, `Lot` (how many units the prices buy, « 1 septim les 3 »; empty = 1; written from v3j) |
 | **Recettes** | one ingredient of one recipe | `Produit`, `Produit EN` (optional, for products not in the catalogue; added on the first write), `Ingrédient`, `Quantité` (per craft), `Rendement` (units per craft, default 1), `Artisan` (the craft, free text), `Note`, `Variante` (1, 2, 3… — a product may have several recipes; empty = 1), `Usage` (`oui` on the rows of the product's *recette d'usage*; none marked = variant 1) |
 | **Missives** (created by the script) | one requested line | `N° missive`, `Écrite le`, `Titre`, `Commanditaire`, `Échéance`, `Statut` (`en cours` / `livrée` / `inachevée`), `Produit`, `Quantité`, `Écrite par`, `Récompense`, `Part commune (%)`, `Close le`, `Close par`, `Note de clôture`, `Recettes` (the recipes chosen for this missive, same on each of its rows: `Potion de vigueur=2; Rubis=acheter`; empty = the usual ones) |
